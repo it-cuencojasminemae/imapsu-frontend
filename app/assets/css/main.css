@@ -1,0 +1,133 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --color-maroon-50: #fdf4f3;
+  --color-maroon-100: #fbe8e6;
+  --color-maroon-200: #f7d2ce;
+  --color-maroon-300: #f0b1a9;
+  --color-maroon-400: #e4857b;
+  --color-maroon-500: #d55d52;
+  --color-maroon-600: #b84034;
+  --color-maroon-700: #98332a;
+  --color-maroon-800: #7b2b24;
+  --color-maroon-900: #62221d;
+  --color-maroon-950: #380f0c;
+
+  --color-gold-50: #fdf9eb;
+  --color-gold-100: #faf0c8;
+  --color-gold-200: #f5e19a;
+  --color-gold-300: #eeca61;
+  --color-gold-400: #e6b53a;
+  --color-gold-500: #d9a51b;
+  --color-gold-600: #b98414;
+  --color-gold-700: #93630f;
+  --color-gold-800: #764e10;
+  --color-gold-900: #654013;
+  --color-gold-950: #3a2208;
+}
+
+/* Shared surfaces, rhythm, and motion. Brand color is reserved for actions. */
+:root {
+  --app-space: 0.25rem;
+  --app-radius-control: 0.5rem;
+  --app-radius-card: 0.75rem;
+  --app-motion-fast: 120ms;
+  --app-motion-press: 100ms;
+  --app-motion-page: 160ms;
+  --app-motion-reveal: 200ms;
+  --app-motion-loaded: 140ms;
+  --app-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --app-page-background: #fafaf9;
+  --ui-text-muted: var(--color-stone-600);
+}
+.dark { --app-page-background: #141211; --ui-text-muted: var(--color-stone-400); }
+body { font-size: 0.875rem; line-height: 1.6; }
+.imapsu-page-bg { background: var(--app-page-background); }
+.imapsu-page { width: 100%; max-width: 72rem; margin-inline: auto; padding: 2rem 1rem 3rem; }
+.imapsu-page--admin { max-width: 80rem; }
+.imapsu-page-header { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+.imapsu-page-heading { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 650; letter-spacing: -0.035em; line-height: 1.25; color: var(--ui-text-highlighted); overflow-wrap: anywhere; }
+.imapsu-page-eyebrow { margin-bottom: 0.5rem; font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ui-text-muted); }
+.imapsu-page-description { margin-top: 0.5rem; max-width: 42rem; color: var(--ui-text-muted); font-size: 0.875rem; }
+.imapsu-page-description > p { margin-top: 0; }
+/* Upload labels retain a visible focus indicator around the usable control. */
+label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+.imapsu-page :where(.text-success) { color: var(--color-green-700); }
+.imapsu-page :where(.text-warning) { color: var(--color-amber-700); }
+.imapsu-page :where(.text-error) { color: var(--color-red-700); }
+.dark .imapsu-page :where(.text-success) { color: var(--color-green-400); }
+.dark .imapsu-page :where(.text-warning) { color: var(--color-amber-300); }
+.dark .imapsu-page :where(.text-error) { color: var(--color-red-400); }
+.imapsu-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.imapsu-page-actions > div { flex-wrap: wrap; }
+.imapsu-brand-bar { background: var(--color-gold-500); }
+.imapsu-brand-tile { background: var(--color-maroon-800); color: var(--color-gold-200); }
+.imapsu-appbar { border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
+.imapsu-appbar-btn { flex-shrink: 0; border-radius: var(--app-radius-control); color: var(--ui-text-toned); transition: background-color var(--app-motion-fast), color var(--app-motion-fast); }
+.imapsu-appbar-btn:hover { background: var(--ui-bg-elevated); color: var(--ui-text-highlighted); }
+.imapsu-nav-link { position: relative; color: var(--color-maroon-100); border: 1px solid transparent; }
+.imapsu-nav-link:hover { background: #ffffff0d; color: white; }
+.imapsu-nav-link.is-active { background: #ffffff12; border-color: #ffffff1a; color: white; }
+.imapsu-nav-link.is-active::before { content: ''; position: absolute; left: 0; top: 25%; height: 50%; width: 3px; border-radius: 2px; background: var(--color-gold-300); }
+.imapsu-nav-icon { color: var(--color-maroon-200); }
+.imapsu-nav-link.is-active .imapsu-nav-icon { color: var(--color-gold-200); }
+.imapsu-nav-icon-wrap { display: grid; place-items: center; flex-shrink: 0; width: 1.75rem; height: 1.75rem; border-radius: var(--app-radius-control); }
+.imapsu-nav-section-label { margin-bottom: 0.5rem; padding-inline: 0.625rem; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-maroon-200); }
+.imapsu-section-title { margin-bottom: 0.75rem; font-size: 0.8125rem; font-weight: 600; color: var(--ui-text-muted); }
+.imapsu-refresh-state { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.625rem 0.875rem; border: 1px solid var(--ui-border); border-radius: var(--app-radius-control); background: var(--ui-bg); font-size: 0.8125rem; color: var(--ui-text-muted); }
+.imapsu-loading { min-height: 12rem; }
+.imapsu-toolbar { border-radius: var(--app-radius-card); }
+.imapsu-empty { border: 1px dashed var(--ui-border); border-radius: var(--app-radius-card); background: var(--ui-bg); padding: 2rem 1rem; }
+.imapsu-metric { display: block; height: 100%; border: 1px solid var(--ui-border); border-radius: var(--app-radius-card); padding: 1.25rem; background: var(--ui-bg); transition: border-color var(--app-motion-fast), background-color var(--app-motion-fast); }
+.imapsu-metric:hover { border-color: var(--ui-primary); background: var(--ui-bg-elevated); }
+.imapsu-attention { border: 1px solid var(--ui-border); border-left: 3px solid var(--color-gold-500); border-radius: var(--app-radius-card); background: var(--ui-bg); padding: 1.25rem; }
+.imapsu-attention-value { font-size: 1.75rem; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--ui-text-highlighted); }
+.imapsu-record-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8125rem; }
+.imapsu-record-table th { padding: 0.875rem 1rem; background: var(--ui-bg-muted); color: var(--ui-text-muted); font-weight: 550; white-space: nowrap; }
+.imapsu-record-table td { padding: 0.875rem 1rem; vertical-align: top; border-top: 1px solid var(--ui-border); overflow-wrap: anywhere; }
+.imapsu-record-table tbody tr:hover { background: var(--ui-bg-muted); }
+.imapsu-record-table td:last-child:not([colspan]) { width: 1%; white-space: nowrap; }
+.imapsu-record-table td .imapsu-record-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.imapsu-auth { max-width: 28rem; margin-inline: auto; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding: 2rem 1rem; }
+.imapsu-hero { border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
+.imapsu-hero-panel { background: var(--color-maroon-900); color: white; border-radius: var(--app-radius-card); padding: 2rem; }
+.imapsu-skip-link { position: fixed; top: 0.5rem; left: 0.5rem; z-index: 100; transform: translateY(-160%); border-radius: var(--app-radius-control); background: var(--ui-bg); color: var(--ui-text-highlighted); padding: 0.75rem 1rem; }
+.imapsu-skip-link:focus { transform: translateY(0); }
+.imapsu-theme-light { display: inline-block; }
+.imapsu-theme-dark { display: none; }
+.dark .imapsu-theme-light { display: none; }
+.dark .imapsu-theme-dark { display: inline-block; }
+:where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+:where(button, a)[data-prominent='true']:active { transform: scale(0.98); }
+:where(button, a)[data-prominent='true'] { transition: background-color var(--app-motion-fast), color var(--app-motion-fast), transform var(--app-motion-press); }
+.imapsu-page :where(p, dd, a) { overflow-wrap: anywhere; }
+.imapsu-page dl dd { font-variant-numeric: tabular-nums; }
+.dark .imapsu-page :where(.bg-gold-50, .bg-gold-100) { background-color: var(--color-gold-950); }
+.dark .imapsu-page :where(.text-gold-600, .text-gold-700) { color: var(--color-gold-300); }
+.dark .imapsu-page :where(.bg-maroon-50, .bg-maroon-100) { background-color: var(--color-maroon-950); }
+.dark .imapsu-page :where(.text-maroon-700, .text-maroon-800) { color: var(--color-maroon-200); }
+.dark .imapsu-page :where(.text-success-600, .text-success-700) { color: var(--color-success-400); }
+.app-page-enter-active { transition: opacity var(--app-motion-page) var(--app-ease); }
+.app-page-enter-from { opacity: 0; }
+/* Remove the old page immediately; it never overlays the next page. */
+.app-page-leave-active { display: none; }
+* { scrollbar-width: thin; scrollbar-color: var(--color-stone-400) transparent; }
+.imapsu-scrollbar-maroon { scrollbar-color: var(--color-maroon-400) transparent; }
+@media (min-width: 640px) { .imapsu-page { padding-inline: 1.5rem; } .imapsu-page-header { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 1.5rem; } }
+@media (min-width: 1024px) { .imapsu-page { padding: 2.5rem 2rem 4rem; } }
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']), select, textarea, [role='combobox'] { font-size: 1rem !important; }
+  .imapsu-page-actions { width: 100%; }
+  .imapsu-page-actions > div { width: 100%; }
+  .imapsu-record-table { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition-duration: 0ms !important; transition-delay: 0ms !important; }
+  .app-page-enter-active { transition: opacity 100ms linear !important; }
+  :where(button, a)[data-prominent='true']:active { transform: none; }
+  [class*='hover:scale'], [class*='hover:-translate'], [class*='group-hover:translate'], [class*='group-hover:-translate'] { transform: none !important; }
+}

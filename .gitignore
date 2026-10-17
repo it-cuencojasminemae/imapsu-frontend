@@ -1,0 +1,45 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+
+# Local configuration, credentials, private data, and generated files
+.env
+.env.*
+*.jwt
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+.npmrc
+.netrc
+credentials*
+*.db
+*.sqlite*
+*.sql
+*.dump
+*.bak
+.private/
+backups/
+exports/
+coverage/

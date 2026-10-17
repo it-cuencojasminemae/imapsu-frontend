@@ -1,0 +1,360 @@
+<script setup lang="ts">
+import type { StrapiFile } from '~/types/auth'
+
+definePageMeta({
+  middleware: ['auth', 'role'],
+  roles: ['oas', 'admin']
+})
+
+type MeterReading = {
+  id: number | string
+  documentId?: string
+  electricMeterReading?: number | string
+  waterMeterReading?: number | string
+  reviewFlags?: string[]
+  readingDate: string
+  notes?: string
+  createdAt?: string
+  electricMeterImage?: StrapiFile | null
+  waterMeterImage?: StrapiFile | null
+  tenancy?: {
+    documentId?: string
+    user?: { username?: string } | null
+    propertySpace?: { name?: string; propertyCode?: string; building?: string } | null
+  } | null
+  recordedBy?: { id: number; username?: string } | null
+}
+
+type Tenancy = {
+  documentId?: string
+  status: string
+  user?: { username?: string } | null
+  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
+}
+
+type ListResponse<T> = { data: T[] }
+
+useHead({ title: 'Meter Readings | iMapSU' })
+
+const auth = useAuth()
+const toast = useToast()
+const { baseURL, $api, getErrorMessage } = useStrapi()
+const headers = {}
+
+const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/api/tenancies', {
+  baseURL,
+  headers,
+  query: { 'populate[user]': true, 'populate[propertySpace]': true, 'pagination[pageSize]': 100 }
+})
+
+const recordsPage = useRecordPage([], {  })
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<MeterReading>>('/api/meter-readings', {
+  baseURL,
+  headers,
+  query: computed(() => ({
+    'populate[tenancy][populate][propertySpace]': true,
+    'populate[tenancy][populate][user]': true,
+    'populate[recordedBy]': true,
+    'populate[electricMeterImage]': true,
+    'populate[waterMeterImage]': true,
+    sort: 'readingDate:desc', ...recordsPage.query.value }))
+})
+const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
+
+
+const readings = computed(() => data.value?.data ?? [])
+
+const activeTenancies = computed(() => (tenancyData.value?.data ?? []).filter(tenancy => tenancy.status === 'Active'))
+
+const tenancyOptions = computed(() => activeTenancies.value.map(tenancy => ({
+  label: `${tenancy.propertySpace?.name ?? 'Property'} (${tenancy.propertySpace?.propertyCode ?? '—'}) — ${tenancy.user?.username ?? 'No user'}`,
+  value: tenancy.documentId!
+})))
+
+const tenancyLabel = (reading: MeterReading) => {
+  const space = reading.tenancy?.propertySpace
+  const user = reading.tenancy?.user
+  if (space && user) return `${space.name} (${space.propertyCode}) — ${user.username}`
+  return 'Tenancy'
+}
+
+const form = reactive({
+  tenancy: '',
+  readingDate: new Date().toISOString().slice(0, 10),
+  electricMeterReading: '',
+  waterMeterReading: '',
+  notes: ''
+})
+
+const submitting = ref(false)
+const formError = ref('')
+const editing = ref<MeterReading | null>(null)
+
+const electricPhoto = ref<File | null>(null)
+const waterPhoto = ref<File | null>(null)
+const electricRemoved = ref(false)
+const waterRemoved = ref(false)
+const electricInitialSrc = ref<string | null>(null)
+const waterInitialSrc = ref<string | null>(null)
+
+const resetPhotos = () => {
+  electricPhoto.value = null
+  waterPhoto.value = null
+  electricRemoved.value = false
+  waterRemoved.value = false
+  electricInitialSrc.value = null
+  waterInitialSrc.value = null
+}
+
+const clearForm = () => {
+  Object.assign(form, {
+    tenancy: '',
+    readingDate: new Date().toISOString().slice(0, 10),
+    electricMeterReading: '',
+    waterMeterReading: '',
+    notes: ''
+  })
+}
+
+const openEdit = (reading: MeterReading) => {
+  editing.value = reading
+  Object.assign(form, {
+    tenancy: reading.tenancy?.documentId ?? '',
+    readingDate: reading.readingDate ?? new Date().toISOString().slice(0, 10),
+    electricMeterReading: reading.electricMeterReading != null ? String(reading.electricMeterReading) : '',
+    waterMeterReading: reading.waterMeterReading != null ? String(reading.waterMeterReading) : '',
+    notes: reading.notes ?? ''
+  })
+  resetPhotos()
+  electricInitialSrc.value = reading.electricMeterImage ? `${baseURL}${reading.electricMeterImage.url}` : null
+  waterInitialSrc.value = reading.waterMeterImage ? `${baseURL}${reading.waterMeterImage.url}` : null
+  formError.value = ''
+}
+
+const cancelEdit = () => {
+  editing.value = null
+  clearForm()
+  resetPhotos()
+  formError.value = ''
+}
+
+const uploadPhoto = async (photo: File) => {
+  const form = new FormData()
+    form.append('purpose', 'meter')
+  form.append('files', photo)
+  const uploaded = await $api<StrapiFile[]>('/api/upload', { method: 'POST', body: form })
+  return uploaded[0].id
+}
+
+const save = async () => {
+  formError.value = ''
+  if (!form.tenancy) {
+    formError.value = 'Please choose a tenancy.'
+    return
+  }
+  if (!form.electricMeterReading && !form.waterMeterReading) {
+    formError.value = 'Provide at least one meter reading (electric or water).'
+    return
+  }
+  submitting.value = true
+  try {
+    let electricMeterImage: number | null = editing.value?.electricMeterImage?.id ?? null
+    let waterMeterImage: number | null = editing.value?.waterMeterImage?.id ?? null
+    if (electricPhoto.value) {
+      electricMeterImage = await uploadPhoto(electricPhoto.value)
+    } else if (electricRemoved.value) {
+      electricMeterImage = null
+    }
+    if (waterPhoto.value) {
+      waterMeterImage = await uploadPhoto(waterPhoto.value)
+    } else if (waterRemoved.value) {
+      waterMeterImage = null
+    }
+
+    const body = {
+      data: {
+        tenancy: form.tenancy,
+        readingDate: form.readingDate,
+        electricMeterReading: form.electricMeterReading === '' ? undefined : Number(form.electricMeterReading),
+        waterMeterReading: form.waterMeterReading === '' ? undefined : Number(form.waterMeterReading),
+        notes: form.notes?.trim() || undefined,
+        electricMeterImage,
+        waterMeterImage
+      }
+    }
+    if (editing.value) {
+      await $api(`/api/meter-readings/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
+      toast.add({ title: 'Meter reading updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+    } else {
+      await $api('/api/meter-readings', { method: 'POST', body })
+      toast.add({ title: 'Meter reading recorded', color: 'success', icon: 'i-lucide-check-circle-2' })
+    }
+    cancelEdit()
+    await refresh()
+  } catch (err) {
+    formError.value = getErrorMessage(err)
+  } finally {
+    submitting.value = false
+  }
+}
+
+const remove = async (reading: MeterReading) => {
+  const label = reading.tenancy?.propertySpace?.name ?? reading.readingDate ?? 'this reading'
+  if (!confirm(`Delete the meter reading for ${label}?`)) return
+  try {
+    await $api(`/api/meter-readings/${reading.documentId ?? reading.id}`, { method: 'DELETE' })
+    toast.add({ title: 'Meter reading deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    if (editing.value?.documentId === (reading.documentId ?? reading.id)) cancelEdit()
+    await refresh()
+  } catch (err) {
+    toast.add({ title: 'Unable to delete meter reading', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+  }
+}
+
+const formatDate = (value?: string) => value
+  ? new Date(value + (value.length === 10 ? 'T00:00:00' : '')).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  : ''
+
+const formatDateTime = (value?: string) => value
+  ? new Date(value).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  : ''
+
+const isMine = (reading: MeterReading) => reading.recordedBy?.id === auth.user.value?.id
+const recordColumns = [
+ { key: 'space', label: 'Space', value: (reading: MeterReading) => reading.tenancy?.propertySpace?.name || '—' },
+ { key: 'tenant', label: 'Tenant', value: (reading: MeterReading) => reading.tenancy?.user?.username || '—' },
+ { key: 'date', label: 'Reading date', value: (reading: MeterReading) => formatDate(reading.readingDate) },
+ { key: 'electric', label: 'Electric', value: (reading: MeterReading) => reading.electricMeterReading ?? '—' },
+ { key: 'water', label: 'Water', value: (reading: MeterReading) => reading.waterMeterReading ?? '—' }
+]
+</script>
+
+<template>
+  <main class="imapsu-page imapsu-page--admin">
+    <AppPageHeader>
+      <template #eyebrow>Management</template>
+      <template #title>Meter Readings</template>
+      <template #description><p class="mt-2 max-w-xl text-muted">Record and review electricity and water readings used for utility consumption calculations. Review photo-assisted readings and enter any undetected values manually.</p></template>
+      <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
+    </AppPageHeader>
+
+    <div class="grid items-start gap-6 lg:grid-cols-5">
+      <UCard class="lg:col-span-3">
+        <template #header>
+          <h2 class="text-lg font-semibold text-highlighted">{{ editing ? 'Edit reading' : 'Record reading' }}</h2>
+        </template>
+        <form class="space-y-4" @submit.prevent="save">
+          <UFormField label="Tenancy" required>
+            <AppRecordLookup v-model="form.tenancy" endpoint="/api/tenancies" :fields="['user.username','propertySpace.name']" :label="item => (item.propertySpace?.name || 'Property') + ' — ' + (item.user?.username || 'Tenant')" :value="item => item.documentId" :query="{ 'populate[user]': true, 'populate[propertySpace]': true, 'filters[status][$eq]': 'Active' }" :fallback="tenancyOptions" />
+            <p v-if="activeTenancies.length === 0" class="mt-1 text-xs text-muted">No active tenancies found.</p>
+          </UFormField>
+
+          <UFormField label="Reading date" required>
+            <UInput required v-model="form.readingDate" type="date" />
+          </UFormField>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Electric (kWh)">
+              <UInput v-model="form.electricMeterReading" type="number" min="0" step="any" placeholder="e.g. 1045" />
+            </UFormField>
+            <UFormField label="Water (m³)">
+              <UInput v-model="form.waterMeterReading" type="number" min="0" step="any" placeholder="e.g. 512" />
+            </UFormField>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <MeterPhotoField
+              title="Electric meter"
+              hint="Upload a meter photo, review the detected value, and enter or correct the reading as needed."
+              unit="kWh"
+              icon="i-lucide-zap"
+              :initial-src="electricInitialSrc"
+              @file-change="file => (electricPhoto = file)"
+              @remove-image="electricRemoved = true"
+              @reading="value => (form.electricMeterReading = String(value))"
+            />
+            <MeterPhotoField
+              title="Water meter"
+              hint="Upload a meter photo, review the detected value, and enter or correct the reading as needed."
+              unit="m³"
+              icon="i-lucide-droplets"
+              :initial-src="waterInitialSrc"
+              @file-change="file => (waterPhoto = file)"
+              @remove-image="waterRemoved = true"
+              @reading="value => (form.waterMeterReading = String(value))"
+            />
+          </div>
+
+          <UFormField label="Notes">
+            <UTextarea v-model="form.notes" :rows="2" placeholder="Anything unusual about the meters…" />
+          </UFormField>
+
+          <UAlert v-if="formError" color="error" icon="i-lucide-triangle-alert" :description="formError" />
+
+          <div class="flex gap-2">
+            <UButton data-prominent="true" type="submit" block :loading="submitting" :disabled="activeTenancies.length === 0">
+              {{ editing ? 'Save changes' : 'Record reading' }}
+            </UButton>
+            <UButton v-if="editing" label="Cancel" color="neutral" variant="ghost" :disabled="submitting" @click="cancelEdit" />
+          </div>
+        </form>
+      </UCard>
+
+      <div class="lg:col-span-2">
+        <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
+    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-24" />
+
+        <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load meter readings" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
+
+        <UEmpty v-else-if="readings.length === 0" icon="i-lucide-gauge" title="No meter readings" description="Readings you record will appear here." />
+
+        <div v-else class="space-y-4">
+          <AppRecordTable :items="readings" :columns="recordColumns" :item-key="reading => reading.documentId ?? reading.id" caption="Meter readings">
+
+        <template #details="{ item: reading }">
+          <UAlert v-if="reading.reviewFlags?.length" class="mb-3" color="warning" title="Reading review flags" :description="reading.reviewFlags.join('; ')" /><UCard  :ui="{ body: 'p-5' }">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-medium text-highlighted">{{ tenancyLabel(reading) }}</p>
+                <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                  <span class="flex items-center gap-1"><UIcon name="i-lucide-calendar-days" class="size-3.5" />{{ formatDate(reading.readingDate) }}</span>
+                  <span class="flex items-center gap-1"><UIcon name="i-lucide-circle-user-round" class="size-3.5" />{{ reading.recordedBy?.username ?? 'Staff' }}</span>
+                  <span class="flex items-center gap-1"><UIcon name="i-lucide-clock-3" class="size-3.5" />{{ formatDateTime(reading.createdAt) }}</span>
+                </p>
+              </div>
+              <UBadge v-if="isMine(reading)" color="primary" variant="subtle">Recorded by you</UBadge>
+              <div v-if="auth.isStaff.value" class="flex gap-2">
+                <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(reading)" />
+                <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(reading)" />
+              </div>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-4 text-sm">
+              <div class="rounded-lg bg-muted/20 px-3 py-2">
+                <dt class="flex items-center gap-1 text-xs text-muted"><UIcon name="i-lucide-zap" class="size-3.5" />Electric</dt>
+                <dd class="mt-0.5 font-semibold text-highlighted">{{ reading.electricMeterReading != null ? `${reading.electricMeterReading} kWh` : '—' }}</dd>
+              </div>
+              <div class="rounded-lg bg-muted/20 px-3 py-2">
+                <dt class="flex items-center gap-1 text-xs text-muted"><UIcon name="i-lucide-droplets" class="size-3.5" />Water</dt>
+                <dd class="mt-0.5 font-semibold text-highlighted">{{ reading.waterMeterReading != null ? `${reading.waterMeterReading} m³` : '—' }}</dd>
+              </div>
+            </dl>
+
+            <div v-if="reading.electricMeterImage || reading.waterMeterImage" class="mt-3 grid grid-cols-2 gap-2">
+              <a v-if="reading.electricMeterImage" :href="`${baseURL}${reading.electricMeterImage.url}`" target="_blank" rel="noopener">
+                <img :src="`${baseURL}${reading.electricMeterImage.url}`" :alt="reading.electricMeterImage.name || 'Electric meter photo'" class="h-24 w-full rounded-lg object-cover transition-transform hover:scale-[1.02]" />
+              </a>
+              <a v-if="reading.waterMeterImage" :href="`${baseURL}${reading.waterMeterImage.url}`" target="_blank" rel="noopener">
+                <img :src="`${baseURL}${reading.waterMeterImage.url}`" :alt="reading.waterMeterImage.name || 'Water meter photo'" class="h-24 w-full rounded-lg object-cover transition-transform hover:scale-[1.02]" />
+              </a>
+            </div>
+
+            <p v-if="reading.notes" class="mt-4 rounded-lg bg-muted/20 px-3 py-2 text-sm text-muted">{{ reading.notes }}</p>
+          </UCard></template>
+      </AppRecordTable>
+        </div>
+      </div>
+    </div>
+    <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
+  </main>
+</template>
