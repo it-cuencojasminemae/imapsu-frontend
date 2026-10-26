@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { MapProperty } from '../app/types/map.ts'
-import { resolveStallPhotoUrl, stallPhotos, stallTitle, visibleStalls } from '../app/utils/mapStalls.ts'
+import { resolveStallPhotoUrl, stallFloorLabel, stallPhotos, stallTitle, visibleStalls } from '../app/utils/mapStalls.ts'
 import { useMapStallDetails } from '../app/composables/useMapStallDetails.ts'
 import { effectScope, ref } from 'vue'
 
@@ -22,6 +22,11 @@ test('vacant stalls use listing photos and absent or unsafe URLs do not become i
   assert.deepEqual(stallPhotos({ ...property, photos: null, tenantPhotos: null }, baseURL), [])
   assert.equal(resolveStallPhotoUrl('uploads/photo.png', baseURL), `${baseURL}/uploads/photo.png`)
   assert.equal(resolveStallPhotoUrl(' https://example.com/photo.png ', baseURL), 'https://example.com/photo.png')
+  // An empty baseURL means uploads go through this site's own /uploads proxy.
+  assert.equal(resolveStallPhotoUrl('/uploads/photo.png', ''), '/uploads/photo.png')
+  assert.equal(resolveStallPhotoUrl('uploads/photo.png', ''), '/uploads/photo.png')
+  assert.equal(resolveStallPhotoUrl('https://example.com/photo.png', ''), 'https://example.com/photo.png')
+  assert.equal(resolveStallPhotoUrl('javascript:alert(1)', ''), null)
   for (const url of [undefined, '', '  ', 'data:image/png;base64,abc', 'file:///photo.png', 'https://[invalid']) assert.equal(resolveStallPhotoUrl(url, baseURL), null)
 })
 
@@ -79,4 +84,14 @@ test('changing buildings, closing the building, and OAS labeling clear the stall
     assert.equal(details.selectStall(property), false)
   })
   scope.stop()
+})
+
+test('floors read as words and free text is kept', () => {
+  assert.equal(stallFloorLabel('1'), '1st floor')
+  assert.equal(stallFloorLabel(' 2 '), '2nd floor')
+  assert.equal(stallFloorLabel('3'), '3rd floor')
+  assert.equal(stallFloorLabel('11'), '11th floor')
+  assert.equal(stallFloorLabel('G'), 'Ground floor')
+  assert.equal(stallFloorLabel('Mezzanine'), 'Mezzanine')
+  for (const floor of [undefined, '', '  ']) assert.equal(stallFloorLabel(floor), null)
 })

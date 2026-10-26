@@ -10,7 +10,7 @@ export default defineEventHandler(async event => {
   deleteCookie(event,'strapi_token',{path:'/'})
   if (!config.sessionPassword || String(config.sessionPassword).length<32 || !config.gatewaySecret) throw createError({statusCode:503,statusMessage:'Secure gateway is not configured'})
   const url=getRequestURL(event), route=url.pathname.replace(/\/+$/, '')
-  const publicAuthentication=new Set(['/api/auth/login','/api/auth/local','/api/auth/register-with-role','/api/auth/confirm-email','/api/auth/resend-confirmation','/api/auth/mfa/challenge']).has(route)
+  const publicAuthentication=new Set(['/api/auth/login','/api/auth/local','/api/auth/register-with-role','/api/auth/confirm-email','/api/auth/resend-confirmation','/api/auth/mfa/challenge','/api/auth/password-recovery/request','/api/auth/password-recovery/reset']).has(route)
   const parts=route.slice(5).split('/')
   if(!allowed.has(parts[0]!) || parts.some(p=>p==='.'||p==='..'||/%2f|%5c/i.test(p))) throw createError({statusCode:404})
   const session=await useSession<any>(event,{name:'imapsu_session',password:String(config.sessionPassword),maxAge:604800,sessionHeader:false,cookie:{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/'}})

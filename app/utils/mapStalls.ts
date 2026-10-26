@@ -11,11 +11,30 @@ export function stallTitle(property: MapProperty): string {
   return (property.space_status === 'Occupied' ? property.businessName?.trim() : '') || property.name?.trim() || property.propertyCode
 }
 
+/** Readable floor, e.g. "1" -> "1st floor", "G" -> "Ground floor"; free text is kept. */
+export function stallFloorLabel(floor: string | undefined): string | null {
+  const value = floor?.trim()
+  if (!value) return null
+  if (/^(g|gf|ground)( ?floor)?$/i.test(value)) return 'Ground floor'
+  if (/^\d+$/.test(value)) {
+    const n = Number(value)
+    const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'
+    return `${n}${suffix} floor`
+  }
+  return value
+}
+
+// Placeholder origin for an empty baseURL: uploads are then served by this
+// site's own /uploads proxy, so the result stays a root-relative path.
+const SAME_ORIGIN = 'http://same-origin.invalid'
+
 export function resolveStallPhotoUrl(value: string | undefined, baseURL: string): string | null {
   if (!value?.trim()) return null
   try {
-    const url = new URL(value.trim(), `${baseURL.replace(/\/$/, '')}/`)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+    const base = baseURL.trim() ? baseURL.trim().replace(/\/$/, '') : SAME_ORIGIN
+    const url = new URL(value.trim(), `${base}/`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url.origin === SAME_ORIGIN ? `${url.pathname}${url.search}${url.hash}` : url.href
   } catch {
     return null
   }

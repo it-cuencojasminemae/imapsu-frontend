@@ -21,25 +21,4 @@ logs
 # Local env files
 .env
 .env.*
-
-# Local configuration, credentials, private data, and generated files
-.env
-.env.*
-*.jwt
-*.pem
-*.key
-*.p12
-*.pfx
-*.keystore
-.npmrc
-.netrc
-credentials*
-*.db
-*.sqlite*
-*.sql
-*.dump
-*.bak
-.private/
-backups/
-exports/
-coverage/
+!.env.example

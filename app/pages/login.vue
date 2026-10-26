@@ -12,7 +12,7 @@ const destination = () => {
   if (requested) {
     const resolved = router.resolve(requested)
     const roles = resolved.meta.roles as string[] | undefined
-    if (resolved.matched.length && !['/', '/login', '/register', '/verify-email'].includes(resolved.path)
+    if (resolved.matched.length && !['/', '/login', '/register', '/verify-email', '/forgot-password'].includes(resolved.path)
       && (!roles?.length || roles.includes(auth.role.value ?? ''))) return resolved.fullPath
   }
   return landingPath(auth.user.value)
@@ -117,6 +117,9 @@ const resendVerification = async () => {
                 </button>
               </template>
             </UInput>
+            <template #hint>
+              <NuxtLink :to="{ path: '/forgot-password', query: identifier.includes('@') ? { email: identifier } : {} }" class="text-xs font-medium text-primary hover:underline">Forgot password?</NuxtLink>
+            </template>
           </UFormField>
 
           <UButton data-prominent="true" type="submit" block size="lg" icon="i-lucide-log-in" :loading="loading">

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { MapProperty, MapZone } from '~/types/map'
+import type { MapPin, MapProperty, MapZone } from '~/types/map'
 import { MAP_STATUS_COLORS, normalizeBuildingName } from '~/utils/mapZones'
 import { PAMSU_BUILDINGS, pamsuBuildingFor, buildingStatusByOrder, propertiesInPamsuBuilding } from '~/utils/pamsu'
 import { mapBindingDiagnostics } from '~/utils/mapDiagnostics'
 import { fetchMapPages, type MapListResponse } from '~/utils/mapPagination'
 import { mapPropertyStatus, unobscuredMapInsets } from '~/utils/mapPresentation'
-import { stallKey, stallPhotos, stallTitle, visibleStalls } from '~/utils/mapStalls'
+import { stallFloorLabel, stallKey, stallPhotos, stallTitle, visibleStalls } from '~/utils/mapStalls'
 import { useMapStallDetails } from '~/composables/useMapStallDetails'
 
 type MapLabel = {
@@ -14,7 +14,11 @@ type MapLabel = {
   label: string
 }
 
-useHead({ title: 'Campus Map | iMapSU' })
+useHead({
+  title: 'Campus Map | iMapSU',
+  // Start the 7 MB model download while the 3D viewer code is still loading.
+  link: [{ rel: 'preload', href: '/models/campus.glb', as: 'fetch', crossorigin: 'anonymous' }]
+})
 definePageMeta({ pageTransition: false })
 
 const auth = useAuth()
@@ -64,7 +68,7 @@ const labelDraft = ref('')
 const savingLabel = ref(false)
 const labelError = ref('')
 
-type ViewerRef = { resetCamera: () => void; focusOn: (zone: MapZone) => void; focusBuilding: (order: number) => void; getBuildingOrders: () => number[] }
+type ViewerRef = { resetCamera: () => void; focusOn: (zone: MapZone) => void; focusBuilding: (order: number) => void; getBuildingZone: (order: number) => MapZone | null; getBuildingOrders: () => number[] }
 
 const bindingDiagnostics = computed(() => mapBindingDiagnostics(properties.value, PAMSU_BUILDINGS, [...availableBuildingOrders.value], pamsuBuildingFor))
 const viewer = ref<ViewerRef | null>(null)
@@ -75,9 +79,16 @@ const onBuildingsReady = (count: number) => {
 }
 const onModelError = (message: string) => { modelError.value = message; modelReady.value = false }
 
+// A pinned stall whose building isn't on the map (an outdoor stall, or a
+// building name the model can't resolve). The details panel then shows just
+// this stall instead of a building's list.
+const pinnedStall = ref<MapProperty | null>(null)
+
 const displayName = (zone: MapZone) => labels.value[normalizeBuildingName(zone.name)] ?? zone.name
 const selectedColor = computed(() => {
-  const occupancy = selected.value?.buildingOrder != null ? statusByOrder.value[String(selected.value.buildingOrder)] : undefined
+  const occupancy = pinnedStall.value
+    ? mapPropertyStatus(pinnedStall.value.space_status)
+    : selected.value?.buildingOrder != null ? statusByOrder.value[String(selected.value.buildingOrder)] : undefined
   return occupancy === 'Vacant' ? MAP_STATUS_COLORS.vacant : occupancy === 'Occupied' ? MAP_STATUS_COLORS.occupied : MAP_STATUS_COLORS.unlisted
 })
 
@@ -130,6 +141,7 @@ const jumpTo = (order: number) => {
 }
 
 const selectZone = async (zone: MapZone) => {
+  pinnedStall.value = null
   selected.value = zone
   if (labelMode.value && auth.isOas.value) {
     const key = normalizeBuildingName(zone.name)
@@ -145,6 +157,7 @@ const selectZone = async (zone: MapZone) => {
 
 const closePanel = () => {
   selected.value = null
+  pinnedStall.value = null
 }
 
 const saveLabel = async () => {
@@ -196,12 +209,14 @@ const removeLabel = async () => {
   }
 }
 
-const buildingProperties = computed(() => propertiesInPamsuBuilding(selected.value?.name ?? '', properties.value))
+const buildingProperties = computed(() => pinnedStall.value
+  ? properties.value.filter(property => stallKey(property) === stallKey(pinnedStall.value!))
+  : propertiesInPamsuBuilding(selected.value?.name ?? '', properties.value))
 
 const propertyPhotos = (property: MapProperty) => stallPhotos(property, baseURL)
 const { stallOpen, selectedStallKey, selectedStall, selectStall, clearStall } = useMapStallDetails(
   buildingProperties,
-  computed(() => selected.value ? `${selected.value.buildingOrder ?? ''}:${selected.value.name}` : null),
+  computed(() => selected.value ? `${selected.value.buildingOrder ?? selected.value.id ?? ''}:${selected.value.name}` : null),
   labelMode
 )
 const galleryPhotos = computed(() => selectedStall.value ? propertyPhotos(selectedStall.value) : [])
@@ -225,6 +240,29 @@ const restoreStallFocus = (event: Event) => {
 const afterStallLeave = () => {
   if (!stallOpen.value) { clearStall(); photoIndex.value = 0; stallTrigger = null }
 }
+// Stalls the OAS pinned on the map. Selecting a pin opens its building panel
+// and the stall's details, the same as choosing it from the building list.
+// A stall outside any mapped building gets a panel of its own.
+const stallPins = computed<MapPin[]>(() => properties.value
+  .filter(property => property.mapPosition)
+  .map(property => ({ id: stallKey(property), ...property.mapPosition!, label: stallTitle(property), status: property.space_status })))
+const selectPin = (id: string) => {
+  const property = properties.value.find(item => stallKey(item) === id)
+  if (!property || labelMode.value) return
+  const order = pamsuBuildingFor(property.building)?.order
+  const zone = order != null ? viewer.value?.getBuildingZone(order) : null
+  if (zone) {
+    selectZone(zone)
+  } else {
+    selected.value = { id: `stall:${id}`, name: property.building?.trim() || 'Outdoor stall', type: 'Stall', corners: [] }
+    pinnedStall.value = property
+  }
+  if (selectStall(property)) {
+    stallTrigger = null
+    photoIndex.value = 0
+  }
+}
+
 watch(galleryPhotos, photos => { if (photoIndex.value >= photos.length) photoIndex.value = 0 })
 watch(propertiesData, () => failedPhotos.clear())
 
@@ -314,7 +352,10 @@ onBeforeUnmount(() => {
         @campus-aspect="campusAspect = $event"
         :occupied-label="auth.isStudent.value ? 'Occupied space listed' : 'Occupied'"
         :show-names="showNames"
+        :pins="stallPins"
+        :active-pin-id="stallOpen ? selectedStallKey : null"
         @select="selectZone"
+        @pin-select="selectPin"
         @model-error="onModelError"
         @buildings-ready="onBuildingsReady"
       />
@@ -471,7 +512,8 @@ onBeforeUnmount(() => {
             />
             <h3 class="break-words text-base font-semibold">{{ selected ? displayName(selected) : '' }}</h3>
           </div>
-          <p class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${buildingProperties.length === 1 ? 'rentable space listed' : 'rentable spaces listed'}` : status === 'error' ? 'Rental-space information unavailable' : 'Loading rentable spaces…' }}</p>
+          <p v-if="pinnedStall" class="mt-1 text-xs font-medium text-toned">Outdoor rentable space</p>
+          <p v-else class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${buildingProperties.length === 1 ? 'rentable space listed' : 'rentable spaces listed'}` : status === 'error' ? 'Rental-space information unavailable' : 'Loading rentable spaces…' }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <UButton
@@ -496,7 +538,7 @@ onBeforeUnmount(() => {
               class="map-stall-card"
               :class="{ 'is-active': selectedStallKey === stallKey(property) }"
               :disabled="labelMode"
-              :aria-label="`View ${stallTitle(property)} (${property.propertyCode})`"
+              :aria-label="`View ${stallTitle(property)}${stallFloorLabel(property.floor) ? `, ${stallFloorLabel(property.floor)}` : ''}`"
               aria-haspopup="dialog"
               @click="openStall(property, $event)"
             >
@@ -512,7 +554,7 @@ onBeforeUnmount(() => {
               </span>
               <span class="min-w-0 space-y-1.5">
                 <span class="block line-clamp-2 text-sm font-semibold leading-snug text-highlighted">{{ stallTitle(property) }}</span>
-                <span class="block truncate text-[11px] text-muted">{{ property.propertyCode }}<template v-if="property.floor"> · {{ property.floor }}</template></span>
+                <span v-if="stallFloorLabel(property.floor)" class="block truncate text-[11px] text-muted">{{ stallFloorLabel(property.floor) }}</span>
                 <UBadge size="sm" variant="subtle" :color="propertyBadgeColor(property)">{{ mapPropertyStatus(property.space_status) ?? 'Status unavailable' }}</UBadge>
               </span>
               <UIcon name="i-lucide-chevron-right" class="size-4 text-muted" />
@@ -557,8 +599,8 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-(--ui-border)/70 bg-(--ui-bg-elevated)/50 p-3.5">
             <dl class="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-              <div><dt class="text-xs text-muted">Space code</dt><dd class="mt-1 font-semibold">{{ selectedStall.propertyCode }}</dd></div>
-              <div v-if="selectedStall.floor"><dt class="text-xs text-muted">Floor</dt><dd class="mt-1 font-medium">{{ selectedStall.floor }}</dd></div>
+              <div><dt class="text-xs text-muted">Stall name</dt><dd class="mt-1 font-semibold">{{ selectedStall.name }}</dd></div>
+              <div><dt class="text-xs text-muted">Floor</dt><dd class="mt-1 font-medium">{{ stallFloorLabel(selectedStall.floor) ?? 'Not specified' }}</dd></div>
             </dl>
             <UBadge variant="subtle" :color="propertyBadgeColor(selectedStall)">{{ mapPropertyStatus(selectedStall.space_status) ?? 'Status unavailable' }}</UBadge>
           </div>

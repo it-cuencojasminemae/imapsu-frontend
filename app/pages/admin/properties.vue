@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PAMSU_BUILDINGS } from '~/utils/pamsu'
+import type { MapPin, MapPosition } from '~/types/map'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -25,6 +26,7 @@ type PropertySpace = {
   operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
   monthlyRent?: number | string
+  mapPosition?: MapPosition | null
   tenancies?: { documentId?: string; status?: string; user?: { username?: string; email?: string } | null }[] | null
 }
 
@@ -147,8 +149,19 @@ const form = reactive({
   area: '',
   monthlyRent: '',
   rentalClassification: 'Other',
-  space_status: 'Vacant' as 'Vacant' | 'Occupied'
+  space_status: 'Vacant' as 'Vacant' | 'Occupied',
+  mapPosition: null as MapPosition | null
 })
+
+// Stall pin on the campus map. Other stalls on this page are shown faded in
+// the picker so the OAS can place neighbours relative to each other.
+const mapPickerOpen = ref(false)
+const otherStallPins = computed<MapPin[]>(() => properties.value
+  .filter(property => property.mapPosition && (property.documentId ?? property.id) !== (editing.value?.documentId ?? editing.value?.id))
+  .map(property => ({ id: String(property.documentId ?? property.id), ...property.mapPosition!, label: property.name, status: property.space_status })))
+const onBuildingPicked = (name: string) => {
+  if (buildingOptions.value.includes(name)) form.building = name
+}
 
 const resetForm = (property: PropertySpace | null) => {
   editing.value = property
@@ -167,7 +180,8 @@ const resetForm = (property: PropertySpace | null) => {
     area: property?.area != null ? String(property.area) : '',
     monthlyRent: property?.monthlyRent != null ? String(property.monthlyRent) : '',
     rentalClassification: property?.rentalClassification ?? 'Other',
-    space_status: property?.space_status ?? 'Vacant'
+    space_status: property?.space_status ?? 'Vacant',
+    mapPosition: property?.mapPosition ?? null
   })
   formError.value = ''
 }
@@ -223,7 +237,8 @@ const save = async () => {
         monthlyRent: form.monthlyRent !== '' ? Number(form.monthlyRent) : undefined,
         rentalClassification: form.rentalClassification,
         photos: [...photoDrafts.value.filter(photo => photo.serverId != null).map(photo => photo.serverId as number), ...uploadedIds.filter(photo => photo?.id != null).map(photo => photo.id)],
-        space_status: form.space_status
+        space_status: form.space_status,
+        mapPosition: form.mapPosition
       }
     }
     if (editing.value) {
@@ -402,6 +417,19 @@ const remove = async (property: PropertySpace) => {
             </UFormField>
           </div>
 
+          <UFormField label="Map location" description="Pin the exact spot of this stall on the campus map.">
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-default px-3 py-2.5">
+              <p class="flex items-center gap-2 text-sm" :class="form.mapPosition ? 'text-highlighted' : 'text-muted'">
+                <UIcon :name="form.mapPosition ? 'i-lucide-map-pin-check' : 'i-lucide-map-pin-off'" class="size-4 shrink-0" :class="form.mapPosition ? 'text-primary' : ''" />
+                {{ form.mapPosition ? `Pinned${form.building ? ` near ${form.building}` : ' on the map'}` : 'Not placed on the map' }}
+              </p>
+              <div class="flex items-center gap-1">
+                <UButton v-if="form.mapPosition" label="Remove" color="neutral" variant="ghost" size="sm" @click="form.mapPosition = null" />
+                <UButton :label="form.mapPosition ? 'Move pin' : 'Pick on map'" icon="i-lucide-map-pin" color="neutral" variant="outline" size="sm" @click="mapPickerOpen = true" />
+              </div>
+            </div>
+          </UFormField>
+
           <UFormField label="Photos" description="Listing photos shown on the campus map while the space is vacant. Photos apply only when you save the property.">
             <div class="flex flex-wrap items-center gap-3">
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary">
@@ -433,6 +461,16 @@ const remove = async (property: PropertySpace) => {
         </form>
       </template>
     </UModal>
+    <ClientOnly>
+      <StallMapPicker
+        v-model:open="mapPickerOpen"
+        v-model="form.mapPosition"
+        :building="form.building"
+        :stall-name="form.name"
+        :other-pins="otherStallPins"
+        @building-picked="onBuildingPicked"
+      />
+    </ClientOnly>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
   </main>
 </template>

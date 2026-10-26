@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { MAP_STATUS_COLORS } from './mapZones.ts'
 
 export const CAMPUS_SURFACE_COLORS = {
-  roof: '#808080',
+  roof: '#5b7186',
   ground: '#b0b0b0',
   road: '#000000'
 } as const
