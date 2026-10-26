@@ -1,75 +1,26 @@
-# Nuxt Minimal Starter
+# iMapSU — Frontend (Nuxt 3)
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
-
-## Setup
-
-Make sure to install dependencies:
+Interactive 3D campus map, dashboards, billing, applications, and announcements for
+iMapSU. It talks to the Strapi backend in
+[imapsu-server](https://github.com/it-cuencojasminemae/imapsu-server), which holds the
+**full setup guide**: clone both repositories side by side, then follow it.
 
 ```bash
-# npm
+mkdir imapsu
+cd imapsu
+git clone https://github.com/it-cuencojasminemae/imapsu-server.git backend
+git clone https://github.com/it-cuencojasminemae/imapsu-frontend.git frontend
+```
+
+## Quick reference
+
+`frontend/.env` is created by the backend's `node scripts/setup-security-env.cjs`
+(see [ENVIRONMENT.md](ENVIRONMENT.md) for every setting). Its `NUXT_GATEWAY_SECRET`
+must match the backend's `GATEWAY_SECRET`, or every API request is rejected.
+
+```bash
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
+npm run dev        # http://localhost:3000 (start the backend first)
+npm test
+npm run build      # production build in .output/
 ```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
