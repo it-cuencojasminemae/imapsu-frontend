@@ -219,7 +219,7 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
       <template #eyebrow>Current tenant</template>
       <template #title>Bills</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Review advance billing information for rent and utilities. Make payments through the University Cashier, then submit the official receipt for verification.</p></template>
-      <template #actions><div v-if="status === 'success'" class="flex gap-3">
+      <template #actions><div v-if="hasLoaded" class="flex gap-3">
         <UCard class="min-w-32" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Bills</p><p class="text-xl font-semibold text-primary">{{ billingSummary?.total ?? '—' }}</p>
         </UCard>

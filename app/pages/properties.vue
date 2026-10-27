@@ -138,7 +138,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
       <template #eyebrow>Property portfolio</template>
       <template #title>Rentable Spaces</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Browse registered campus stalls and other rentable spaces. Information shown depends on your account access.</p></template>
-      <template #actions><div v-if="status === 'success'" class="flex gap-3">
+      <template #actions><div v-if="hasLoaded" class="flex gap-3">
         <UCard class="min-w-28" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Total spaces</p><p class="text-xl font-semibold text-highlighted">{{ properties.length }}</p>
         </UCard>

@@ -19,7 +19,14 @@ const getWorker = () => {
           for (const callback of statusCallbacks) callback(message.status)
         }
       }
+    }).then(async (worker) => {
+      // Meters only show digits. recognize() ignores Tesseract parameters, so
+      // the whitelist has to be set on the worker itself.
+      await worker.setParameters({ tessedit_char_whitelist: '0123456789.' })
+      return worker
     })
+    // A failed start (e.g. OCR assets missing) must not block later scans.
+    workerPromise.catch(() => { workerPromise = null })
   }
   return workerPromise
 }
@@ -30,9 +37,7 @@ export const useMeterOcr = () => {
     if (callback) statusCallbacks.add(callback)
     try {
       const worker = await getWorker()
-      const { data } = await worker.recognize(image, {
-        tessedit_char_whitelist: '0123456789.'
-      })
+      const { data } = await worker.recognize(image)
       return data.text
     } finally {
       if (callback) statusCallbacks.delete(callback)
