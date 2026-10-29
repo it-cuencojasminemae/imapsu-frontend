@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uploadInBatches } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['aspiring-tenant']
@@ -141,10 +143,12 @@ const submit = async () => {
   try {
     const uploadFiles = async (files: File[]) => {
       if (files.length === 0) return [] as { id: number }[]
-      const form = new FormData()
-    form.append('purpose', 'application')
-      files.forEach(file => form.append('files', file))
-      return $api<{ id: number }[]>('/api/upload', { method: 'POST', body: form })
+      return uploadInBatches(files, batch => {
+        const form = new FormData()
+        form.append('purpose', 'application')
+        batch.forEach(file => form.append('files', file))
+        return $api<{ id: number }[]>('/api/upload', { method: 'POST', body: form })
+      })
     }
     const [letterUploaded, dtiUploaded, birUploaded, permitUploaded] = await Promise.all([
       uploadFiles(letterFile.value ? [letterFile.value] : []),
@@ -208,12 +212,14 @@ const uploadMissing = async (item: RentalApplication, field: DocField, files?: F
   missingKey.value = `${docId}:${field}`
   missingError.value = ''
   try {
-    const form = new FormData()
-    form.append('purpose', 'application')
-    Array.from(files).forEach(file => form.append('files', file))
-    const uploaded = await $api<{ id: number }[]>('/api/upload', {
-      method: 'POST',
-      body: form
+    const uploaded = await uploadInBatches(Array.from(files), batch => {
+      const form = new FormData()
+      form.append('purpose', 'application')
+      batch.forEach(file => form.append('files', file))
+      return $api<{ id: number }[]>('/api/upload', {
+        method: 'POST',
+        body: form
+      })
     })
     const newIds = uploaded.map(file => file.id)
     const existingIds = docsOf(item, field).map(doc => doc.id)

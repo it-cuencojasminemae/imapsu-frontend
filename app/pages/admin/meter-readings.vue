@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StrapiFile } from '~/types/auth'
+import { prepareUpload } from '~/utils/uploadFile'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -141,7 +142,7 @@ const cancelEdit = () => {
 const uploadPhoto = async (photo: File) => {
   const form = new FormData()
     form.append('purpose', 'meter')
-  form.append('files', photo)
+  form.append('files', await prepareUpload(photo))
   const uploaded = await $api<StrapiFile[]>('/api/upload', { method: 'POST', body: form })
   return uploaded[0].id
 }

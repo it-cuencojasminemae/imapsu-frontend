@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { prepareUpload } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['current-tenant']
@@ -91,7 +93,7 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
   try {
     const form = new FormData()
     form.append('purpose', 'receipt')
-    form.append('files', file)
+    form.append('files', await prepareUpload(file))
     const uploaded = await $api<{ id: number; url?: string }[]>('/api/upload', {
       method: 'POST',
       body: form

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PAMSU_BUILDINGS } from '~/utils/pamsu'
+import { uploadInBatches } from '~/utils/uploadFile'
 import type { MapPin, MapPosition } from '~/types/map'
 
 definePageMeta({
@@ -218,13 +219,15 @@ const save = async () => {
     const pending = photoDrafts.value.filter(photo => photo.file)
     let uploadedIds: UploadedFile[] = []
     if (pending.length) {
-      const formData = new FormData()
-    formData.append('purpose', 'property-photo')
-      for (const photo of pending) formData.append('files', photo.file as File)
-      uploadedIds = (await $api<UploadedFile[]>('/api/upload', {
-        method: 'POST',
-        body: formData
-      })) ?? []
+      uploadedIds = await uploadInBatches(pending.map(photo => photo.file as File), batch => {
+        const formData = new FormData()
+        formData.append('purpose', 'property-photo')
+        for (const file of batch) formData.append('files', file)
+        return $api<UploadedFile[]>('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
+      })
     }
     const body = {
       data: {

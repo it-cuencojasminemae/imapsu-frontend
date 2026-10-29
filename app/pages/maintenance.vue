@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uploadInBatches } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['current-tenant']
@@ -95,14 +97,16 @@ const submit = async () => {
   try {
     let imageIds: number[] = []
     if (imageFiles.value.length) {
-      const formData = new FormData()
-    formData.append('purpose', 'maintenance')
-      for (const file of imageFiles.value) formData.append('files', file)
-      const uploaded = await $api<UploadedFile[]>('/api/upload', {
-        method: 'POST',
-        body: formData
+      const uploaded = await uploadInBatches(imageFiles.value, batch => {
+        const formData = new FormData()
+        formData.append('purpose', 'maintenance')
+        for (const file of batch) formData.append('files', file)
+        return $api<UploadedFile[]>('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
       })
-      imageIds = (uploaded ?? []).map(file => file.id).filter((id): id is number => id != null)
+      imageIds = uploaded.map(file => file.id).filter((id): id is number => id != null)
     }
     await $api('/api/maintenance-tickets', {
       method: 'POST',

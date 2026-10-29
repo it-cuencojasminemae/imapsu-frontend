@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { prepareUpload, uploadInBatches } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['current-tenant']
@@ -126,7 +128,7 @@ const submitRenewal = async () => {
   try {
     const form = new FormData()
     form.append('purpose', 'renewal')
-    form.append('files', renewLetterFile.value)
+    form.append('files', await prepareUpload(renewLetterFile.value))
     const uploaded = await $api<{ id: number }[]>('/api/upload', {
       method: 'POST',
       body: form
@@ -213,14 +215,16 @@ const submitPhotos = async (tenancy: Tenancy) => {
     const pending = list.filter(photo => photo.file)
     let uploadedIds: number[] = []
     if (pending.length) {
-      const formData = new FormData()
-      formData.append('purpose', 'tenant-photo')
-      for (const photo of pending) formData.append('files', photo.file as File)
-      const uploaded = await $api<UploadedFile[]>('/api/upload', {
-        method: 'POST',
-        body: formData
+      const uploaded = await uploadInBatches(pending.map(photo => photo.file as File), batch => {
+        const formData = new FormData()
+        formData.append('purpose', 'tenant-photo')
+        for (const file of batch) formData.append('files', file)
+        return $api<UploadedFile[]>('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
       })
-      uploadedIds = (uploaded ?? []).filter(photo => photo?.id != null).map(photo => photo.id)
+      uploadedIds = uploaded.filter(photo => photo?.id != null).map(photo => photo.id)
     }
     const ids = [...list.filter(photo => photo.serverId != null).map(photo => photo.serverId as number), ...uploadedIds]
     await savePhotos(tenancy, ids)

@@ -2,6 +2,7 @@
 import type { StrapiFile, User } from '~/types/auth'
 import { accountSection } from '~/utils/accountNavigation'
 import { employeeProfileFields, sharedProfileFields, normalizeProfileText, profilePatch, type ProfileDraft, type ProfileField } from '~/utils/accountProfile'
+import { prepareUpload } from '~/utils/uploadFile'
 
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'My Account | iMapSU' })
@@ -108,7 +109,7 @@ const saveAvatar = async (blob: Blob | null) => {
     if (blob) {
       const upload = new FormData()
       upload.append('purpose', 'avatar')
-      upload.append('files', new File([blob], 'avatar.png', { type: 'image/png' }))
+      upload.append('files', await prepareUpload(new File([blob], 'avatar.png', { type: 'image/png' })))
       const uploaded = await $api<StrapiFile[]>('/api/upload', { method: 'POST', body: upload })
       if (!uploaded[0]?.id) throw new Error('The photo upload returned no file.')
       avatar = uploaded[0].id

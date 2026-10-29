@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { UPLOAD_LIMIT_BYTES } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['admin']
@@ -47,6 +49,10 @@ const restoring = ref(false)
 const restoreFile = ref<File | null>(null)
 const restoreInput = ref<HTMLInputElement | null>(null)
 const restoreConfirmation = ref('')
+const storedRestore = ref<BackupMeta | null>(null)
+const storedRestoreOpen = ref(false)
+const storedConfirmation = ref('')
+const restoreTooLarge = computed(() => (restoreFile.value?.size ?? 0) > UPLOAD_LIMIT_BYTES)
 
 const createBackup = async () => {
   creating.value = true
@@ -81,26 +87,54 @@ const onFilePicked = (event: Event) => {
   restoreConfirmation.value = ''
 }
 
-const restoreBackup = async () => {
-  if (!restoreFile.value) return
-  if (restoreConfirmation.value !== restoreFile.value.name) return
-  if (!confirm(`Restore the database from "${restoreFile.value.name}"?\n\nThis will REPLACE all current data with the contents of the backup. This cannot be undone.`)) return
+// Shared by uploaded and stored restores: the typed filename, browser confirmation and reauthentication apply to both.
+const runRestore = async (name: string, confirmation: string, request: { body?: File, headers: Record<string, string> }) => {
+  if (confirmation !== name) return false
+  if (!confirm(`Restore the database from "${name}"?\n\nThis will REPLACE all current data with the contents of the backup. This cannot be undone.`)) return false
 
   restoring.value = true
   try {
     const result = await $api<{ ok: boolean }>('/api/system/backups/restore', {
       method: 'POST',
-      body: restoreFile.value,
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Backup-Name': restoreFile.value.name, 'X-Restore-Confirm': restoreConfirmation.value }
+      body: request.body,
+      headers: { ...request.headers, 'X-Backup-Name': name, 'X-Restore-Confirm': confirmation }
     })
     toast.add({ title: result.ok ? 'Database restored' : 'Restore could not be confirmed', description: result.ok ? 'Backup applied successfully.' : 'Review the system status before continuing.', color: result.ok ? 'success' : 'warning', icon: result.ok ? 'i-lucide-check-circle-2' : 'i-lucide-triangle-alert' })
-    restoreFile.value = null
-    if (restoreInput.value) restoreInput.value.value = ''
+    return true
   } catch (err) {
     toast.add({ title: 'Restore failed', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    return false
   } finally {
     restoring.value = false
   }
+}
+
+const restoreBackup = async () => {
+  if (!restoreFile.value) return
+  if (restoreTooLarge.value) {
+    toast.add({ title: 'Backup file is too large', description: `Uploaded dumps must be under 4 MB (this one is ${formatSize(restoreFile.value.size)}). Restore larger backups from the stored backup list instead.`, color: 'error', icon: 'i-lucide-triangle-alert' })
+    return
+  }
+  const restored = await runRestore(restoreFile.value.name, restoreConfirmation.value, {
+    body: restoreFile.value,
+    headers: { 'Content-Type': 'application/octet-stream' }
+  })
+  if (!restored) return
+  restoreFile.value = null
+  if (restoreInput.value) restoreInput.value.value = ''
+}
+
+const openStoredRestore = (backup: BackupMeta) => {
+  storedRestore.value = backup
+  storedConfirmation.value = ''
+  storedRestoreOpen.value = true
+}
+
+// The backend reads the stored dump itself, so this request carries no body.
+const restoreStoredBackup = async () => {
+  if (!storedRestore.value) return
+  const restored = await runRestore(storedRestore.value.name, storedConfirmation.value, { headers: { 'X-Backup-Source': 'stored' } })
+  if (restored) storedRestoreOpen.value = false
 }
 
 const formatSize = (bytes: number) => {
@@ -119,7 +153,7 @@ const formatDate = (value: string) =>
       <template #eyebrow>Administration</template>
       <template #title>Database Backups</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
-          Create on-demand database backups, download dumps, and restore the database from an uploaded backup file.
+          Create on-demand database backups, download dumps, and restore the database from a stored or uploaded backup file.
         </p></template>
       <template #actions><div class="flex items-center gap-2">
         <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" />
@@ -166,7 +200,7 @@ const formatDate = (value: string) =>
     <UCard class="mb-8">
       <template #header>
         <h2 class="text-lg font-semibold text-highlighted">Restore database</h2>
-        <p class="text-sm text-muted">Upload a .dump file created by this tool (or an equivalent PostgreSQL custom-format dump).</p>
+        <p class="text-sm text-muted">Upload a .dump file created by this tool (or an equivalent PostgreSQL custom-format dump). Uploaded dumps must be under 4 MB; restore larger backups with the Restore action in the backup list below.</p>
       </template>
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input ref="restoreInput" type="file" accept=".dump,application/octet-stream" class="block w-full max-w-sm text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary" @change="onFilePicked" />
@@ -174,13 +208,14 @@ const formatDate = (value: string) =>
           label="Restore database"
           icon="i-lucide-upload-cloud"
           color="warning"
-          :disabled="!restoreFile || restoreConfirmation !== restoreFile.name"
+          :disabled="!restoreFile || restoreTooLarge || restoreConfirmation !== restoreFile.name"
           :loading="restoring"
           @click="restoreBackup"
         />
       </div>
-      <UFormField v-if="restoreFile" class="mt-4" label="Confirm backup filename" description="Type the selected filename exactly. Recent authenticator verification is required."><UInput v-model="restoreConfirmation" class="w-full" /></UFormField>
-      <UAlert v-if="restoreFile" class="mt-4" color="warning" icon="i-lucide-triangle-alert" title="Destructive operation" :description="`Restoring from ${restoreFile.name} will replace the application database. A pre-restore backup is retained; signed-in users must sign in again.`" />
+      <UAlert v-if="restoreFile && restoreTooLarge" class="mt-4" color="error" icon="i-lucide-file-x" title="File is too large to upload" :description="`${restoreFile.name} is ${formatSize(restoreFile.size)}. Uploaded dumps must be under 4 MB. Restore it from the stored backup list instead.`" />
+      <UFormField v-if="restoreFile && !restoreTooLarge" class="mt-4" label="Confirm backup filename" description="Type the selected filename exactly. Recent authenticator verification is required."><UInput v-model="restoreConfirmation" class="w-full" /></UFormField>
+      <UAlert v-if="restoreFile && !restoreTooLarge" class="mt-4" color="warning" icon="i-lucide-triangle-alert" title="Destructive operation" :description="`Restoring from ${restoreFile.name} will replace the application database. A pre-restore backup is retained; signed-in users must sign in again.`" />
     </UCard>
 
     <UCard>
@@ -206,6 +241,7 @@ const formatDate = (value: string) =>
             <p class="text-xs text-muted">{{ formatDate(backup.createdAt) }} · {{ formatSize(backup.size) }}</p>
           </div>
           <UButton :to="'/api/system/backups/' + encodeURIComponent(backup.name) + '/download'" target="_blank" label="Download" icon="i-lucide-download" color="neutral" variant="ghost" size="sm" />
+          <UButton label="Restore" icon="i-lucide-history" color="warning" variant="ghost" size="sm" :disabled="restoring" @click="openStoredRestore(backup)" />
           <UButton
             square
             color="error"
@@ -219,5 +255,20 @@ const formatDate = (value: string) =>
         </li>
       </ul>
     </UCard>
+
+    <UModal v-model:open="storedRestoreOpen" class="max-w-xl" title="Restore stored backup" description="Replace the application database with a backup kept on the server.">
+      <template #body>
+        <form v-if="storedRestore" class="space-y-4" @submit.prevent="restoreStoredBackup">
+          <UAlert color="warning" icon="i-lucide-triangle-alert" title="Destructive operation" :description="`Restoring from ${storedRestore.name} (${formatDate(storedRestore.createdAt)}) will replace the application database. A pre-restore backup is retained; signed-in users must sign in again.`" />
+          <UFormField label="Confirm backup filename" description="Type the backup filename exactly. Recent authenticator verification is required.">
+            <UInput v-model="storedConfirmation" class="w-full" :placeholder="storedRestore.name" />
+          </UFormField>
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" :disabled="restoring" @click="storedRestoreOpen = false" />
+            <UButton data-prominent="true" type="submit" color="warning" icon="i-lucide-history" :loading="restoring" :disabled="storedConfirmation !== storedRestore.name">Restore database</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
   </main>
 </template>

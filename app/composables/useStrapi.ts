@@ -1,3 +1,5 @@
+import { UploadTooLargeError } from '~/utils/uploadFile'
+
 export const useStrapi = () => {
   const config = useRuntimeConfig()
   const baseURL = ''
@@ -7,7 +9,7 @@ export const useStrapi = () => {
   const $api = useSecureApi()
 
   const getErrorMessage = (err: unknown) =>
-    (err as any)?.data?.error?.message ?? (err as any)?.data?.message ?? 'Unable to complete the request. Please try again.'
+    (err instanceof UploadTooLargeError ? err.message : undefined) ?? (err as any)?.data?.error?.message ?? (err as any)?.data?.message ?? 'Unable to complete the request. Please try again.'
 
   return { baseURL, authHeaders, $api, getErrorMessage }
 }

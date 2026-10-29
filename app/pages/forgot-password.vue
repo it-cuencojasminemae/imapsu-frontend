@@ -7,8 +7,9 @@ const toast = useToast()
 
 const OTP_LENGTH = 6
 
-const step = ref<'request' | 'reset' | 'done'>('request')
+const step = ref<'request' | 'verify' | 'reset' | 'done'>('request')
 const email = ref('')
+const resetToken = ref('')
 const digits = ref<string[]>(Array(OTP_LENGTH).fill(''))
 const inputRefs = ref<(HTMLElement | null)[]>([])
 const password = ref('')
@@ -98,7 +99,7 @@ const requestCode = async () => {
   loading.value = true
   try {
     await auth.requestPasswordReset(email.value)
-    step.value = 'reset'
+    step.value = 'verify'
     startResendCooldown()
     await nextTick()
     focusInput(0)
@@ -125,13 +126,38 @@ const resend = async () => {
   }
 }
 
-const resetPassword = async () => {
-  attempted.value = true
+const clearCode = async () => {
+  digits.value = Array(OTP_LENGTH).fill('')
+  await nextTick()
+  focusInput(0)
+}
+
+const verifyCode = async () => {
   errorMessage.value = ''
   if (!codeComplete.value) {
     errorMessage.value = 'Enter the 6-digit reset code from your email.'
     return
   }
+  loading.value = true
+  try {
+    resetToken.value = await auth.verifyPasswordReset(email.value, code.value)
+    step.value = 'reset'
+  } catch (error: unknown) {
+    errorMessage.value = messageOf(error, 'That code is incorrect or has expired.')
+    await clearCode()
+  } finally {
+    loading.value = false
+  }
+}
+
+// Check the code as soon as the last digit is entered.
+watch(codeComplete, (complete) => {
+  if (complete && step.value === 'verify' && !loading.value) verifyCode()
+})
+
+const resetPassword = async () => {
+  attempted.value = true
+  errorMessage.value = ''
   if (!passwordCheck.value.ok) {
     errorMessage.value = `Password must contain ${PASSWORD_REQUIREMENTS.filter(requirement => passwordCheck.value.missing.includes(requirement.key)).map(requirement => requirement.label.toLowerCase()).join(', ')}.`
     return
@@ -142,15 +168,21 @@ const resetPassword = async () => {
   }
   loading.value = true
   try {
-    await auth.resetPassword(email.value, code.value, password.value)
+    await auth.resetPassword(email.value, resetToken.value, password.value)
     password.value = ''
     confirmPassword.value = ''
+    resetToken.value = ''
     step.value = 'done'
   } catch (error: unknown) {
-    errorMessage.value = messageOf(error, 'We could not reset your password. The code may be incorrect or expired.')
-    if (/code/i.test(errorMessage.value)) {
-      digits.value = Array(OTP_LENGTH).fill('')
-      focusInput(0)
+    errorMessage.value = messageOf(error, 'We could not reset your password. Please try again.')
+    // An expired reset session means the user must start over with a new code.
+    if (/expired|new code/i.test(errorMessage.value)) {
+      resetToken.value = ''
+      password.value = ''
+      confirmPassword.value = ''
+      attempted.value = false
+      step.value = 'verify'
+      await clearCode()
     }
   } finally {
     loading.value = false
@@ -160,6 +192,9 @@ const resetPassword = async () => {
 const changeEmail = () => {
   step.value = 'request'
   digits.value = Array(OTP_LENGTH).fill('')
+  resetToken.value = ''
+  password.value = ''
+  confirmPassword.value = ''
   errorMessage.value = ''
   attempted.value = false
 }
@@ -179,7 +214,7 @@ onBeforeUnmount(() => {
           </span>
           <h1 class="text-2xl font-bold tracking-tight text-highlighted">Reset your password</h1>
           <p class="mt-1 text-sm text-muted">
-            {{ step === 'request' ? 'We will email you a 6-digit code to confirm it is you.' : step === 'reset' ? 'Enter the code and choose a new password.' : 'You can now sign in with your new password.' }}
+            {{ step === 'request' ? 'We will email you a 6-digit code to confirm it is you.' : step === 'verify' ? 'Enter the 6-digit code we emailed you.' : step === 'reset' ? 'Choose a new password for your account.' : 'You can now sign in with your new password.' }}
           </p>
         </div>
       </template>
@@ -205,7 +240,7 @@ onBeforeUnmount(() => {
         </UButton>
       </form>
 
-      <form v-else class="space-y-5" @submit.prevent="resetPassword">
+      <form v-else-if="step === 'verify'" class="space-y-5" @submit.prevent="verifyCode">
         <UAlert color="info" variant="soft" icon="i-lucide-mail" :description="`If an active account uses ${email}, we sent a reset code to it. Check your spam folder too.`" />
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 
@@ -233,8 +268,24 @@ onBeforeUnmount(() => {
           <p class="mt-2 text-center text-xs text-muted">The code expires in 10 minutes and works once.</p>
         </UFormField>
 
+        <UButton data-prominent="true" type="submit" block size="lg" icon="i-lucide-badge-check" :loading="loading" :disabled="!codeComplete">
+          Verify code
+        </UButton>
+
+        <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
+          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0 || loading" @click="resend">
+            {{ resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code' }}
+          </UButton>
+          <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Use a different email</UButton>
+        </div>
+      </form>
+
+      <form v-else class="space-y-5" @submit.prevent="resetPassword">
+        <UAlert color="success" variant="soft" icon="i-lucide-badge-check" :description="`Code verified for ${email}. Choose a new password.`" />
+        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+
         <UFormField label="New password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
-          <UInput v-model="password" required :type="showPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
+          <UInput v-model="password" required :type="showPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }">
             <template #trailing>
               <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
                 <UIcon :name="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
@@ -268,11 +319,8 @@ onBeforeUnmount(() => {
           Reset password
         </UButton>
 
-        <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
-          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0 || loading" @click="resend">
-            {{ resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code' }}
-          </UButton>
-          <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Use a different email</UButton>
+        <div class="flex justify-center text-sm">
+          <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Start over</UButton>
         </div>
       </form>
 

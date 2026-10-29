@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uploadInBatches } from '~/utils/uploadFile'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['oas']
@@ -249,14 +251,16 @@ const onImagesSelected = async (event: Event) => {
   imageUploading.value = true
   formError.value = ''
   try {
-    const formData = new FormData()
-    formData.append('purpose', 'maintenance')
-    for (const file of files) formData.append('files', file)
-    const uploaded = await $api<UploadedFile[]>('/api/upload', {
-      method: 'POST',
-      body: formData
+    const uploaded = await uploadInBatches(files, batch => {
+      const formData = new FormData()
+      formData.append('purpose', 'maintenance')
+      for (const file of batch) formData.append('files', file)
+      return $api<UploadedFile[]>('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
     })
-    imageDrafts.value.push(...(uploaded ?? []).filter(image => image?.id != null))
+    imageDrafts.value.push(...uploaded.filter(image => image?.id != null))
   } catch (err) {
     formError.value = getErrorMessage(err)
   } finally {

@@ -40,8 +40,9 @@ export const useAuth = () => {
     confirmEmail: async (email: string, code: string) => { const result = await request<AuthResponse>('/api/auth/confirm-email', { method: 'POST', body: { email, code } }); mfaPending.value = !!result.mfaRequired; setUser(mfaPending.value ? null : result.user ?? null); if (mfaPending.value) await navigateTo('/login'); else await refreshMe(); return result.user },
     resendConfirmation: (email: string) => request('/api/auth/resend-confirmation', { method: 'POST', body: { email } }),
     requestPasswordReset: (email: string) => request('/api/auth/password-recovery/request', { method: 'POST', body: { email } }),
+    verifyPasswordReset: async (email: string, code: string) => (await request<{ resetToken: string }>('/api/auth/password-recovery/verify', { method: 'POST', body: { email, code } })).resetToken,
     // The server signs out every session, so drop any local account state too.
-    resetPassword: async (email: string, code: string, password: string) => { await request('/api/auth/password-recovery/reset', { method: 'POST', body: { email, code, password } }); setUser(null) },
+    resetPassword: async (email: string, resetToken: string, password: string) => { await request('/api/auth/password-recovery/reset', { method: 'POST', body: { email, resetToken, password } }); setUser(null) },
     logout: async () => { await request('/api/auth/logout', { method: 'POST' }); setUser(null) },
   }
 }
