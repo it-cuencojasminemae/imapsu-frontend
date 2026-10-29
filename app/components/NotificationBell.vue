@@ -58,7 +58,9 @@ const targetFor = (type: NotificationItem['type']) => {
   }
   switch (type) {
     case 'application':
-      return '/rental-applications'
+      // A finalized lease turns the applicant into a current tenant, whose
+      // applications live on as their tenancy.
+      return auth.isCurrentTenant.value ? '/tenancy' : '/rental-applications'
     case 'ticket':
     case 'follow-up':
       return '/maintenance'

@@ -220,6 +220,22 @@ const { stallOpen, selectedStallKey, selectedStall, selectStall, clearStall } = 
   labelMode
 )
 const galleryPhotos = computed(() => selectedStall.value ? propertyPhotos(selectedStall.value) : [])
+// Students rate an occupied stall straight from its details; guests sign in
+// first and land on the same pre-filled form.
+const rateStallLink = computed(() => {
+  const stall = selectedStall.value
+  if (stall?.space_status !== 'Occupied' || !stall.documentId) return null
+  const target = `/feedback?property=${stall.documentId}`
+  if (auth.isStudent.value) return target
+  return auth.isAuthenticated.value ? null : `/login?redirect=${encodeURIComponent(target)}`
+})
+// The listing opens with this stall pinned and highlighted, so aspiring
+// tenants don't have to hunt for it among every space.
+const listingLink = computed(() => {
+  const documentId = selectedStall.value?.documentId
+  const target = documentId ? `/properties?focus=${documentId}` : '/properties'
+  return auth.isAuthenticated.value ? target : `/login?redirect=${encodeURIComponent(target)}`
+})
 const photoIndex = ref(0)
 const activePhoto = computed(() => galleryPhotos.value[photoIndex.value])
 const failedPhotos = reactive(new Set<string>())
@@ -614,7 +630,8 @@ onBeforeUnmount(() => {
       </template>
       <template #footer>
         <UButton color="neutral" variant="ghost" label="Back to spaces" icon="i-lucide-arrow-left" @click="stallOpen = false" />
-        <UButton :to="auth.isAuthenticated.value ? '/properties' : '/login'" size="sm" icon="i-lucide-store" label="View property listing" />
+        <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="rateStallLink ? 'neutral' : 'primary'" :variant="rateStallLink ? 'outline' : 'solid'" icon="i-lucide-store" label="View property listing" />
+        <UButton v-if="rateStallLink" :to="rateStallLink" size="sm" icon="i-lucide-star" label="Rate this stall" />
       </template>
     </UModal>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { StrapiFile, User } from '~/types/auth'
 import { accountSection } from '~/utils/accountNavigation'
-import { employeeProfileFields, sharedProfileFields, normalizeProfileText, profilePatch, type ProfileDraft, type ProfileField } from '~/utils/accountProfile'
+import { allProfileFields, emptyProfileDraft, normalizeProfileText, profilePatch, type ProfileField } from '~/utils/accountProfile'
 import { prepareUpload } from '~/utils/uploadFile'
 
 definePageMeta({ middleware: 'auth' })
@@ -19,8 +19,8 @@ const sections = [
   { value: 'security', label: 'Security', icon: 'i-lucide-shield-check' },
   { value: 'preferences', label: 'Preferences', icon: 'i-lucide-sliders-horizontal' }
 ]
-const fields = [...sharedProfileFields, ...employeeProfileFields]
-const emptyDraft = (): ProfileDraft => ({ fullName: '', contactNumber: '', bio: '', position: '', department: '', employeeId: '', officeLocation: '' })
+const fields = allProfileFields
+const emptyDraft = emptyProfileDraft
 const form = reactive(emptyDraft())
 const baseline = reactive(emptyDraft())
 const saving = ref(false)
@@ -30,7 +30,7 @@ const password = useTemplateRef('password')
 const security = useTemplateRef('security')
 const passwordUpdated = ref(false)
 const sharedDirty = useState('account-unsaved-changes', () => false)
-const changed = computed(() => profilePatch(form, baseline, auth.isStaff.value))
+const changed = computed(() => profilePatch(form, baseline, auth.role.value))
 const dirty = computed(() => Object.keys(changed.value).length > 0)
 const hasUnsavedChanges = computed(() => dirty.value || !!password.value?.dirty)
 watchEffect(() => { sharedDirty.value = hasUnsavedChanges.value })
@@ -138,9 +138,10 @@ watch(auth.user, (user, previous) => {
   }
 }, { immediate: true, flush: 'sync' })
 
-const confirmLeave = () => !hasUnsavedChanges.value || passwordUpdated.value || window.confirm('You have unsaved account changes. Leave without saving?')
+const { confirm } = useConfirmDialog()
+const confirmLeave = async () => !hasUnsavedChanges.value || passwordUpdated.value || await confirm({ title: 'Leave without saving?', description: 'You have unsaved account changes. They will be lost if you leave this page.', confirmLabel: 'Leave page', cancelLabel: 'Keep editing', tone: 'warning' })
 onBeforeRouteLeave(() => confirmLeave())
-const beforePasswordUpdate = () => !dirty.value || window.confirm('Changing your password signs you out and discards your unsaved profile changes. Continue?')
+const beforePasswordUpdate = async () => !dirty.value || await confirm({ title: 'Change password?', description: 'Changing your password signs you out and discards your unsaved profile changes.', confirmLabel: 'Change password', tone: 'warning', icon: 'i-lucide-key-round' })
 const beforeUnload = (event: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value && !passwordUpdated.value) { event.preventDefault(); event.returnValue = '' }
 }
@@ -197,6 +198,7 @@ onBeforeUnmount(() => {
                 <UFormField label="Full name" name="fullName" :error="fieldErrors.fullName" class="sm:col-span-2"><UInput v-model="form.fullName" placeholder="Your full name" autocomplete="name" :disabled="saving" class="w-full" size="md" /></UFormField>
                 <UFormField label="Contact number" name="contactNumber" :error="fieldErrors.contactNumber"><UInput v-model="form.contactNumber" type="tel" autocomplete="tel" placeholder="e.g. 0917 000 0000" :disabled="saving" class="w-full" size="md" /></UFormField>
                 <UFormField label="Email address" name="email" description="Managed by an administrator"><UInput :model-value="auth.user.value?.email" type="email" disabled class="w-full" size="md" /></UFormField>
+                <UFormField v-if="auth.role.value === 'aspiring-tenant' || auth.role.value === 'current-tenant'" label="Business name" name="businessName" :error="fieldErrors.businessName"><UInput v-model="form.businessName" placeholder="Your business or trade name" autocomplete="organization" :disabled="saving" class="w-full" size="md" /></UFormField>
                 <UFormField label="Bio" name="bio" :error="fieldErrors.bio" class="sm:col-span-2"><UTextarea v-model="form.bio" placeholder="A little about you" :disabled="saving" class="w-full" :rows="3" /></UFormField>
               </div>
             </UCard>

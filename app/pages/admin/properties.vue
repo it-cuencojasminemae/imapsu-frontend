@@ -37,6 +37,7 @@ useHead({ title: 'Manage Properties | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -261,7 +262,8 @@ const save = async () => {
 }
 
 const remove = async (property: PropertySpace) => {
-  if (!confirm(`Delete "${property.name}" (${property.propertyCode})? This cannot be undone.`)) return
+  const tenantNote = property.space_status === 'Occupied' ? ' Its active tenancy will be ended and the tenant returned to aspiring tenant.' : ''
+  if (!await confirm({ title: 'Delete rentable space?', description: `"${property.name}" (${property.propertyCode}) will be permanently removed.${tenantNote} This cannot be undone.`, confirmLabel: 'Delete space', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/property-spaces/${property.documentId ?? property.id}`, { method: 'DELETE' })
     toast.add({ title: 'Property deleted', description: property.name, color: 'success', icon: 'i-lucide-check-circle-2' })

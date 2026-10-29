@@ -23,6 +23,7 @@ type BackupSettings = {
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -68,7 +69,7 @@ const createBackup = async () => {
 }
 
 const removeBackup = async (backup: BackupMeta) => {
-  if (!confirm(`Delete backup "${backup.name}"? This cannot be undone.`)) return
+  if (!await confirm({ title: 'Delete backup?', description: `"${backup.name}" will be permanently removed. This cannot be undone.`, confirmLabel: 'Delete backup', icon: 'i-lucide-trash-2' })) return
   deleting.value = backup.name
   try {
     await $api(`/api/system/backups/${backup.name}`, { method: 'DELETE' })
@@ -87,10 +88,10 @@ const onFilePicked = (event: Event) => {
   restoreConfirmation.value = ''
 }
 
-// Shared by uploaded and stored restores: the typed filename, browser confirmation and reauthentication apply to both.
+// Shared by uploaded and stored restores: the typed filename, confirmation dialog and reauthentication apply to both.
 const runRestore = async (name: string, confirmation: string, request: { body?: File, headers: Record<string, string> }) => {
   if (confirmation !== name) return false
-  if (!confirm(`Restore the database from "${name}"?\n\nThis will REPLACE all current data with the contents of the backup. This cannot be undone.`)) return false
+  if (!await confirm({ title: 'Restore database?', description: `Restoring from "${name}" will REPLACE all current data with the contents of the backup. This cannot be undone.`, confirmLabel: 'Restore database', icon: 'i-lucide-database-backup' })) return false
 
   restoring.value = true
   try {
@@ -165,7 +166,7 @@ const formatDate = (value: string) =>
       <UCard>
         <div class="flex items-center gap-3">
           <span class="imapsu-brand-tile grid size-10 place-items-center rounded-lg">
-            <span class="i-lucide-clock-3 text-lg"></span>
+            <UIcon name="i-lucide-clock-3" class="size-5" />
           </span>
           <div>
             <p class="text-xs text-muted">Schedule</p>
@@ -176,7 +177,7 @@ const formatDate = (value: string) =>
       <UCard>
         <div class="flex items-center gap-3">
           <span class="imapsu-brand-tile grid size-10 place-items-center rounded-lg">
-            <span class="i-lucide-calendar-check text-lg"></span>
+            <UIcon name="i-lucide-calendar-check" class="size-5" />
           </span>
           <div>
             <p class="text-xs text-muted">Retention</p>
@@ -187,7 +188,7 @@ const formatDate = (value: string) =>
       <UCard>
         <div class="flex items-center gap-3">
           <span class="imapsu-brand-tile grid size-10 place-items-center rounded-lg">
-            <span class="i-lucide-power text-lg"></span>
+            <UIcon name="i-lucide-power" class="size-5" />
           </span>
           <div>
             <p class="text-xs text-muted">Scheduled backups</p>
@@ -214,7 +215,7 @@ const formatDate = (value: string) =>
         />
       </div>
       <UAlert v-if="restoreFile && restoreTooLarge" class="mt-4" color="error" icon="i-lucide-file-x" title="File is too large to upload" :description="`${restoreFile.name} is ${formatSize(restoreFile.size)}. Uploaded dumps must be under 4 MB. Restore it from the stored backup list instead.`" />
-      <UFormField v-if="restoreFile && !restoreTooLarge" class="mt-4" label="Confirm backup filename" description="Type the selected filename exactly. Recent authenticator verification is required."><UInput v-model="restoreConfirmation" class="w-full" /></UFormField>
+      <UFormField v-if="restoreFile && !restoreTooLarge" class="mt-4" label="Confirm backup filename" :description="`Type the selected filename exactly.${auth.user.value?.security?.mfaRequired ? ' Recent authenticator verification is required.' : ''}`"><UInput v-model="restoreConfirmation" class="w-full" /></UFormField>
       <UAlert v-if="restoreFile && !restoreTooLarge" class="mt-4" color="warning" icon="i-lucide-triangle-alert" title="Destructive operation" :description="`Restoring from ${restoreFile.name} will replace the application database. A pre-restore backup is retained; signed-in users must sign in again.`" />
     </UCard>
 
@@ -235,7 +236,7 @@ const formatDate = (value: string) =>
 
       <ul v-else class="divide-y divide-default">
         <li v-for="backup in backups" :key="backup.name" class="flex items-center gap-4 px-5 py-3">
-          <span class="i-lucide-file-archive text-lg text-muted"></span>
+          <UIcon name="i-lucide-file-archive" class="size-5 text-muted" />
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-highlighted">{{ backup.name }}</p>
             <p class="text-xs text-muted">{{ formatDate(backup.createdAt) }} · {{ formatSize(backup.size) }}</p>
@@ -260,7 +261,7 @@ const formatDate = (value: string) =>
       <template #body>
         <form v-if="storedRestore" class="space-y-4" @submit.prevent="restoreStoredBackup">
           <UAlert color="warning" icon="i-lucide-triangle-alert" title="Destructive operation" :description="`Restoring from ${storedRestore.name} (${formatDate(storedRestore.createdAt)}) will replace the application database. A pre-restore backup is retained; signed-in users must sign in again.`" />
-          <UFormField label="Confirm backup filename" description="Type the backup filename exactly. Recent authenticator verification is required.">
+          <UFormField label="Confirm backup filename" :description="`Type the backup filename exactly.${auth.user.value?.security?.mfaRequired ? ' Recent authenticator verification is required.' : ''}`">
             <UInput v-model="storedConfirmation" class="w-full" :placeholder="storedRestore.name" />
           </UFormField>
           <div class="flex justify-end gap-2">

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { User } from '~/types/auth'
+import { landingPath } from '~/utils/accountNavigation'
 
 definePageMeta({
   title: 'Verify your email',
-  description: 'Enter the verification code to activate your iMapSU account.'
+  description: 'Enter the verification code to activate your iMapSU account.',
+  middleware: 'guest'
 })
 
 const route = useRoute()
@@ -11,6 +13,7 @@ const auth = useAuth()
 const toast = useToast()
 
 const OTP_LENGTH = 6
+const RESEND_COOLDOWN_SECONDS = 90
 
 const email = ref('')
 const digits = ref<string[]>(Array(OTP_LENGTH).fill(''))
@@ -80,7 +83,7 @@ function onDigitPaste(_idx: number, event: ClipboardEvent) {
   focusInput(Math.min(pasted.length, OTP_LENGTH - 1))
 }
 
-function startResendCooldown(seconds = 30) {
+function startResendCooldown(seconds = RESEND_COOLDOWN_SECONDS) {
   resendCooldown.value = seconds
   if (cooldownTimer) clearInterval(cooldownTimer)
   cooldownTimer = setInterval(() => {
@@ -95,7 +98,7 @@ function startResendCooldown(seconds = 30) {
 const verify = async () => {
   errorMessage.value = ''
   if (!email.value.includes('@')) {
-    errorMessage.value = 'Enter the email address you registered with.'
+    errorMessage.value = 'No email address to verify. Open this page from the registration screen.'
     return
   }
   if (!codeComplete.value) {
@@ -132,8 +135,8 @@ const resend = async () => {
   }
 }
 
-const goToAccount = async () => {
-  await navigateTo('/account')
+const goToDashboard = async () => {
+  await navigateTo(landingPath(verifiedUser.value), { replace: true })
 }
 
 onMounted(() => {
@@ -176,15 +179,28 @@ watch(code, (value) => {
             you're signed in.
           </p>
         </div>
-        <UButton block size="lg" icon="i-lucide-arrow-right" @click="goToAccount">Continue to your account</UButton>
+        <UButton block size="lg" icon="i-lucide-arrow-right" @click="goToDashboard">Continue to your dashboard</UButton>
       </div>
 
       <form v-else class="space-y-5" @submit.prevent="verify">
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 
-        <UFormField label="Email address" name="email" required>
-          <UInput required v-model="email" type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="verifying || resending" :ui="{ root: 'w-full' }" />
-        </UFormField>
+        <div v-if="email" class="flex items-center gap-3 rounded-xl border border-default bg-elevated/60 px-4 py-3">
+          <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <UIcon name="i-lucide-mail" class="size-4" />
+          </span>
+          <div class="min-w-0 text-left">
+            <p class="text-xs text-muted">Code sent to</p>
+            <p class="truncate text-sm font-medium text-highlighted" :title="email">{{ email }}</p>
+          </div>
+        </div>
+        <UAlert
+          v-else
+          color="warning"
+          icon="i-lucide-mail-question"
+          title="No email address found"
+          description="Open the verification link from the registration page, or sign in to request a new code."
+        />
 
         <UFormField label="Verification code" name="code" required>
           <div class="flex items-center justify-center gap-2 sm:gap-3" role="group" aria-label="6-digit verification code">
@@ -218,7 +234,7 @@ watch(code, (value) => {
 
         <div class="flex items-center justify-center gap-1.5 text-sm">
           <span class="text-muted">Haven't received it?</span>
-          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0" @click="resend">
+          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0 || !email" @click="resend">
             {{ resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code' }}
           </UButton>
         </div>

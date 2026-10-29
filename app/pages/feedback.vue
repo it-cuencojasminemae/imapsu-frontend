@@ -9,6 +9,7 @@ type Feedback = {
   documentId?: string
   tenantName?: string
   rating: number
+  category?: string
   comment?: string
   createdAt?: string
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
@@ -58,20 +59,26 @@ const propertyOptions = computed(() => properties.value.map(property => ({
   value: property.documentId
 })))
 
-const selectedProperty = ref<string>()
-const tenantName = ref('')
+// Optional quick tags; "Other" is the stored default when none is picked.
+const categoryOptions = ['Product', 'Service', 'Cleanliness', 'Environment', 'Staff']
+
+// "Rate this stall" links from the map and property cards open the form
+// with the stall already chosen.
+const route = useRoute()
+const selectedProperty = ref<string | undefined>(typeof route.query.property === 'string' ? route.query.property : undefined)
 const rating = ref(0)
+const category = ref<string>()
 const comment = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
 const tenantMap = computed(() => new Map((tenantData.value?.data ?? []).map(entry => [entry.propertyDocumentId, entry.tenantName ?? ''])))
 
-const tenantOfProperty = (documentId?: string) => tenantMap.value.get(documentId ?? '') ?? ''
+const tenantName = computed(() => tenantMap.value.get(selectedProperty.value ?? '') ?? '')
 
-watch(selectedProperty, value => {
-  tenantName.value = tenantOfProperty(value)
-})
+const toggleCategory = (value: string) => {
+  category.value = category.value === value ? undefined : value
+}
 
 const submit = async () => {
   errorMessage.value = ''
@@ -89,15 +96,15 @@ const submit = async () => {
     await $api('/api/feedbacks', {
       method: 'POST',
       body: {
-        tenantName: tenantName.value || undefined,
         rating: rating.value,
+        category: category.value,
         comment: comment.value || undefined,
         propertySpace: selectedProperty.value
       }
     })
     selectedProperty.value = undefined
-    tenantName.value = ''
     rating.value = 0
+    category.value = undefined
     comment.value = ''
     toast.add({ title: 'Feedback submitted', color: 'success', icon: 'i-lucide-check-circle-2' })
     await refresh()
@@ -129,13 +136,9 @@ const formatDate = (value?: string) => value
         </template>
 
         <form class="space-y-5" @submit.prevent="submit">
-          <UFormField label="Property" name="propertySpace" required>
+          <UFormField label="Stall" name="propertySpace" required>
             <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
-          </UFormField>
-
-          <UFormField label="Tenant name" name="tenantName">
-            <UInput v-model="tenantName" type="text" placeholder="No active tenant" disabled />
-            <p class="mt-1 text-xs text-muted">The tenant is filled in automatically for the selected property.</p>
+            <p v-if="tenantName" class="mt-1.5 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-user-round" class="size-3.5" /> Run by {{ tenantName }}</p>
           </UFormField>
 
           <UFormField label="Rating" name="rating" required>
@@ -146,17 +149,36 @@ const formatDate = (value?: string) => value
                 type="button"
                 color="neutral"
                 variant="ghost"
+                size="xl"
                 square
                 icon="i-lucide-star"
                 :class="star <= rating ? 'text-secondary fill-current' : 'text-toned'"
                 :aria-label="`Rate ${star} star${star > 1 ? 's' : ''}`"
+                :aria-pressed="star === rating"
                 :disabled="submitting"
                 @click="rating = star"
               />
             </div>
           </UFormField>
 
-          <UFormField label="Comment" name="comment">
+          <UFormField label="What is it about?" name="category" hint="Optional">
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                v-for="option in categoryOptions"
+                :key="option"
+                type="button"
+                size="sm"
+                :color="category === option ? 'primary' : 'neutral'"
+                :variant="category === option ? 'solid' : 'outline'"
+                :aria-pressed="category === option"
+                :label="option"
+                :disabled="submitting"
+                @click="toggleCategory(option)"
+              />
+            </div>
+          </UFormField>
+
+          <UFormField label="Comment" name="comment" hint="Optional">
             <UTextarea v-model="comment" placeholder="Tell us about your experience…" :rows="4" :disabled="submitting" />
           </UFormField>
 
@@ -186,7 +208,10 @@ const formatDate = (value?: string) => value
                   :class="star <= item.rating ? 'text-secondary fill-current' : 'text-toned'"
                 />
               </div>
-              <p class="text-xs text-muted">{{ formatDate(item.createdAt) }}</p>
+              <div class="flex items-center gap-2">
+                <UBadge v-if="item.category && item.category !== 'Other'" color="neutral" variant="subtle" size="sm">{{ item.category }}</UBadge>
+                <p class="text-xs text-muted">{{ formatDate(item.createdAt) }}</p>
+              </div>
             </div>
             <p class="mt-3 text-sm leading-relaxed text-toned">{{ item.comment || 'No comment left.' }}</p>
             <p class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">

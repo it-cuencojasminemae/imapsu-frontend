@@ -2,6 +2,8 @@ export const useSecureApi = () => {
   const requestFetch = useRequestFetch()
   const csrf = useState<string | null>('csrf-token', () => null)
   const reauthentication = useReauthentication()
+  const authUser = useState<unknown>('auth-user', () => null)
+  const endSession = useEndSession()
   return async <T>(path: string, options: any = {}): Promise<T> => {
     const method = String(options.method || 'GET').toUpperCase()
     const headers = { ...(options.headers || {}) }
@@ -17,6 +19,7 @@ export const useSecureApi = () => {
         const fresh=await requestFetch<{token:string}>('/api/auth/csrf')
         return requestFetch<T>(path,{...options,baseURL:'',headers:{...headers,'X-CSRF-Token':fresh.token}}) as Promise<T>
       }
+      if(import.meta.client && authUser.value && (error?.statusCode ?? error?.status) === 401 && !/^\/api\/auth\/(login|mfa\/challenge|logout)\b/.test(path)) await endSession()
       throw error
     }
   }

@@ -24,6 +24,7 @@ useHead({ title: 'Manage Tenancies | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -213,7 +214,7 @@ const save = async () => {
 
 const remove = async (tenancy: Tenancy) => {
   const label = tenancy.propertySpace?.name ?? tenancy.user?.username ?? 'this tenancy'
-  if (!confirm(`Delete the tenancy for ${label}?`)) return
+  if (!await confirm({ title: 'Delete tenancy?', description: `The tenancy for ${label} will be permanently removed.`, confirmLabel: 'Delete tenancy', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/tenancies/${tenancy.documentId ?? tenancy.id}`, { method: 'DELETE' })
     toast.add({ title: 'Tenancy deleted', color: 'success', icon: 'i-lucide-check-circle-2' })

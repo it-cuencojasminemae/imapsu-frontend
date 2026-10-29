@@ -9,8 +9,9 @@ const isStandalonePage = computed(() => ['/login', '/register', '/verify-email',
 const isMapPage = computed(() => route.path === '/campus-map')
 const drawerOpen = ref(false)
 const accountDirty = useState('account-unsaved-changes', () => false)
+const { confirm } = useConfirmDialog()
 const signOut = async () => {
-  if (accountDirty.value && !window.confirm('You have unsaved account changes. Sign out without saving?')) return
+  if (accountDirty.value && !await confirm({ title: 'Sign out without saving?', description: 'You have unsaved account changes. They will be lost if you sign out now.', confirmLabel: 'Sign out', cancelLabel: 'Keep editing', tone: 'warning', icon: 'i-lucide-log-out' })) return
   await auth.logout()
   drawerOpen.value = false
   await navigateTo('/campus-map')

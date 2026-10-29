@@ -34,6 +34,7 @@ export interface User {
   department?: string | null
   employeeId?: string | null
   officeLocation?: string | null
+  businessName?: string | null
   bio?: string | null
   avatar?: StrapiFile | null
   createdAt?: string
@@ -44,4 +45,14 @@ export interface AuthResponse {
   mfaRequired?: boolean
   user: User
   verificationEmailSent?: boolean
+}
+
+export interface RegisterInput {
+  username: string
+  email: string
+  password: string
+  role: string
+  fullName: string
+  contactNumber: string
+  businessName?: string
 }

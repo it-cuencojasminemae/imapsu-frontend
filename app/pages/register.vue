@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ middleware: 'guest' })
 useHead({ title: 'Create Account | iMapSU' })
 
 const auth = useAuth()
@@ -6,6 +7,9 @@ const toast = useToast()
 
 const username = ref('')
 const email = ref('')
+const fullName = ref('')
+const contactNumber = ref('')
+const businessName = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
@@ -17,6 +21,26 @@ const deliveryFailed = ref(false)
 const resending = ref(false)
 const registrationError = ref('')
 const attempted = ref(false)
+const RESEND_COOLDOWN_SECONDS = 90
+const resendCooldown = ref(0)
+
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+
+function startResendCooldown(seconds = RESEND_COOLDOWN_SECONDS) {
+  resendCooldown.value = seconds
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    resendCooldown.value -= 1
+    if (resendCooldown.value <= 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+
+onBeforeUnmount(() => {
+  if (cooldownTimer) clearInterval(cooldownTimer)
+})
 
 const roleOptions = [
   { label: 'Student', value: 'student', description: 'View the map and submit feedback about tenants.' },
@@ -45,9 +69,18 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    const result = await auth.register({ username: username.value, email: email.value, password: password.value, role: role.value })
+    const result = await auth.register({
+      username: username.value,
+      email: email.value,
+      password: password.value,
+      role: role.value,
+      fullName: fullName.value,
+      contactNumber: contactNumber.value,
+      ...(role.value === 'student' ? {} : { businessName: businessName.value })
+    })
     deliveryFailed.value = result.verificationEmailSent === false
     registeredEmail.value = email.value
+    if (!deliveryFailed.value) startResendCooldown()
   } catch (error: unknown) {
     const message = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
     registrationError.value = message ?? 'Unable to complete the request. Please try again.'
@@ -58,11 +91,12 @@ const handleRegister = async () => {
 }
 
 const resendVerification = async () => {
-  if (!registeredEmail.value) return
+  if (!registeredEmail.value || resendCooldown.value > 0) return
   resending.value = true
   try {
     await auth.resendConfirmation(registeredEmail.value)
     toast.add({ title: 'Verification requested', description: 'If the account needs verification, a new code has been requested.', color: 'success', icon: 'i-lucide-mail-check' })
+    startResendCooldown()
   } catch {
     toast.add({ title: 'Unable to resend', description: 'Please try again in a moment.', color: 'error', icon: 'i-lucide-triangle-alert' })
   } finally {
@@ -100,8 +134,8 @@ const resendVerification = async () => {
         <UButton block size="lg" icon="i-lucide-key-round" :to="`/verify-email?email=${encodeURIComponent(registeredEmail)}`">
           Enter verification code
         </UButton>
-        <UButton block variant="ghost" size="sm" :loading="resending" icon="i-lucide-refresh-cw" @click="resendVerification">
-          Resend verification email
+        <UButton block variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0" icon="i-lucide-refresh-cw" @click="resendVerification">
+          {{ resendCooldown > 0 ? `Resend verification email in ${resendCooldown}s` : 'Resend verification email' }}
         </UButton>
         <NuxtLink to="/login" class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
           <UIcon name="i-lucide-log-in" class="size-4" />
@@ -111,18 +145,34 @@ const resendVerification = async () => {
 
       <form v-else class="space-y-5" @submit.prevent="handleRegister">
         <UAlert v-if="registrationError" color="error" icon="i-lucide-triangle-alert" title="Unable to create your account" :description="registrationError" />
-        <UFormField label="Username" name="username" required>
-          <UInput required v-model="username" type="text" leading-icon="i-lucide-circle-user-round" placeholder="jdoe" autocomplete="username" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
-        </UFormField>
-
-        <UFormField label="Email" name="email" required>
-          <UInput required v-model="email" type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
-        </UFormField>
-
         <UFormField label="I want to use iMapSU as" name="role" required>
-          <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" />
+          <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" class="w-full" />
           <p class="mt-1 text-xs text-muted">{{ roleOptions.find(option => option.value === role)?.description }}</p>
         </UFormField>
+
+        <UFormField label="Full name" name="fullName" required>
+          <UInput required v-model="fullName" type="text" leading-icon="i-lucide-id-card" placeholder="Juan Dela Cruz" autocomplete="name" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
+        </UFormField>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <UFormField label="Username" name="username" required>
+            <UInput required v-model="username" type="text" leading-icon="i-lucide-circle-user-round" placeholder="jdoe" autocomplete="username" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+
+          <UFormField label="Email" name="email" required>
+            <UInput required v-model="email" type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <UFormField label="Contact number" name="contactNumber" required :class="{ 'sm:col-span-2': role === 'student' }">
+            <UInput required v-model="contactNumber" type="tel" leading-icon="i-lucide-phone" placeholder="0917 000 0000" autocomplete="tel" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+
+          <UFormField v-if="role !== 'student'" label="Business name" name="businessName" hint="Optional">
+            <UInput v-model="businessName" type="text" leading-icon="i-lucide-store" placeholder="Store or trade name" autocomplete="organization" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+        </div>
 
         <div class="grid gap-5 sm:grid-cols-2">
           <UFormField label="Password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">

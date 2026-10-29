@@ -4,7 +4,7 @@ const auth = useAuth()
 const { $api, getErrorMessage } = useStrapi()
 const toast = useToast()
 const emit = defineEmits<{ passwordUpdated: [] }>()
-const props = defineProps<{ beforeUpdate?: () => boolean }>()
+const props = defineProps<{ beforeUpdate?: () => boolean | Promise<boolean> }>()
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -30,7 +30,7 @@ const savePassword = async () => {
     passwordError.value = `Password requirements: ${check.missing.map(key => PASSWORD_REQUIREMENTS.find(item => item.key === key)?.label ?? key).join('; ')}.`
     return
   }
-  if (props.beforeUpdate && !props.beforeUpdate()) return
+  if (props.beforeUpdate && !await props.beforeUpdate()) return
   savingPassword.value = true
   try {
     await $api('/api/auth/account', {

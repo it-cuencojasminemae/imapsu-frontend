@@ -34,6 +34,7 @@ useHead({ title: 'Maintenance Tickets | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -328,7 +329,7 @@ const save = async () => {
 
 const remove = async (ticket: MaintenanceTicket) => {
   const label = `${ticket.reporter?.username ?? 'Unknown'} — ${ticket.category}`
-  if (!confirm(`Delete this ticket (${label})? This cannot be undone.`)) return
+  if (!await confirm({ title: 'Delete ticket?', description: `The ticket "${label}" will be permanently removed. This cannot be undone.`, confirmLabel: 'Delete ticket', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/maintenance-tickets/${ticket.documentId ?? ticket.id}`, { method: 'DELETE' })
     toast.add({ title: 'Ticket deleted', color: 'success', icon: 'i-lucide-check-circle-2' })

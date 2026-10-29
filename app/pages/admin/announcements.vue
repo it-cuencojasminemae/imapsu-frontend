@@ -31,6 +31,7 @@ useHead({ title: 'Announcements | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -141,7 +142,7 @@ const save = async () => {
 }
 
 const remove = async (item: Announcement) => {
-  if (!confirm(`Delete the announcement \u201c${item.title}\u201d?`)) return
+  if (!await confirm({ title: 'Delete announcement?', description: `\u201c${item.title}\u201d will be permanently removed.`, confirmLabel: 'Delete announcement', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/announcements/${item.documentId ?? item.id}`, { method: 'DELETE' })
     toast.add({ title: 'Announcement deleted', color: 'success', icon: 'i-lucide-check-circle-2' })

@@ -1,4 +1,4 @@
-import type { AuthResponse, User } from '~/types/auth'
+import type { AuthResponse, RegisterInput, User } from '~/types/auth'
 
 export const useAuth = () => {
   const request = useSecureApi()
@@ -11,6 +11,11 @@ export const useAuth = () => {
   const isCurrentTenant = computed(() => role.value === 'current-tenant')
   const isOas = computed(() => role.value === 'oas')
   const isAdmin = computed(() => role.value === 'admin')
+  // Avatars render only after hydration: a server-rendered <img> whose file is
+  // missing fails before Vue listens for `error`, so UAvatar would show the
+  // browser's alt text instead of falling back to the initial.
+  const avatarReady = useState('auth-avatar-ready', () => false)
+  if (import.meta.client && !avatarReady.value) onNuxtReady(() => { avatarReady.value = true })
   const setUser = (next: User | null) => {
     if (import.meta.client && (next?.id !== user.value?.id || next?.role?.type !== user.value?.role?.type)) clearNuxtData()
     user.value = next
@@ -26,7 +31,7 @@ export const useAuth = () => {
     isStaff: computed(() => isOas.value || isAdmin.value),
     isAuthenticated: computed(() => !!user.value),
     displayName: computed(() => user.value?.fullName || user.value?.username || 'Account'),
-    avatarUrl: computed(() => user.value?.avatar?.url || null),
+    avatarUrl: computed(() => (avatarReady.value && user.value?.avatar?.url) || null),
     refreshMe, init: refreshMe,
     login: async (identifier: string, password: string) => {
       const data = await request<AuthResponse>('/api/auth/login', { method: 'POST', body: { identifier, password } })
@@ -36,7 +41,7 @@ export const useAuth = () => {
       return data.user
     },
     completeMfa: async (code: string) => { const result=await request<AuthResponse>('/api/auth/mfa/challenge', { method: 'POST', body: { code } }); mfaPending.value = false; setUser(result.user ?? null); await refreshMe() },
-    register: (input: { username: string; email: string; password: string; role: string }) => request<AuthResponse>('/api/auth/register-with-role', { method: 'POST', body: input }),
+    register: (input: RegisterInput) => request<AuthResponse>('/api/auth/register-with-role', { method: 'POST', body: input }),
     confirmEmail: async (email: string, code: string) => { const result = await request<AuthResponse>('/api/auth/confirm-email', { method: 'POST', body: { email, code } }); mfaPending.value = !!result.mfaRequired; setUser(mfaPending.value ? null : result.user ?? null); if (mfaPending.value) await navigateTo('/login'); else await refreshMe(); return result.user },
     resendConfirmation: (email: string) => request('/api/auth/resend-confirmation', { method: 'POST', body: { email } }),
     requestPasswordReset: (email: string) => request('/api/auth/password-recovery/request', { method: 'POST', body: { email } }),

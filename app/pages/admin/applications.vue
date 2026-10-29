@@ -22,7 +22,8 @@ type RentalApplication = {
   appearanceDate?: string
   appearanceConfirmed?: boolean
   user?: { id: number; username?: string; email?: string } | null
-  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
+  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; monthlyRent?: number | string | null } | null
+  tenancy?: { documentId?: string; startDate?: string; status?: string } | null
 }
 
 type RenewalIntent = {
@@ -36,7 +37,7 @@ type RenewalIntent = {
   tenancy?: { documentId?: string; propertySpace?: { name?: string; propertyCode?: string; building?: string } | null } | null
 }
 
-type ApplicationItem = { kind: 'application'; status: RentalApplication['status']; propertySpace?: RentalApplication['propertySpace']; letterOfIntent?: RentalApplication['letterOfIntent']; dtiDocuments?: RentalApplication['dtiDocuments']; birDocuments?: RentalApplication['birDocuments']; businessPermits?: RentalApplication['businessPermits']; productsServices?: RentalApplication['productsServices']; appearanceDate?: RentalApplication['appearanceDate']; appearanceConfirmed?: RentalApplication['appearanceConfirmed']; evaluation?: RentalApplication['evaluation']; recommendation?: RentalApplication['recommendation'] }
+type ApplicationItem = { kind: 'application'; status: RentalApplication['status']; propertySpace?: RentalApplication['propertySpace']; letterOfIntent?: RentalApplication['letterOfIntent']; dtiDocuments?: RentalApplication['dtiDocuments']; birDocuments?: RentalApplication['birDocuments']; businessPermits?: RentalApplication['businessPermits']; productsServices?: RentalApplication['productsServices']; appearanceDate?: RentalApplication['appearanceDate']; appearanceConfirmed?: RentalApplication['appearanceConfirmed']; evaluation?: RentalApplication['evaluation']; recommendation?: RentalApplication['recommendation']; tenancy?: RentalApplication['tenancy'] }
   & Pick<RentalApplication, 'id' | 'documentId' | 'message' | 'createdAt' | 'user'>
 type RenewalItem = { kind: 'renewal'; status: RenewalIntent['status']; letterOfRenewal?: RenewalIntent['letterOfRenewal']; tenancy?: RenewalIntent['tenancy'] }
   & Pick<RenewalIntent, 'id' | 'documentId' | 'message' | 'createdAt' | 'user'>
@@ -238,6 +239,75 @@ const confirmAttendance = async (item: Item) => {
   }
 }
 
+// An approved applicant who attended their office visit can be given the
+// stall in one step: the server creates the active tenancy, switches the
+// account to current tenant and closes the other open applications.
+const isLeased = (item: Item) => item.kind === 'application' && !!item.tenancy
+const canFinalize = (item: Item) => item.kind === 'application' && item.status === 'Approved' && !!item.appearanceConfirmed && !item.tenancy
+
+const finalizeOpen = ref(false)
+const finalizeTarget = ref<ApplicationItem | null>(null)
+const finalizeSaving = ref(false)
+const finalizeError = ref('')
+const finalizeForm = reactive({
+  businessName: '',
+  productsServices: '',
+  operatingDetails: '',
+  monthlyRent: '' as string | number,
+  startDate: ''
+})
+
+const todayIso = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+const openFinalize = (item: Item) => {
+  if (item.kind !== 'application') return
+  finalizeTarget.value = item
+  finalizeForm.businessName = ''
+  finalizeForm.productsServices = item.productsServices ?? ''
+  finalizeForm.operatingDetails = ''
+  finalizeForm.monthlyRent = item.propertySpace?.monthlyRent != null ? Number(item.propertySpace.monthlyRent) : ''
+  finalizeForm.startDate = todayIso()
+  finalizeError.value = ''
+  finalizeOpen.value = true
+}
+
+const saveFinalize = async () => {
+  const item = finalizeTarget.value
+  if (!item) return
+  finalizeSaving.value = true
+  finalizeError.value = ''
+  try {
+    const result = await $api<{ data: { promoted: boolean; closed: { cancelled: number; declined: number } } }>(`/api/rental-applications/${item.documentId ?? item.id}/finalize-lease`, {
+      method: 'POST',
+      body: {
+        data: {
+          businessName: finalizeForm.businessName.trim(),
+          productsServices: finalizeForm.productsServices.trim(),
+          operatingDetails: finalizeForm.operatingDetails.trim(),
+          monthlyRent: Number(finalizeForm.monthlyRent),
+          startDate: finalizeForm.startDate
+        }
+      }
+    })
+    const { promoted, closed } = result.data
+    const closedCount = closed.cancelled + closed.declined
+    const notes = [
+      promoted ? `${item.user?.username ?? 'The applicant'} is now a current tenant.` : '',
+      closedCount ? `${closedCount} other open application${closedCount === 1 ? ' was' : 's were'} closed.` : ''
+    ].filter(Boolean).join(' ')
+    toast.add({ title: `Lease active for ${propertyName(item)}`, description: notes || undefined, color: 'success', icon: 'i-lucide-key-round' })
+    finalizeOpen.value = false
+    await refresh()
+  } catch (err) {
+    finalizeError.value = getErrorMessage(err)
+  } finally {
+    finalizeSaving.value = false
+  }
+}
+
 const formatAppearance = (value?: string) => {
   if (!value) return ''
   const date = new Date(value)
@@ -294,7 +364,7 @@ const recordColumns = [
  { key: 'applicant', label: 'Applicant', value: (item: Item) => item.user?.username || '—' },
  { key: 'kind', label: 'Type', value: (item: Item) => item.kind === 'renewal' ? 'Renewal' : 'Application' },
  { key: 'date', label: 'Submitted', value: (item: Item) => formatDate(item.createdAt) },
- { key: 'status', label: 'Status', value: (item: Item) => item.status, badge: true, color: (item: Item) => statusColor(item.status) }
+ { key: 'status', label: 'Status', value: (item: Item) => isLeased(item) ? 'Lease active' : item.status, badge: true, color: (item: Item) => statusColor(item.status) }
 ]
 </script>
 
@@ -347,7 +417,7 @@ const recordColumns = [
                 <span>Submitted {{ formatDate(item.createdAt) }}</span>
               </p>
             </div>
-            <UBadge :color="statusColor(item.status)" variant="subtle">{{ item.status }}</UBadge>
+            <UBadge :color="statusColor(item.status)" variant="subtle">{{ isLeased(item) ? 'Lease active' : item.status }}</UBadge>
           </div>
 
           <div class="mt-4 border-t border-default pt-4">
@@ -386,7 +456,14 @@ const recordColumns = [
                 <UBadge v-else color="warning" variant="subtle">Attendance pending</UBadge>
               </div>
               <UButton v-if="!item.appearanceConfirmed" label="Confirm attendance" icon="i-lucide-check" size="sm" color="primary" variant="subtle" :loading="confirmingAppearance === String(item.documentId ?? item.id)" @click="confirmAttendance(item)" />
+              <UButton v-else-if="canFinalize(item)" label="Finalize lease" icon="i-lucide-key-round" size="sm" color="primary" @click="openFinalize(item)" />
             </div>
+            <p v-if="item.kind === 'application' && item.tenancy" class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-toned">
+              <UIcon name="i-lucide-key-round" class="size-4 text-success" />
+              Lease active since {{ formatDate(item.tenancy.startDate) }}.
+              <NuxtLink to="/admin/tenancies" class="font-medium text-primary hover:underline">Manage in Tenancies</NuxtLink>
+            </p>
+            <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">Attendance is confirmed. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall and switch their account to current tenant.</p>
           </div>
 
           <div v-if="item.kind === 'application' && (item.evaluation || item.recommendation)" class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -406,7 +483,7 @@ const recordColumns = [
               :model-value="item.status"
               :items="statusOptions(item)"
               class="w-44"
-              :disabled="updating === (item.documentId ?? item.id)"
+              :disabled="updating === (item.documentId ?? item.id) || isLeased(item)"
               @update:model-value="(value: unknown) => value && updateStatus(item, String(value))"
             />
             <UButton v-if="item.kind === 'application'" label="Review" icon="i-lucide-clipboard-list" color="primary" variant="subtle" size="sm" @click="openReview(item)" />
@@ -433,6 +510,56 @@ const recordColumns = [
           <div class="flex justify-end gap-2">
             <UButton label="Cancel" color="neutral" variant="ghost" :disabled="reviewSaving" @click="reviewOpen = false" />
             <UButton data-prominent="true" type="submit" :loading="reviewSaving">Save review</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="finalizeOpen" class="max-w-2xl" title="Finalize lease" :description="finalizeTarget ? `Lease ${propertyName(finalizeTarget)} to ${finalizeTarget.user?.username ?? 'the applicant'}.` : undefined">
+      <template #body>
+        <form v-if="finalizeTarget" class="space-y-4" @submit.prevent="saveFinalize">
+          <div class="grid gap-3 rounded-lg border border-default p-3 text-sm sm:grid-cols-2">
+            <div>
+              <p class="text-xs font-medium text-muted">Applicant</p>
+              <p class="mt-0.5 font-medium text-highlighted">{{ finalizeTarget.user?.username ?? '—' }}</p>
+              <p class="text-xs text-muted">{{ finalizeTarget.user?.email }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-muted">Stall</p>
+              <p class="mt-0.5 font-medium text-highlighted">{{ propertyName(finalizeTarget) }}</p>
+              <p class="text-xs text-muted"><span class="font-mono">{{ propertyCode(finalizeTarget) }}</span> · {{ finalizeTarget.propertySpace?.building }}</p>
+            </div>
+          </div>
+          <UFormField label="Business name" required>
+            <UInput v-model="finalizeForm.businessName" required placeholder="e.g. Campus Bites" :ui="{ root: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Products / services" description="From the application. Shown on the campus map.">
+            <UTextarea v-model="finalizeForm.productsServices" :rows="3" :ui="{ root: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Operating hours">
+            <UInput v-model="finalizeForm.operatingDetails" placeholder="e.g. Mon–Sat 7:00 AM–6:00 PM" :ui="{ root: 'w-full' }" />
+          </UFormField>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Monthly rent (₱)" description="From the stall's listed rent." required>
+              <UInput v-model="finalizeForm.monthlyRent" type="number" min="1" step="0.01" required :ui="{ root: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Start date" required>
+              <UInput v-model="finalizeForm.startDate" type="date" required :ui="{ root: 'w-full' }" />
+            </UFormField>
+          </div>
+          <UAlert color="info" variant="subtle" icon="i-lucide-info" title="What happens next">
+            <template #description>
+              <ul class="mt-1 list-disc space-y-0.5 pl-4 text-sm">
+                <li>An active tenancy is created and the stall is marked Occupied on the map.</li>
+                <li>{{ finalizeTarget.user?.username ?? 'The applicant' }}'s account switches to current tenant. They are signed out and get a notification to sign in again.</li>
+                <li>Their other open applications, and other applicants' open applications for this stall, are closed and those applicants are notified.</li>
+              </ul>
+            </template>
+          </UAlert>
+          <UAlert v-if="finalizeError" color="error" icon="i-lucide-triangle-alert" :description="finalizeError" />
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" :disabled="finalizeSaving" @click="finalizeOpen = false" />
+            <UButton data-prominent="true" type="submit" icon="i-lucide-key-round" :loading="finalizeSaving">Finalize lease</UButton>
           </div>
         </form>
       </template>

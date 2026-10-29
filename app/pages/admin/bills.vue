@@ -47,6 +47,7 @@ useHead({ title: 'Manage Bills | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -401,7 +402,7 @@ const save = async () => {
 }
 
 const remove = async (bill: Bill) => {
-  if (!confirm(`Delete this ${formatCurrency(bill.amount)} bill${bill.period ? ` for ${bill.period}` : ''}?`)) return
+  if (!await confirm({ title: 'Delete bill?', description: `This ${formatCurrency(bill.amount)} bill${bill.period ? ` for ${bill.period}` : ''} will be permanently removed.`, confirmLabel: 'Delete bill', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/bills/${bill.documentId ?? bill.id}`, { method: 'DELETE' })
     toast.add({ title: 'Bill deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
@@ -446,8 +447,8 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
   }
 }
 
-const verifyBill = (bill: Bill) => {
-  if (!confirm(`Verify this receipt for ${formatCurrency(bill.amount)}${bill.orNumber ? ` (OR ${bill.orNumber})` : ''}?`)) return
+const verifyBill = async (bill: Bill) => {
+  if (!await confirm({ title: 'Verify receipt?', description: `Mark the ${formatCurrency(bill.amount)} payment${bill.orNumber ? ` (OR ${bill.orNumber})` : ''} as verified.`, confirmLabel: 'Verify receipt', tone: 'primary', icon: 'i-lucide-badge-check' })) return
   setBillStatus(bill, 'Verified')
 }
 

@@ -380,9 +380,14 @@ const confirmAppearance = async (item: RentalApplication) => {
           <label class="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': submitting }">
             <UIcon name="i-lucide-folder-up" class="size-4" />
             Choose file
-            <input :key="letterFormKey" type="file" accept=".pdf,.doc,.docx" class="sr-only" :disabled="submitting" @change="(event: Event) => { const input = event.target as HTMLInputElement; letterFile = input.files?.[0] }" />
+            <input :key="letterFormKey" type="file" accept=".pdf,.doc,.docx" class="sr-only" :disabled="submitting" @change="(event: Event) => { const input = event.target as HTMLInputElement; letterFile = input.files?.[0] ?? letterFile; input.value = '' }" />
           </label>
-          <p v-if="letterFile" class="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary"><UIcon name="i-lucide-file-text" class="size-3.5" />{{ letterFile.name }}</p>
+          <ul v-if="letterFile" class="mt-2 space-y-1">
+            <li class="flex items-center justify-between gap-2 rounded-md border border-default px-2 py-1 text-sm">
+              <span class="flex min-w-0 items-center gap-1.5 truncate text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ letterFile.name }}</span></span>
+              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :disabled="submitting" @click="letterFile = undefined" />
+            </li>
+          </ul>
           <p v-else class="mt-1 text-xs text-muted">Attach your signed letter of intent in PDF or Word format.</p>
         </UFormField>
 

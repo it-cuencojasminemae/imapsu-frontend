@@ -39,6 +39,7 @@ useHead({ title: 'Meter Readings | iMapSU' })
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -201,7 +202,7 @@ const save = async () => {
 
 const remove = async (reading: MeterReading) => {
   const label = reading.tenancy?.propertySpace?.name ?? reading.readingDate ?? 'this reading'
-  if (!confirm(`Delete the meter reading for ${label}?`)) return
+  if (!await confirm({ title: 'Delete meter reading?', description: `The meter reading for ${label} will be permanently removed.`, confirmLabel: 'Delete reading', icon: 'i-lucide-trash-2' })) return
   try {
     await $api(`/api/meter-readings/${reading.documentId ?? reading.id}`, { method: 'DELETE' })
     toast.add({ title: 'Meter reading deleted', color: 'success', icon: 'i-lucide-check-circle-2' })

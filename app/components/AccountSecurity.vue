@@ -34,7 +34,7 @@ const verify = async () => {
 defineExpose({ start })
 </script>
 <template>
-  <UCard v-if="auth.isStaff.value">
+  <UCard v-if="auth.isStaff.value && auth.user.value?.security?.mfaRequired">
     <template #header><h2 class="text-base font-semibold text-highlighted">Authenticator</h2></template>
     <p class="text-sm text-muted">{{ auth.user.value?.security?.mfaEnabled ? 'Your authenticator is enabled.' : 'An authenticator is required for MIS and OAS accounts.' }}</p>
     <p v-if="!auth.user.value?.security?.mfaEnabled && auth.user.value?.security?.enrollmentDeadline" class="mt-2 text-sm">Enroll by {{ new Date(auth.user.value.security.enrollmentDeadline).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) }} (Philippine time).</p>

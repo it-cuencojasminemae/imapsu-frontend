@@ -1,7 +1,8 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { trustedClientIP } from '../utils/trusted-proxy'
-import { defineEventHandler, useSession, getRequestURL, getHeader, getRequestIP, readBody, setHeader, setResponseStatus, sendStream, createError, deleteCookie } from 'h3'
+import { gatewaySession, refreshGatewaySession } from '../utils/gateway-session'
+import { defineEventHandler, getRequestURL, getHeader, getRequestIP, readBody, setHeader, setResponseStatus, sendStream, createError, deleteCookie } from 'h3'
 
 const allowed = new Set(['auth','property-spaces','properties','tenancies','bills','rental-applications','renewal-intents','maintenance-tickets','feedbacks','meter-readings','announcements','announcement-acknowledgments','notifications','map-labels','map-zones','status-histories','audit-logs','system-settings','system','roles','user-directory','users','upload','media','dashboard'])
 const equal = (a: string,b: string) => { const x=Buffer.from(a),y=Buffer.from(b); return x.length===y.length && timingSafeEqual(x,y) }
@@ -13,7 +14,7 @@ export default defineEventHandler(async event => {
   const publicAuthentication=new Set(['/api/auth/login','/api/auth/local','/api/auth/register-with-role','/api/auth/confirm-email','/api/auth/resend-confirmation','/api/auth/mfa/challenge','/api/auth/password-recovery/request','/api/auth/password-recovery/verify','/api/auth/password-recovery/reset']).has(route)
   const parts=route.slice(5).split('/')
   if(!allowed.has(parts[0]!) || parts.some(p=>p==='.'||p==='..'||/%2f|%5c/i.test(p))) throw createError({statusCode:404})
-  const session=await useSession<any>(event,{name:'imapsu_session',password:String(config.sessionPassword),maxAge:604800,sessionHeader:false,cookie:{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/'}})
+  const session=await gatewaySession(event)
   setHeader(event,'Cache-Control','private, no-store')
   if(route==='/api/auth/csrf'){
     if(event.method!=='GET')throw createError({statusCode:405,statusMessage:'Use GET to request a verification token'})
@@ -47,14 +48,7 @@ export default defineEventHandler(async event => {
   const json=!['GET','HEAD'].includes(method)&&(!contentType||contentType.includes('application/json'))
   if(json){body=await readBody(event);if(route==='/api/auth/mfa/challenge')body={...body,challengeToken:session.data.challengeToken};body=JSON.stringify(body||{})}
   else if(!['GET','HEAD'].includes(method))body=event.node.req
-  const tokenExpired=session.data.accessExpiresAt && session.data.accessExpiresAt<Date.now()
-  if(!publicAuthentication&&session.data.refreshToken&&(!session.data.jwt||tokenExpired)){
-    let response:Response
-    try {response=await fetch(base+'/api/auth/session/refresh',{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({refreshToken:session.data.refreshToken})})}catch{throw createError({statusCode:503,statusMessage:'Service unavailable. Please retry.'})}
-    if(response.status===401){await session.clear();throw createError({statusCode:401,statusMessage:'Sign in again'})}
-    if(!response.ok)throw createError({statusCode:503,statusMessage:'Session refresh unavailable. Please retry.'})
-    const tokens=await response.json();await session.update({jwt:tokens.jwt,refreshToken:tokens.refreshToken,accessExpiresAt:Date.now()+540000})
-  }
+  if(!publicAuthentication&&await refreshGatewaySession(event,session,headers)==='ended')throw createError({statusCode:401,statusMessage:'Sign in again'})
   let response:Response
   try {response=await upstream(route+url.search,body,publicAuthentication?undefined:session.data.jwt)}catch{throw createError({statusCode:503,statusMessage:'Service unavailable. Please retry.'})}
   setResponseStatus(event,response.status)

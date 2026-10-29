@@ -68,6 +68,19 @@ const { data: feedbackDataResponse, refresh: refreshFeedback, status: feedbackDa
 const { data: feedbackData } = useRequestPresentation(feedbackDataResponse, feedbackDataStatus)
 
 
+// The campus map links here with ?focus=<documentId>. That stall may sit on
+// another page of the listing, so it is fetched on its own and pinned first.
+const route = useRoute()
+const router = useRouter()
+const requestFetch = useRequestFetch()
+const focusId = computed(() => typeof route.query.focus === 'string' ? route.query.focus : '')
+const { data: focusResponse } = await useAsyncData('properties:focus', () => focusId.value
+  ? requestFetch<PropertyResponse>('/api/properties', {
+      baseURL: '',
+      query: { 'populate[photos]': true, 'populate[tenantPhotos]': true, 'filters[documentId][$eq]': focusId.value }
+    })
+  : Promise.resolve(null), { watch: [focusId] })
+
 const properties = computed(() => {
   const all = data.value?.data ?? []
   // The API already filters these for students; this guards against any
@@ -97,7 +110,7 @@ type Card = PropertySpace & {
   feedback: { count: number; avg: number; latest: Feedback } | null
 }
 
-const cards = computed<Card[]>(() => properties.value.map(property => {
+const toCard = (property: PropertySpace): Card => {
   const tenantName = activeTenantByProperty.value.get(property.documentId ?? '') ?? null
   const list = feedbacksForCurrentTenant.value.get(property.documentId ?? '')
   const feedback = list?.length
@@ -108,7 +121,33 @@ const cards = computed<Card[]>(() => properties.value.map(property => {
       }
     : null
   return { ...property, tenantName, feedback }
-}))
+}
+
+const focusedCard = computed<Card | null>(() => {
+  if (!focusId.value) return null
+  const property = properties.value.find(entry => entry.documentId === focusId.value) ?? focusResponse.value?.data?.[0]
+  if (!property || (auth.isStudent.value && property.space_status === 'Vacant')) return null
+  return toCard(property)
+})
+
+const cards = computed<Card[]>(() => {
+  const all = properties.value.map(toCard)
+  return focusedCard.value ? [focusedCard.value, ...all.filter(card => card.documentId !== focusId.value)] : all
+})
+
+const isFocused = (card: Card) => !!focusId.value && card.documentId === focusId.value
+const clearFocus = () => {
+  const { focus: _focus, ...query } = route.query
+  router.replace({ query })
+}
+
+const scrollToFocused = async () => {
+  if (!focusedCard.value) return
+  await nextTick()
+  document.getElementById(`property-${focusId.value}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+onMounted(scrollToFocused)
+watch(focusedCard, (card, previous) => { if (card && card.documentId !== previous?.documentId) scrollToFocused() })
 
 // Occupied spaces show the tenant's own photos; vacant ones show the office's
 // listing photos.
@@ -159,11 +198,34 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
 
     <UEmpty v-else-if="properties.length === 0" icon="i-lucide-store" title="No property spaces found" description="Property spaces will appear here once they are added to iMapSU." />
 
-    <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <UCard v-for="card in cards" :key="card.documentId ?? card.id" :ui="{ header: 'p-5', body: 'p-5 pt-0' }">
+    <template v-else>
+    <UAlert
+      v-if="focusedCard"
+      class="mb-4"
+      color="primary"
+      variant="subtle"
+      icon="i-lucide-map-pin"
+      :title="`${focusedCard.name} is shown first`"
+      description="This is the space you selected on the campus map."
+    >
+      <template #actions>
+        <UButton size="sm" color="neutral" variant="outline" to="/campus-map" label="Back to map" icon="i-lucide-map" />
+        <UButton size="sm" color="neutral" variant="ghost" label="Show all spaces" @click="clearFocus" />
+      </template>
+    </UAlert>
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <UCard
+        v-for="card in cards"
+        :id="`property-${card.documentId ?? card.id}`"
+        :key="card.documentId ?? card.id"
+        class="scroll-mt-24"
+        :class="isFocused(card) && 'ring-2 ring-primary'"
+        :ui="{ header: 'p-5', body: 'p-5 pt-0' }"
+      >
         <template #header>
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
+              <UBadge v-if="isFocused(card)" class="mb-2" color="primary" variant="solid" size="sm" icon="i-lucide-map-pin" label="Selected on map" />
               <p class="font-mono text-xs text-muted">{{ card.propertyCode }}</p>
               <h2 class="mt-1 truncate text-lg font-semibold text-highlighted">{{ card.name }}</h2>
             </div>
@@ -212,6 +274,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <p v-if="card.feedback.latest.comment" class="mt-1.5 line-clamp-2 text-sm text-toned">{{ card.feedback.latest.comment }}</p>
           </template>
           <p v-else class="text-sm text-toned">No feedback yet for this tenant.</p>
+          <UButton v-if="card.documentId" class="mt-3" size="sm" color="neutral" variant="outline" block :to="`/feedback?property=${card.documentId}`" label="Rate this stall" icon="i-lucide-star" />
         </div>
 
         <div v-if="auth.isAspiringTenant.value && card.space_status === 'Vacant' && card.documentId" class="mt-4">
@@ -219,6 +282,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
         </div>
       </UCard>
     </div>
+    </template>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
   </main>
 </template>

@@ -6,6 +6,7 @@ import { appMotion } from '~/utils/appMotion'
 <template>
   <UApp>
     <ReauthenticationDialog />
+    <ConfirmDialog />
     <MotionConfig reduced-motion="user" :transition="{ duration: appMotion.reveal, ease: appMotion.ease }">
       <NuxtLayout>
         <NuxtPage :page-key="route => route.path" />

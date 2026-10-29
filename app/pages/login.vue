@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { internalRedirect, landingPath, requiresAccountSetup, SECURITY_PATH } from '~/utils/accountNavigation'
+definePageMeta({ middleware: 'guest' })
 useHead({ title: 'Sign In | iMapSU' })
 
 const auth = useAuth()
@@ -18,6 +19,7 @@ const destination = () => {
   return landingPath(auth.user.value)
 }
 
+const sessionEnded = computed(() => route.query.reason === 'session-ended')
 const identifier = ref('')
 const password = ref('')
 const showPassword = ref(false)
@@ -30,7 +32,7 @@ const authenticatorCode = ref('')
 const submitMfa = async () => {
   loading.value = true
   loginError.value = ''
-  try { await auth.completeMfa(authenticatorCode.value); await navigateTo(destination()) }
+  try { await auth.completeMfa(authenticatorCode.value); await navigateTo(destination(), { replace: true }) }
   catch (error: any) { loginError.value = error?.data?.error?.message || 'Verification failed. Check your code.' }
   finally { loading.value = false }
 }
@@ -42,7 +44,7 @@ const handleLogin = async () => {
     await auth.login(identifier.value, password.value)
     if (auth.mfaPending.value) return
     toast.add({ title: 'Signed in successfully', description: `Signed in as ${auth.user.value?.username}`, color: 'success', icon: 'i-lucide-check-circle-2' })
-    await navigateTo(destination())
+    await navigateTo(destination(), { replace: true })
   } catch (error: unknown) {
     const message = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
     if (message && /verify.+email|confirmed/i.test(message)) {
@@ -102,6 +104,8 @@ const resendVerification = async () => {
             </div>
           </template>
         </UAlert>
+
+        <UAlert v-if="sessionEnded && !loginError" color="info" icon="i-lucide-log-in" variant="soft" title="Please sign in again" description="Your session ended because your account changed, for example when your lease became active. Sign in to continue." class="mb-5" />
 
         <form class="space-y-5" @submit.prevent="handleLogin">
           <UAlert v-if="loginError" color="error" icon="i-lucide-triangle-alert" title="Unable to sign in" :description="loginError" />

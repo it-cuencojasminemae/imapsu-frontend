@@ -26,11 +26,13 @@ const STOPWORDS = new Set([
   'ext'
 ])
 
+// Single digits are kept: they are what tells numbered buildings apart
+// ("... BUILDING 1" vs "... BUILDING 3").
 function buildingTokens(value: string): string[] {
   return (value ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t))
+    .filter((t) => (t.length > 1 || /^\d$/.test(t)) && !STOPWORDS.has(t))
 }
 
 function tokensMatch(a: string, b: string): boolean {

@@ -36,6 +36,7 @@ const ROLE_OPTIONS = [
 
 const auth = useAuth()
 const toast = useToast()
+const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
@@ -127,7 +128,7 @@ const changeRole = async (user: DirectoryUser, type: string) => {
 }
 
 const remove = async (user: DirectoryUser) => {
-  if (!confirm(`Delete user "${user.username}" (${user.email})? This cannot be undone.`)) return
+  if (!await confirm({ title: 'Delete user?', description: `"${user.username}" (${user.email}) will be permanently removed. This cannot be undone.`, confirmLabel: 'Delete user', icon: 'i-lucide-user-x' })) return
   try {
     await $api(`/api/auth/user/${user.id}`, { method: 'DELETE' })
     toast.add({ title: 'User deleted', description: user.username, color: 'success', icon: 'i-lucide-check-circle-2' })
@@ -220,7 +221,9 @@ const toggling = ref<number | null>(null)
 
 const toggleActive = async (user: DirectoryUser) => {
   const next = user.blocked ? 'activate' : 'deactivate'
-  if (!confirm(`Are you sure you want to ${next} "${user.username}"?`)) return
+  if (!await confirm(next === 'activate'
+    ? { title: 'Activate account?', description: `"${user.username}" will be able to sign in again.`, confirmLabel: 'Activate', tone: 'primary', icon: 'i-lucide-user-check' }
+    : { title: 'Deactivate account?', description: `"${user.username}" will no longer be able to sign in.`, confirmLabel: 'Deactivate', tone: 'warning', icon: 'i-lucide-user-x' })) return
   toggling.value = user.id
   try {
     await $api(`/api/auth/user/${user.id}/${next}`, { method: 'POST' })
@@ -238,7 +241,7 @@ const toggleActive = async (user: DirectoryUser) => {
   }
 }
 const resetAuthenticator = async (user: DirectoryUser) => {
-  if (!confirm('Reset the authenticator for ' + user.username + '? Existing sessions will be revoked.')) return
+  if (!await confirm({ title: 'Reset authenticator?', description: `${user.username} will need to re-enroll their authenticator. Existing sessions will be revoked.`, confirmLabel: 'Reset authenticator', tone: 'warning', icon: 'i-lucide-shield-off' })) return
   updating.value = user.id
   try { await $api('/api/auth/user/' + user.id + '/reset-mfa', { method: 'POST' }); toast.add({ title: 'Authenticator reset', description: 'Re-enrollment is required.', color: 'success' }); await refresh() }
   catch (error) { toast.add({ title: 'Unable to reset authenticator', description: getErrorMessage(error), color: 'error' }) }
@@ -284,7 +287,7 @@ const filteredUsers = computed(() => {
         <template #actions="{ item }"><UButton v-if="auth.isAdmin.value && !isSelf(item)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
         <template #details="{ item: user }"><UCard  :ui="{ body: 'p-4' }">
           <UAlert v-if="user.security?.lockedUntil && user.security.lockedUntil > Date.now()" class="mb-3" color="warning" :title="'Sign-in limited until ' + new Date(user.security.lockedUntil).toLocaleString()" />
-          <UButton v-if="!isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
+          <UButton v-if="auth.user.value?.security?.mfaRequired && !isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
             <span class="imapsu-brand-tile grid size-10 shrink-0 place-items-center rounded-lg text-sm font-semibold">{{ user.username.charAt(0).toUpperCase() }}</span>
