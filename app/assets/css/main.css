@@ -101,7 +101,8 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-theme-dark { display: none; }
 .dark .imapsu-theme-light { display: none; }
 .dark .imapsu-theme-dark { display: inline-block; }
-:where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+/* Nuxt UI parts (data-slot) draw their own focus ring; outlining them too shows a double outline. */
+:where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):not([data-slot]):focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
 :where(button, a)[data-prominent='true']:active { transform: scale(0.98); }
 :where(button, a)[data-prominent='true'] { transition: background-color var(--app-motion-fast), color var(--app-motion-fast), transform var(--app-motion-press); }
 .imapsu-page :where(p, dd, a) { overflow-wrap: anywhere; }

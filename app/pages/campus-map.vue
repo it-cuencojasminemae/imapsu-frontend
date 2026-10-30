@@ -135,9 +135,15 @@ const searchResults = computed<SearchResult[]>(() => {
 
 const jumpTo = (order: number) => {
   if (!modelReady.value || !availableBuildingOrders.value.has(order)) return
+  if (searchCloseTimer) clearTimeout(searchCloseTimer)
   viewer.value?.focusBuilding(order)
   searchQuery.value = ''
   searchOpen.value = false
+}
+
+const jumpToFirstResult = () => {
+  const first = searchResults.value.find(result => availableBuildingOrders.value.has(result.order))
+  if (first) jumpTo(first.order)
 }
 
 const selectZone = async (zone: MapZone) => {
@@ -426,10 +432,14 @@ onBeforeUnmount(() => {
             autocomplete="off"
             @focus="searchOpen = true"
             @blur="closeSearch"
+            @keydown.enter.prevent="jumpToFirstResult"
           />
+          <!-- mousedown.prevent keeps the input focused, so a slow click or tap
+               can't blur it and close the list before the click lands. -->
           <div
             v-if="searchOpen && searchResults.length"
             class="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-(--ui-border) bg-(--ui-bg) shadow-lg"
+            @mousedown.prevent
           >
             <button
               v-for="result in searchResults"

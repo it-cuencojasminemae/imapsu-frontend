@@ -16,7 +16,7 @@ const failed = ref(false)
     v-else
     src="/logo.png"
     alt="iMapSU logo"
-    class="select-none rounded-lg object-contain shadow-sm"
+    class="select-none object-contain drop-shadow-sm"
     :class="size"
     @error="failed = true"
   />
