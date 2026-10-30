@@ -745,7 +745,9 @@ onBeforeUnmount(() => {
 }
 .map-stall-card:not(:disabled):hover { border-color: var(--ui-primary); background: var(--ui-bg-elevated); }
 .map-stall-card.is-active { border-color: var(--color-gold-500); }
-.map-stall-card:focus-visible, .map-gallery-thumbnail:focus-visible { outline: 2px solid var(--color-gold-500); outline-offset: 3px; }
+/* Outline sits on the border so focused cards show one outline, not border + outline. */
+.map-stall-card:focus-visible { outline: 2px solid var(--color-gold-500); outline-offset: -1px; }
+.map-gallery-thumbnail:focus-visible { outline: 2px solid var(--color-gold-500); outline-offset: -2px; }
 .map-stall-card:disabled { opacity: 0.6; }
 .map-stall-thumbnail { display: block; height: 84px; overflow: hidden; border-radius: 9px; background: var(--ui-bg-elevated); }
 .map-stall-thumbnail img { width: 100%; height: 100%; object-fit: cover; }

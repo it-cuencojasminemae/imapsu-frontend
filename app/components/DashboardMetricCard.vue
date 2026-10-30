@@ -28,6 +28,7 @@ withDefaults(defineProps<{
 <style scoped>
 .dashboard-metric { display: flex; flex-direction: column; height: 100%; padding: 1.25rem; border: 1px solid var(--ui-border); border-radius: var(--app-radius-card); background: var(--ui-bg); transition: border-color var(--app-motion-fast), background-color var(--app-motion-fast); }
 .dashboard-metric:hover, .dashboard-metric:focus-visible { border-color: var(--ui-primary); background: var(--ui-bg-elevated); }
+.dashboard-metric:focus-visible { outline-offset: -1px; }
 .dashboard-metric-icon { display: grid; place-items: center; flex-shrink: 0; width: 2rem; height: 2rem; border-radius: var(--app-radius-control); color: var(--ui-primary); background: var(--ui-bg-muted); }
 .dashboard-metric--warning .dashboard-metric-icon { color: var(--ui-warning); background: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-bg)); }
 .dashboard-metric--error .dashboard-metric-icon { color: var(--ui-error); background: color-mix(in srgb, var(--ui-error) 10%, var(--ui-bg)); }

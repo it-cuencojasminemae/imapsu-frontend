@@ -25,7 +25,7 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
   </AppPageHeader>
 
   <section aria-label="Quick actions" class="mb-6 grid gap-3 sm:grid-cols-2" :class="auth.isCurrentTenant.value ? 'xl:grid-cols-4' : 'xl:grid-cols-3'">
-    <NuxtLink v-for="action in actions" :key="action.to" :to="action.to" class="rounded-xl border border-default bg-default p-5 transition-colors hover:border-primary/50 hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary">
+    <NuxtLink v-for="action in actions" :key="action.to" :to="action.to" class="rounded-xl border border-default bg-default p-5 transition-colors hover:border-primary/50 hover:bg-elevated focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-primary">
       <UIcon :name="action.icon" class="mb-3 size-5 text-primary" aria-hidden="true" />
       <h2 class="font-semibold text-highlighted">{{ action.label }}</h2>
       <p class="mt-1 text-sm text-muted">{{ action.description }}</p>

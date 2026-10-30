@@ -54,8 +54,8 @@ body { font-size: 0.875rem; line-height: 1.6; }
 .imapsu-page-eyebrow { margin-bottom: 0.5rem; font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ui-text-muted); }
 .imapsu-page-description { margin-top: 0.5rem; max-width: 42rem; color: var(--ui-text-muted); font-size: 0.875rem; }
 .imapsu-page-description > p { margin-top: 0; }
-/* Upload labels retain a visible focus indicator around the usable control. */
-label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+/* Upload labels retain a visible focus indicator around the usable control, drawn over their border so it reads as one outline. */
+label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
 .imapsu-page :where(.text-success) { color: var(--color-green-700); }
 .imapsu-page :where(.text-warning) { color: var(--color-amber-700); }
 .imapsu-page :where(.text-error) { color: var(--color-red-700); }
@@ -101,8 +101,11 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-theme-dark { display: none; }
 .dark .imapsu-theme-light { display: none; }
 .dark .imapsu-theme-dark { display: inline-block; }
-/* Nuxt UI parts (data-slot) draw their own focus ring; outlining them too shows a double outline. */
-:where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):not([data-slot]):focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+/* Nuxt UI parts (data-slot) draw their own focus ring; outlining them too shows a double outline.
+   Kept in the base layer so elements with their own focus style (e.g. `outline-none` + ring) override it. */
+@layer base {
+  :where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):not([data-slot]):focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+}
 :where(button, a)[data-prominent='true']:active { transform: scale(0.98); }
 :where(button, a)[data-prominent='true'] { transition: background-color var(--app-motion-fast), color var(--app-motion-fast), transform var(--app-motion-press); }
 .imapsu-page :where(p, dd, a) { overflow-wrap: anywhere; }
