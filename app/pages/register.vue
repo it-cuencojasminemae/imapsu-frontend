@@ -50,6 +50,11 @@ const roleOptions = [
 ]
 
 const passwordCheck = computed(() => checkPasswordStrength(password.value))
+const passwordsMatch = computed(() => password.value === confirmPassword.value)
+// Flag a mismatch live once the user starts typing the confirmation, not only after submitting.
+const confirmPasswordError = computed(() =>
+  (confirmPassword.value || attempted.value) && !passwordsMatch.value ? 'Passwords do not match.' : undefined
+)
 
 const handleRegister = async () => {
   attempted.value = true
@@ -64,7 +69,7 @@ const handleRegister = async () => {
     return
   }
 
-  if (password.value !== confirmPassword.value) {
+  if (!passwordsMatch.value) {
     toast.add({ title: 'Passwords do not match', color: 'error', icon: 'i-lucide-triangle-alert' })
     return
   }
@@ -204,7 +209,7 @@ const resendVerification = async () => {
             </ul>
           </UFormField>
 
-          <UFormField label="Confirm password" name="confirmPassword" required :error="attempted && password !== confirmPassword ? 'Passwords do not match.' : undefined">
+          <UFormField label="Confirm password" name="confirmPassword" required :error="confirmPasswordError">
             <UInput required v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
               <template #trailing>
                 <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">
@@ -212,6 +217,10 @@ const resendVerification = async () => {
                 </button>
               </template>
             </UInput>
+            <p v-if="confirmPassword && passwordsMatch" class="mt-1.5 flex items-center gap-1.5 text-xs text-success">
+              <UIcon name="i-lucide-check-circle-2" class="size-3.5 shrink-0" />
+              Passwords match
+            </p>
           </UFormField>
         </div>
 
