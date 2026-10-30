@@ -60,14 +60,11 @@ const userItems = computed(() => {
       }
     },
     {
-      label: 'Account settings',
-      icon: 'i-lucide-settings-2',
-      to: '/account?section=security'
-    },
-    {
       label: 'My account',
       icon: 'i-lucide-circle-user-round',
-      to: '/account?section=profile'
+      to: '/account?section=profile',
+      // The router ignores the query, so on any /account page this would always render as highlighted
+      active: false
     }
   ]
 

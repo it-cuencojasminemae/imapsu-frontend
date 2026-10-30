@@ -302,15 +302,14 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === 'Save Changes')?.disabled)
   check('photo removal preserves profile edits')
 
-  await page.getByRole('button', { name: 'Account menu', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Account settings', exact: true }).click()
-  await waitPath(page, '/account?section=security')
+  await chooseSection(page, 'Security')
   await page.reload()
   await page.getByRole('heading', { name: 'Change password', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Account menu', exact: true }).click()
+  assert.equal(await page.getByRole('menuitem', { name: 'Account settings', exact: true }).count(), 0)
   await page.getByRole('menuitem', { name: 'My account', exact: true }).click()
   await waitPath(page, '/account?section=profile')
-  check('dropdown links select distinct account sections and survive refresh')
+  check('account sections survive refresh and the dropdown opens My account')
 
   await page.goto(origin + '/account?section=unknown')
   await page.getByRole('region', { name: 'Profile', exact: true }).waitFor()
