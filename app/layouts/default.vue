@@ -5,7 +5,7 @@ const colorMode = useColorMode()
 const route = useRoute()
 const entryPath = computed(() => landingPath(auth.user.value))
 
-const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password'].includes(route.path))
+const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password', '/privacy'].includes(route.path))
 const isMapPage = computed(() => route.path === '/campus-map')
 const drawerOpen = ref(false)
 const accountDirty = useState('account-unsaved-changes', () => false)

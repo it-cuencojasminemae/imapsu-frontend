@@ -55,4 +55,5 @@ export interface RegisterInput {
   fullName: string
   contactNumber: string
   businessName?: string
+  privacyConsent: boolean
 }

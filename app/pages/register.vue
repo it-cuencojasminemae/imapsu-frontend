@@ -15,6 +15,8 @@ const confirmPassword = ref('')
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const role = ref('student')
+const privacyConsent = ref(false)
+const privacyOpen = ref(false)
 const loading = ref(false)
 const registeredEmail = ref('')
 const deliveryFailed = ref(false)
@@ -67,6 +69,11 @@ const handleRegister = async () => {
     return
   }
 
+  if (!privacyConsent.value) {
+    toast.add({ title: 'Consent required', description: 'Please read and agree to the Data Privacy Notice to create an account.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    return
+  }
+
   loading.value = true
   try {
     const result = await auth.register({
@@ -76,6 +83,7 @@ const handleRegister = async () => {
       role: role.value,
       fullName: fullName.value,
       contactNumber: contactNumber.value,
+      privacyConsent: true,
       ...(role.value === 'student' ? {} : { businessName: businessName.value })
     })
     deliveryFailed.value = result.verificationEmailSent === false
@@ -207,6 +215,18 @@ const resendVerification = async () => {
           </UFormField>
         </div>
 
+        <UFormField name="privacyConsent" :error="attempted && !privacyConsent ? 'You must agree to the Data Privacy Notice.' : undefined">
+          <UCheckbox v-model="privacyConsent" :disabled="loading">
+            <template #label>
+              <span class="text-sm text-default">
+                I have read the
+                <button type="button" class="font-medium text-primary hover:underline" @click.prevent="privacyOpen = true">Data Privacy Notice</button>
+                and agree to iMapSU collecting and using my personal data as described, in line with the Data Privacy Act of 2012 (RA 10173).
+              </span>
+            </template>
+          </UCheckbox>
+        </UFormField>
+
         <UButton data-prominent="true" type="submit" block size="lg" :loading="loading">
           Create account
         </UButton>
@@ -219,5 +239,17 @@ const resendVerification = async () => {
         </p>
       </template>
     </UCard>
+
+    <UModal v-model:open="privacyOpen" title="Data Privacy Notice" description="How iMapSU collects, uses and protects your personal data." :ui="{ content: 'max-w-2xl' }">
+      <template #body>
+        <PrivacyNotice />
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton variant="ghost" color="neutral" @click="privacyOpen = false">Close</UButton>
+          <UButton icon="i-lucide-check" @click="privacyConsent = true; privacyOpen = false">I agree</UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

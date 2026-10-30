@@ -140,6 +140,8 @@ const resendVerification = async () => {
             <div class="flex items-center justify-center gap-1.5 text-sm text-muted">
               <UIcon name="i-lucide-arrow-left" class="size-3.5" />
               <NuxtLink to="/campus-map" class="font-medium text-primary hover:underline">Back to campus map</NuxtLink>
+              <span aria-hidden="true">·</span>
+              <NuxtLink to="/privacy" class="font-medium text-primary hover:underline">Data Privacy Notice</NuxtLink>
             </div>
           </div>
         </template>

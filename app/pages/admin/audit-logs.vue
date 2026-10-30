@@ -32,6 +32,7 @@ const ACTIONS = [
   'account-deactivated',
   'account-deleted',
   'password-reset',
+  'privacy-consent',
   'role-changed',
   'permissions-updated',
   'settings-updated',
