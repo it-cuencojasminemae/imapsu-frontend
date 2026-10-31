@@ -496,12 +496,14 @@ const recordColumns = [
                 <UBadge v-else color="warning" variant="subtle">Not yet arrived</UBadge>
               </div>
               <div v-if="!item.appearanceConfirmed" class="flex flex-wrap items-center gap-2">
-                <UButton v-if="visitDayStarted(item.appearanceDate)" label="Mark as no-show" icon="i-lucide-user-x" size="sm" color="error" variant="ghost" @click="openNoShow(item)" />
+                <UTooltip :text="`Available from ${formatAppearance(item.appearanceDate)}`" :disabled="visitDayStarted(item.appearanceDate)">
+                  <span><UButton label="Mark as no-show" icon="i-lucide-user-x" size="sm" color="error" variant="ghost" :disabled="!visitDayStarted(item.appearanceDate)" @click="openNoShow(item)" /></span>
+                </UTooltip>
                 <UButton label="Mark as attended" icon="i-lucide-user-check" size="sm" color="primary" variant="subtle" :loading="confirmingAppearance === String(item.documentId ?? item.id)" @click="markAttended(item)" />
               </div>
               <UButton v-else-if="canFinalize(item)" label="Finalize lease" icon="i-lucide-key-round" size="sm" color="primary" @click="openFinalize(item)" />
             </div>
-            <p v-if="!item.appearanceConfirmed" class="mt-3 text-sm text-muted">Mark the applicant as attended only once they are at the office. If no visit is recorded by the end of {{ formatAppearance(item.appearanceDate) }}, the application is declined automatically.</p>
+            <p v-if="!item.appearanceConfirmed" class="mt-3 text-sm text-muted">Mark the applicant as attended only once they are at the office. If no visit is recorded by the end of {{ formatAppearance(item.appearanceDate) }}, the application is declined automatically.<template v-if="!visitDayStarted(item.appearanceDate)"> Mark as no-show becomes available on that day.</template></p>
             <p v-if="item.kind === 'application' && item.tenancy" class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-toned">
               <UIcon name="i-lucide-key-round" class="size-4 text-success" />
               Lease active since {{ formatDate(item.tenancy.startDate) }}.
