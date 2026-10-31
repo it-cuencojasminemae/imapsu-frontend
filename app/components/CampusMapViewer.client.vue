@@ -33,6 +33,9 @@ const props = withDefaults(
     pickPoint?: boolean
     pins?: MapPin[]
     activePinId?: string | null
+    // Phone layout: portrait-fitted camera, one-finger pan, double-tap zoom,
+    // and building labels only once zoomed in.
+    mobile?: boolean
   }>(),
   {
     modelPath: '/models/campus.glb',
@@ -50,7 +53,8 @@ const props = withDefaults(
     labels: () => ({}),
     pickPoint: false,
     pins: () => [],
-    activePinId: null
+    activePinId: null,
+    mobile: false
   }
 )
 
@@ -140,6 +144,17 @@ const pinObjects = new Map<string, CSS2DObject>()
 let hoveredZoneId: string | null = null
 let pointerDownPos = { x: 0, y: 0 }
 let pointerDownTime = 0
+
+// Mobile: the ground direction the camera looks from, chosen so the campus
+// fills the screen, and the overview zoom labels are measured against.
+let mobileHorizontal = new THREE.Vector3(1, 0, 0.35).normalize()
+let overviewZoom = 1
+// Labels appear once the user zooms in this far past the overview.
+const MOBILE_LABEL_ZOOM = 1.6
+const DOUBLE_TAP_MS = 280
+const DOUBLE_TAP_DISTANCE = 30
+let lastTap: { x: number; y: number; time: number } | null = null
+let tapTimer: ReturnType<typeof setTimeout> | null = null
 
 type BuildingNode = {
   node: THREE.Object3D
@@ -895,10 +910,10 @@ function zoneBounds(zone: MapZone) {
   return box
 }
 
-function cameraFrame(box: THREE.Box3, direction: THREE.Vector3, points?: THREE.Vector3[]) {
+function cameraFrame(box: THREE.Box3, direction: THREE.Vector3, points?: THREE.Vector3[], margin = 1.12) {
   const el = container.value
   if (!el || box.isEmpty()) return null
-  const frame = frameMapBox(box, direction, Math.max(el.clientWidth, 1), Math.max(el.clientHeight, 1), VIEW_HEIGHT, props.viewInsets, 1.12, points)
+  const frame = frameMapBox(box, direction, Math.max(el.clientWidth, 1), Math.max(el.clientHeight, 1), VIEW_HEIGHT, props.viewInsets, margin, points)
   if (modelBounds) {
     const shift = direction.clone().multiplyScalar((campusBounds().getCenter(new THREE.Vector3()).y - frame.target.y) / direction.y)
     frame.target.add(shift)
@@ -958,8 +973,36 @@ function constrainNavigation() {
   camera.updateMatrixWorld()
 }
 
+/** The overview direction for a ground heading, tilted like the desktop view. */
+function overviewDirection(horizontal: THREE.Vector3) {
+  const angle = THREE.MathUtils.degToRad(35)
+  return horizontal.clone().multiplyScalar(Math.sin(angle)).add(new THREE.Vector3(0, Math.cos(angle), 0))
+}
+
+/**
+ * Turns the campus so it fills the phone screen: tries headings around the
+ * campus and keeps the one that frames it largest, which in portrait puts the
+ * campus's long side top to bottom. Of the two opposite headings that frame it
+ * equally, the one nearer the desktop view wins.
+ */
+function fitMobileHeading(points: THREE.Vector3[]) {
+  const el = container.value, box = campusBounds()
+  if (!el || box.isEmpty() || !points.length) return
+  const desktop = new THREE.Vector3(1, 0, 0.35).normalize()
+  let best = desktop, bestZoom = -Infinity
+  for (let degrees = 0; degrees < 180; degrees += 3) {
+    const radians = THREE.MathUtils.degToRad(degrees)
+    const horizontal = new THREE.Vector3(Math.cos(radians), 0, Math.sin(radians))
+    if (horizontal.dot(desktop) < 0) horizontal.negate()
+    const { zoom } = frameMapBox(box, overviewDirection(horizontal), Math.max(el.clientWidth, 1), Math.max(el.clientHeight, 1), VIEW_HEIGHT, props.viewInsets, 1.04, points)
+    if (zoom > bestZoom * 1.005) { best = horizontal; bestZoom = zoom }
+  }
+  mobileHorizontal = best
+}
+
 function fitCamera() {
   if (!camera || !controls) return
+  if (props.mobile) { fitMobileCamera(); return }
   const horizontal = new THREE.Vector3(1, 0, 0.35).normalize()
   const angle = THREE.MathUtils.degToRad(35)
   const direction = horizontal.multiplyScalar(Math.sin(angle)).add(new THREE.Vector3(0, Math.cos(angle), 0))
@@ -982,6 +1025,28 @@ function fitCamera() {
   requestRender()
 }
 
+function fitMobileCamera() {
+  if (!camera || !controls) return
+  const points = framePoints()
+  fitMobileHeading(points)
+  const frame = cameraFrame(campusBounds(), overviewDirection(mobileHorizontal), points.length ? points : undefined, 1.04)
+  if (!frame) return
+  stopControlMotion()
+  setCameraInsets()
+  camera.position.copy(frame.position)
+  controls.target.copy(frame.target)
+  camera.zoom = frame.zoom
+  camera.far = Math.max(modelExtent * 12, 5000)
+  constrainNavigation()
+  camera.updateProjectionMatrix()
+  controls.update()
+  overviewZoom = camera.zoom
+  hasFitted = true
+  overview = true
+  focusedZone = null
+  requestRender()
+}
+
 function resetCamera() {
   focusAnim = null
   hasFitted = false
@@ -990,13 +1055,17 @@ function resetCamera() {
 
 function focusOn(zone: MapZone, immediate = false) {
   if (!camera || !controls) return
-  const frame = cameraFrame(zoneBounds(zone), new THREE.Vector3(1, 1, 0.35).normalize())
+  // Phones keep the overview's heading so focusing doesn't spin the campus.
+  const focusDirection = props.mobile
+    ? mobileHorizontal.clone().multiplyScalar(Math.hypot(1, 0.35)).setY(1).normalize()
+    : new THREE.Vector3(1, 1, 0.35).normalize()
+  const frame = cameraFrame(zoneBounds(zone), focusDirection)
   if (!frame) return
   stopControlMotion()
   setCameraInsets()
   // Preserve a safe orbit radius; only the orthographic zoom needs to change.
   const distance = Math.max(campusBounds().getSize(new THREE.Vector3()).length() * 2, 100)
-  frame.position.copy(frame.target).addScaledVector(new THREE.Vector3(1, 1, 0.35).normalize(), distance)
+  frame.position.copy(frame.target).addScaledVector(focusDirection, distance)
   frame.zoom = Math.min(frame.zoom, controls.maxZoom)
   hasFitted = true
   overview = false
@@ -1120,6 +1189,7 @@ function initScene(el: HTMLDivElement) {
   controls.zoomSpeed = 0.8
   controls.panSpeed = 0.7
   controls.rotateSpeed = 0.65
+  applyTouchGestures()
   controls.addEventListener('start', onControlStart)
   controls.addEventListener('end', onControlEnd)
   controls.addEventListener('change', requestRender)
@@ -1156,6 +1226,37 @@ function onControlStart() {
 }
 
 function onControlEnd() { interacting = false; requestRender() }
+
+// Phones pan with one finger like a map app; two fingers pinch to zoom and
+// drag to tilt or turn. Elsewhere OrbitControls keeps its defaults.
+function applyTouchGestures() {
+  if (!controls) return
+  controls.touches = props.mobile
+    ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }
+    : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+}
+
+/** Doubles the zoom, keeping the tapped spot under the finger. */
+function zoomAtPoint(clientX: number, clientY: number) {
+  const ndc = ndcFromClient(clientX, clientY)
+  if (!ndc || !camera || !controls) return
+  const toZoom = Math.min(camera.zoom * 2, controls.maxZoom)
+  if (toZoom <= camera.zoom * 1.01) return
+  raycaster.setFromCamera(ndc, camera)
+  const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -controls.target.y), new THREE.Vector3())
+  stopControlMotion()
+  const toTarget = point
+    ? point.clone().add(controls.target.clone().sub(point).multiplyScalar(camera.zoom / toZoom))
+    : controls.target.clone()
+  overview = false
+  focusedZone = null
+  focusAnim = {
+    fromPos: camera.position.clone(), fromTarget: controls.target.clone(), fromZoom: camera.zoom,
+    toPos: toTarget.clone().add(camera.position.clone().sub(controls.target)), toTarget, toZoom,
+    start: performance.now(), duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 280
+  }
+  requestRender()
+}
 
 function onMapWheel(event: WheelEvent) { event.preventDefault() }
 
@@ -1248,7 +1349,10 @@ function layoutLabels() {
     const outside = point.z < -1 || point.z > 1 || rect.right < 0 || rect.left > width || rect.top < 0 || rect.bottom > height
     const blocked = priority < 2 && (rect.top < props.viewInsets.top || rect.bottom > height - props.viewInsets.bottom || rect.left < props.viewInsets.left || rect.right > width - props.viewInsets.right)
     const collision = occupied.some(other => rect.left < other.right && rect.right > other.left && rect.top < other.bottom && rect.bottom > other.top)
-    const visible = !outside && !blocked && (!collision || priority === 3)
+    // On phones only the selected building is named until the user zooms in,
+    // so names and status badges don't bury the pins in the overview.
+    const zoomedOut = props.mobile && camera.zoom < overviewZoom * MOBILE_LABEL_ZOOM
+    const visible = !outside && !blocked && (!collision || priority === 3) && (!zoomedOut || priority === 3)
     element.style.visibility = visible ? 'visible' : 'hidden'
     element.classList.toggle('is-selected', selected.has(key))
     element.classList.toggle('is-hovered', key === hovered)
@@ -1291,15 +1395,37 @@ function onPointerUp(event: PointerEvent) {
     return
   }
 
+  if (props.mobile) {
+    // A second tap close by zooms in; a single tap selects once it's clear no
+    // second tap is coming.
+    const now = performance.now()
+    if (tapTimer && lastTap && now - lastTap.time < DOUBLE_TAP_MS && Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) < DOUBLE_TAP_DISTANCE) {
+      clearTimeout(tapTimer)
+      tapTimer = null
+      lastTap = null
+      zoomAtPoint(event.clientX, event.clientY)
+      return
+    }
+    const { clientX, clientY } = event
+    lastTap = { x: clientX, y: clientY, time: now }
+    if (tapTimer) clearTimeout(tapTimer)
+    tapTimer = setTimeout(() => { tapTimer = null; selectAt(clientX, clientY) }, DOUBLE_TAP_MS)
+    return
+  }
+
+  selectAt(event.clientX, event.clientY)
+}
+
+function selectAt(clientX: number, clientY: number) {
   if (!props.autoBuildings) {
-    const zone = pickZone(event.clientX, event.clientY)
+    const zone = pickZone(clientX, clientY)
     if (zone) {
       emit('select', zone)
       return
     }
   }
 
-  const building = pickModelBuilding(event.clientX, event.clientY)
+  const building = pickModelBuilding(clientX, clientY)
   if (!building?.name) return
   const order = /^\d+$/.test(building.name) ? parseInt(building.name, 10) : NaN
   const entry = Number.isFinite(order) ? buildingEntries.get(order) : undefined
@@ -1413,6 +1539,8 @@ function cleanupResources() {
   cancelAnimationFrame(frameId)
   frameId = 0
   if (initTimer) clearTimeout(initTimer)
+  if (tapTimer) clearTimeout(tapTimer)
+  tapTimer = null
   resizeObserver?.disconnect()
   motionQuery?.removeEventListener('change', onMotionChange)
   decoder?.dispose()
@@ -1470,6 +1598,22 @@ watch(() => [props.activeZoneId, props.activeBuildingOrder], () => {
   if (props.activeZoneId == null && props.activeBuildingOrder == null) focusedZone = null
 })
 watch(() => props.occupiedLabel, rebuildLabels)
+// Crossing the phone breakpoint swaps gestures and camera framing, so the
+// view is rebuilt for the new layout instead of keeping the other one's.
+watch(() => props.mobile, () => {
+  applyTouchGestures()
+  if (tapTimer) clearTimeout(tapTimer)
+  tapTimer = null
+  lastTap = null
+  if (!camera || !controls || !modelGroup) return
+  focusAnim = null
+  // Let the page re-measure its overlays for the new layout first.
+  nextTick(() => {
+    if (destroyed) return
+    if (focusedZone) focusOn(focusedZone, true)
+    else resetCamera()
+  })
+})
 watch(() => props.viewInsets, () => {
   if (overview) fitCamera()
   else if (focusedZone) focusOn(focusedZone, true)
@@ -1498,7 +1642,7 @@ defineExpose({ resetCamera, focusOn, focusBuilding, getBuildingZone, getBuilding
 </script>
 
 <template>
-  <div ref="container" class="relative h-full w-full overscroll-contain" />
+  <div ref="container" class="relative h-full w-full overscroll-contain" :class="{ 'campus-map-mobile': mobile }" />
 </template>
 
 <style>
@@ -1607,6 +1751,19 @@ defineExpose({ resetCamera, focusOn, focusBuilding, getBuildingZone, getBuilding
 .campus-map-pin.is-active .campus-map-pin-label,
 .campus-map-pin:hover .campus-map-pin-label,
 .campus-map-pin:focus-within .campus-map-pin-label { opacity: 1; }
+@media (max-width: 959px) {
+  /* Pinch and drag move the map, never the page. */
+  .campus-map-mobile, .campus-map-mobile canvas { touch-action: none; }
+  /* Smaller pins, each with an invisible 44px tap target. */
+  .campus-map-mobile .campus-map-pin-marker { left: -11px; width: 22px; height: 22px; }
+  .campus-map-mobile .campus-map-pin-marker::after { inset: 6px; }
+  .campus-map-mobile .campus-map-pin-marker::before { content: ''; position: absolute; inset: -11px; border-radius: 50%; }
+  .campus-map-mobile .campus-map-pin.is-active .campus-map-pin-marker { left: -15px; width: 30px; height: 30px; }
+  .campus-map-mobile .campus-map-pin.is-active .campus-map-pin-marker::after { inset: 8px; }
+  .campus-map-mobile .campus-map-pin.is-active .campus-map-pin-marker::before { inset: -7px; }
+  .campus-map-mobile .campus-map-pin-label { bottom: 34px; }
+  .campus-map-mobile .campus-map-pin.is-active .campus-map-pin-label { bottom: 42px; }
+}
 .campus-map-label-status.is-vacant { background: #dcfce7; color: #166534; }
 .campus-map-label-status.is-occupied { background: #fbe8e6; color: #7b2b24; }
 </style>

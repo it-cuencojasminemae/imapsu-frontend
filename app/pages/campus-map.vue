@@ -7,6 +7,7 @@ import { fetchMapPages, type MapListResponse } from '~/utils/mapPagination'
 import { mapPropertyStatus, unobscuredMapInsets } from '~/utils/mapPresentation'
 import { stallFloorLabel, stallKey, stallPhotos, stallTitle, visibleStalls } from '~/utils/mapStalls'
 import { useMapStallDetails } from '~/composables/useMapStallDetails'
+import { createReusableTemplate, useMediaQuery, useMounted } from '@vueuse/core'
 
 type MapLabel = {
   documentId?: string
@@ -24,6 +25,16 @@ definePageMeta({ pageTransition: false })
 const auth = useAuth()
 const toast = useToast()
 const { baseURL, $api, getErrorMessage } = useStrapi()
+
+// Phones and narrow windows (the same 959px breakpoint as the mobile CSS).
+// False until mounted so the server render and hydration match the desktop.
+const mounted = useMounted()
+const narrowScreen = useMediaQuery('(max-width: 959px)')
+const isMobile = computed(() => mounted.value && narrowScreen.value)
+const fullscreenSupported = ref(true)
+// The stall details render in a dialog on desktop and a bottom sheet on phones.
+const [DefineStallBody, StallBody] = createReusableTemplate()
+const [DefineStallFooter, StallFooter] = createReusableTemplate()
 
 const propertiesKey = computed(() => `map-properties:${auth.user.value?.id ?? 'guest'}`)
 const { data: propertiesData, status, refresh: refreshProperties } = await useAsyncData(propertiesKey, () =>
@@ -309,13 +320,23 @@ const measurePanels = () => {
   if (!map) return
   const bounds = map.getBoundingClientRect()
   viewport.value = { width: bounds.width, height: bounds.height }
-  const measured = unobscuredMapInsets(bounds.width, bounds.height, panels.value.map(panel => {
+  // Phones frame the campus edge to edge below the search bar (and above an
+  // open details panel); the small corner controls float over the map.
+  const heading = headingPanel.value?.getBoundingClientRect()
+  const details = detailsPanel.value?.getBoundingClientRect()
+  const measured = isMobile.value ? {
+    top: heading ? Math.round(heading.bottom - bounds.top + 8) : 12,
+    right: 12,
+    bottom: details ? Math.round(bounds.bottom - details.top + 8) : 12,
+    left: 12
+  } : unobscuredMapInsets(bounds.width, bounds.height, panels.value.map(panel => {
     const rect = panel.getBoundingClientRect()
     return { left: rect.left - bounds.left, right: rect.right - bounds.left, top: rect.top - bounds.top, bottom: rect.bottom - bounds.top }
   }), campusAspect.value)
   if (Object.keys(measured).some(key => measured[key as keyof typeof measured] !== viewInsets.value[key as keyof typeof measured])) viewInsets.value = measured
 }
 watch(campusAspect, measurePanels)
+watch(isMobile, () => nextTick(measurePanels))
 watch(panels, (current, previous) => {
   for (const panel of previous ?? []) viewportObserver?.unobserve(panel)
   for (const panel of current) viewportObserver?.observe(panel)
@@ -340,6 +361,7 @@ const syncFullscreen = () => {
 }
 
 onMounted(() => {
+  fullscreenSupported.value = document.fullscreenEnabled
   document.addEventListener('fullscreenchange', syncFullscreen)
   viewportObserver = new ResizeObserver(measurePanels)
   if (mapContainer.value) viewportObserver.observe(mapContainer.value)
@@ -376,6 +398,7 @@ onBeforeUnmount(() => {
         :show-names="showNames"
         :pins="stallPins"
         :active-pin-id="stallOpen ? selectedStallKey : null"
+        :mobile="isMobile"
         @select="selectZone"
         @pin-select="selectPin"
         @model-error="onModelError"
@@ -513,6 +536,7 @@ onBeforeUnmount(() => {
         @click="viewer?.resetCamera()"
       />
       <UButton
+        v-if="!isMobile || fullscreenSupported"
         size="sm"
         :color="isFullscreen ? 'primary' : 'neutral'"
         variant="solid"
@@ -596,16 +620,7 @@ onBeforeUnmount(() => {
 
     </AppMotionReveal></div>
 
-    <UModal
-      v-model:open="stallOpen"
-      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
-      :description="selected ? displayName(selected) : 'Campus rental space'"
-      portal="#campus-map-root"
-      :content="{ onCloseAutoFocus: restoreStallFocus }"
-      :ui="{ overlay: 'absolute z-40 bg-black/45 backdrop-blur-[2px]', content: 'absolute z-50 w-[calc(100%-2rem)] max-w-[800px] max-h-[calc(100%-2rem)] sm:max-h-[calc(100%-2rem)] rounded-xl', wrapper: 'min-w-0 pr-8', title: 'break-words', body: 'min-h-0 overflow-y-auto p-4 sm:p-6', footer: 'justify-between gap-3' }"
-      @after:leave="afterStallLeave"
-    >
-      <template #body>
+    <DefineStallBody>
         <div v-if="selectedStall" class="space-y-5">
           <div class="space-y-3">
             <div class="map-stall-gallery">
@@ -637,19 +652,47 @@ onBeforeUnmount(() => {
           </template>
           <p v-else-if="selectedStall.space_status === 'Vacant'" class="text-sm text-muted">This space is currently vacant.</p>
         </div>
-      </template>
-      <template #footer>
+    </DefineStallBody>
+    <DefineStallFooter>
         <UButton color="neutral" variant="ghost" label="Back to spaces" icon="i-lucide-arrow-left" @click="stallOpen = false" />
         <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="rateStallLink ? 'neutral' : 'primary'" :variant="rateStallLink ? 'outline' : 'solid'" icon="i-lucide-store" label="View property listing" />
         <UButton v-if="rateStallLink" :to="rateStallLink" size="sm" icon="i-lucide-star" label="Rate this stall" />
-      </template>
+    </DefineStallFooter>
+
+    <UModal
+      v-if="!isMobile"
+      v-model:open="stallOpen"
+      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
+      :description="selected ? displayName(selected) : 'Campus rental space'"
+      portal="#campus-map-root"
+      :content="{ onCloseAutoFocus: restoreStallFocus }"
+      :ui="{ overlay: 'absolute z-40 bg-black/45 backdrop-blur-[2px]', content: 'absolute z-50 w-[calc(100%-2rem)] max-w-[800px] max-h-[calc(100%-2rem)] sm:max-h-[calc(100%-2rem)] rounded-xl', wrapper: 'min-w-0 pr-8', title: 'break-words', body: 'min-h-0 overflow-y-auto p-4 sm:p-6', footer: 'justify-between gap-3' }"
+      @after:leave="afterStallLeave"
+    >
+      <template #body><StallBody /></template>
+      <template #footer><StallFooter /></template>
     </UModal>
+
+    <UDrawer
+      v-else
+      v-model:open="stallOpen"
+      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
+      :description="selected ? displayName(selected) : 'Campus rental space'"
+      portal="#campus-map-root"
+      :content="{ onCloseAutoFocus: restoreStallFocus }"
+      :ui="{ overlay: 'z-40 bg-black/45', content: 'z-50 max-h-[85dvh] rounded-t-2xl', container: 'gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]', title: 'break-words', footer: 'flex-row flex-wrap items-center justify-between gap-2' }"
+      @animation-end="(open: boolean) => { if (!open) afterStallLeave() }"
+    >
+      <template #body><StallBody /></template>
+      <template #footer><StallFooter /></template>
+    </UDrawer>
 
     <div
       ref="legendPanel"
       class="map-legend map-surface absolute z-10 px-3.5 py-3 text-xs text-muted"
+      :class="{ 'has-details': selected }"
     >
-      <p>
+      <p class="map-legend-count">
         {{ modelReady ? `${buildingCount} modeled buildings` : 'Campus overview' }}
       </p>
       <div class="mt-2 space-y-1">
@@ -775,5 +818,26 @@ onBeforeUnmount(() => {
   .map-legend-note { display: none; }
   .map-data-status { top: 160px; left: 196px; right: 12px; bottom: auto; max-width: none; padding: 6px 9px; border-radius: 12px; font-size: 10px; }
   .map-data-status > div { flex-wrap: wrap; gap: 4px; }
+}
+/* Phones: the map fills everything below the app bar (4px brand bar + 59px
+   bar + 1px border) and the overlays shrink to a search bar, a corner button
+   stack and a legend chip. */
+@media (max-width: 959px) {
+  .campus-map-page:not(:fullscreen) { height: calc(100dvh - 64px); }
+  .map-heading { left: 10px; right: 10px; top: 10px; width: auto; }
+  .map-heading .map-surface { padding: 6px; }
+  .map-eyebrow, .map-heading h1 { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .map-heading details, .map-instructions { display: none; }
+  .map-heading :deep(.mt-3) { margin-top: 0; }
+  /* 16px keeps iOS Safari from zooming the page when the search is focused. */
+  .map-heading :deep(input) { font-size: 16px; }
+  .map-toolbar { top: 68px; right: 10px; left: auto; flex-direction: column; gap: 4px; padding: 4px; }
+  .map-labeling, .map-data-status { top: 68px; left: 10px; right: 64px; bottom: auto; max-width: none; }
+  .map-data-status { padding: 6px 9px; font-size: 11px; }
+  .map-details { left: 10px; right: 10px; bottom: 10px; width: auto; max-height: min(45%, 360px); }
+  .map-legend { left: 10px; right: auto; bottom: 10px; display: block; padding: 6px 11px; border-radius: 999px; font-size: 11px; }
+  .map-legend.has-details, .map-legend-count, .map-legend-note { display: none; }
+  .map-legend > div { margin-top: 0; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; }
+  .map-legend > div > span { margin: 0; }
 }
 </style>
