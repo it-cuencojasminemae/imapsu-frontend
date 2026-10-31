@@ -219,9 +219,11 @@ const updateStatus = async (item: Item, statusValue: string) => {
   }
 }
 
+// Staff record the office visit only when the applicant is at the counter;
+// applicants cannot mark it themselves.
 const confirmingAppearance = ref<string | null>(null)
 
-const confirmAttendance = async (item: Item) => {
+const markAttended = async (item: Item) => {
   if (item.kind !== 'application') return
   const docId = item.documentId ?? item.id
   confirmingAppearance.value = String(docId)
@@ -230,12 +232,50 @@ const confirmAttendance = async (item: Item) => {
       method: 'PUT',
       body: { data: { appearanceConfirmed: true } }
     })
-    toast.add({ title: 'Attendance confirmed', description: 'The applicant\u2019s office visit is confirmed.', color: 'success', icon: 'i-lucide-check-circle-2' })
+    toast.add({ title: 'Marked as attended', description: 'The applicant\u2019s office visit is recorded.', color: 'success', icon: 'i-lucide-check-circle-2' })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to confirm attendance', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    toast.add({ title: 'Unable to record the visit', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
   } finally {
     confirmingAppearance.value = null
+  }
+}
+
+// A no-show can be declined from the visit day onward, freeing the stall
+// without waiting for the overnight auto-decline.
+const visitDayStarted = (value?: string) => {
+  if (!value) return false
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  return Date.now() >= new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+const noShowOpen = ref(false)
+const noShowTarget = ref<ApplicationItem | null>(null)
+const noShowSaving = ref(false)
+const noShowError = ref('')
+
+const openNoShow = (item: Item) => {
+  if (item.kind !== 'application') return
+  noShowTarget.value = item
+  noShowError.value = ''
+  noShowOpen.value = true
+}
+
+const saveNoShow = async () => {
+  const item = noShowTarget.value
+  if (!item) return
+  noShowSaving.value = true
+  noShowError.value = ''
+  try {
+    await $api(`/api/rental-applications/${item.documentId ?? item.id}/no-show`, { method: 'POST' })
+    toast.add({ title: 'Marked as no-show', description: `The application for ${propertyName(item)} was declined.`, color: 'neutral', icon: 'i-lucide-user-x' })
+    noShowOpen.value = false
+    await refresh()
+  } catch (err) {
+    noShowError.value = getErrorMessage(err)
+  } finally {
+    noShowSaving.value = false
   }
 }
 
@@ -452,18 +492,22 @@ const recordColumns = [
               <div class="flex flex-wrap items-center gap-2 text-sm">
                 <UIcon :name="item.appearanceConfirmed ? 'i-lucide-badge-check' : 'i-lucide-calendar-clock'" class="size-4" :class="item.appearanceConfirmed ? 'text-success' : 'text-warning'" />
                 <span class="font-medium text-highlighted">Office visit: {{ formatAppearance(item.appearanceDate) }}</span>
-                <UBadge v-if="item.appearanceConfirmed" color="success" variant="subtle">Confirmed</UBadge>
-                <UBadge v-else color="warning" variant="subtle">Attendance pending</UBadge>
+                <UBadge v-if="item.appearanceConfirmed" color="success" variant="subtle">Attended</UBadge>
+                <UBadge v-else color="warning" variant="subtle">Not yet arrived</UBadge>
               </div>
-              <UButton v-if="!item.appearanceConfirmed" label="Confirm attendance" icon="i-lucide-check" size="sm" color="primary" variant="subtle" :loading="confirmingAppearance === String(item.documentId ?? item.id)" @click="confirmAttendance(item)" />
+              <div v-if="!item.appearanceConfirmed" class="flex flex-wrap items-center gap-2">
+                <UButton v-if="visitDayStarted(item.appearanceDate)" label="Mark as no-show" icon="i-lucide-user-x" size="sm" color="error" variant="ghost" @click="openNoShow(item)" />
+                <UButton label="Mark as attended" icon="i-lucide-user-check" size="sm" color="primary" variant="subtle" :loading="confirmingAppearance === String(item.documentId ?? item.id)" @click="markAttended(item)" />
+              </div>
               <UButton v-else-if="canFinalize(item)" label="Finalize lease" icon="i-lucide-key-round" size="sm" color="primary" @click="openFinalize(item)" />
             </div>
+            <p v-if="!item.appearanceConfirmed" class="mt-3 text-sm text-muted">Mark the applicant as attended only once they are at the office. If no visit is recorded by the end of {{ formatAppearance(item.appearanceDate) }}, the application is declined automatically.</p>
             <p v-if="item.kind === 'application' && item.tenancy" class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-toned">
               <UIcon name="i-lucide-key-round" class="size-4 text-success" />
               Lease active since {{ formatDate(item.tenancy.startDate) }}.
               <NuxtLink to="/admin/tenancies" class="font-medium text-primary hover:underline">Manage in Tenancies</NuxtLink>
             </p>
-            <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">Attendance is confirmed. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall and switch their account to current tenant.</p>
+            <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">The applicant attended their office visit. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall and switch their account to current tenant.</p>
           </div>
 
           <div v-if="item.kind === 'application' && (item.evaluation || item.recommendation)" class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -560,6 +604,19 @@ const recordColumns = [
           <div class="flex justify-end gap-2">
             <UButton label="Cancel" color="neutral" variant="ghost" :disabled="finalizeSaving" @click="finalizeOpen = false" />
             <UButton data-prominent="true" type="submit" icon="i-lucide-key-round" :loading="finalizeSaving">Finalize lease</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="noShowOpen" class="max-w-lg" title="Mark as no-show" :description="noShowTarget ? `${noShowTarget.user?.username ?? 'The applicant'} did not report for ${propertyName(noShowTarget)}.` : undefined">
+      <template #body>
+        <form v-if="noShowTarget" class="space-y-4" @submit.prevent="saveNoShow">
+          <p class="text-sm text-toned">The application will be declined right away and {{ noShowTarget.user?.username ?? 'the applicant' }} will be notified that they did not report on {{ formatAppearance(noShowTarget.appearanceDate) }}. The stall becomes available to other applicants.</p>
+          <UAlert v-if="noShowError" color="error" icon="i-lucide-triangle-alert" :description="noShowError" />
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" :disabled="noShowSaving" @click="noShowOpen = false" />
+            <UButton type="submit" color="error" icon="i-lucide-user-x" :loading="noShowSaving">Decline as no-show</UButton>
           </div>
         </form>
       </template>

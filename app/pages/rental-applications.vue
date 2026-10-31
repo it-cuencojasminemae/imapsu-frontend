@@ -261,25 +261,6 @@ const appearanceDayPassed = (value?: string) => {
   const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
   return Date.now() >= end.getTime()
 }
-
-const confirmingFor = ref<string | null>(null)
-
-const confirmAppearance = async (item: RentalApplication) => {
-  const docId = item.documentId ?? item.id
-  confirmingFor.value = String(docId)
-  try {
-    await $api(`/api/rental-applications/${docId}`, {
-      method: 'PUT',
-      body: { data: { appearanceConfirmed: true } }
-    })
-    toast.add({ title: 'Attendance confirmed', description: 'You confirmed your office visit for this application.', color: 'success', icon: 'i-lucide-check-circle-2' })
-    await refresh()
-  } catch (err) {
-    toast.add({ title: 'Unable to confirm attendance', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
-  } finally {
-    confirmingFor.value = null
-  }
-}
 </script>
 
 <template>
@@ -322,23 +303,20 @@ const confirmAppearance = async (item: RentalApplication) => {
             </dl>
 
             <div v-if="item.status === 'Approved' && item.appearanceDate" class="mt-4 rounded-lg border p-4" :class="item.appearanceConfirmed ? 'border-success/40 bg-success/5' : 'border-warning/40 bg-warning/5'">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-start gap-2.5">
-                  <UIcon :name="item.appearanceConfirmed ? 'i-lucide-badge-check' : 'i-lucide-calendar-check'" class="mt-0.5 size-4 shrink-0" :class="item.appearanceConfirmed ? 'text-success' : 'text-warning'" />
-                  <div>
-                    <p class="text-sm font-medium text-highlighted">{{ item.appearanceConfirmed ? 'Attendance confirmed' : `Report to the office on ${formatAppearance(item.appearanceDate)}` }}</p>
-                    <p class="mt-0.5 text-xs text-muted">
-                      <template v-if="item.appearanceConfirmed">Thank you for confirming your office visit for this application.</template>
-                      <template v-else-if="appearanceDayPassed(item.appearanceDate)">The appearance date has passed. Please contact the OAS office; unconfirmed applications are declined after this day.</template>
-                      <template v-else>Please show up at the OAS office on {{ formatAppearance(item.appearanceDate) }} and confirm your attendance. Unconfirmed applications are declined after this day.</template>
-                    </p>
-                  </div>
+              <div class="flex items-start gap-2.5">
+                <UIcon :name="item.appearanceConfirmed ? 'i-lucide-badge-check' : 'i-lucide-calendar-check'" class="mt-0.5 size-4 shrink-0" :class="item.appearanceConfirmed ? 'text-success' : 'text-warning'" />
+                <div>
+                  <p class="text-sm font-medium text-highlighted">{{ item.appearanceConfirmed ? `Visit recorded on ${formatAppearance(item.appearanceDate)}` : `Report to the OAS office on ${formatAppearance(item.appearanceDate)}` }}</p>
+                  <p class="mt-0.5 text-xs text-muted">
+                    <template v-if="item.appearanceConfirmed">The OAS recorded your office visit and is finalizing your lease. You will be notified once it is active.</template>
+                    <template v-else-if="appearanceDayPassed(item.appearanceDate)">The scheduled visit day has passed without a recorded visit. Please contact the OAS office.</template>
+                    <template v-else>Bring a valid ID and the original copies of your documents. OAS staff will record your visit when you arrive. If you do not report on this day, your application will be declined automatically.</template>
+                  </p>
                 </div>
-                <UButton v-if="!item.appearanceConfirmed && !appearanceDayPassed(item.appearanceDate)" label="Confirm attendance" icon="i-lucide-check" :loading="confirmingFor === String(item.documentId ?? item.id)" @click="confirmAppearance(item)" />
               </div>
             </div>
 
-            <p v-if="item.status === 'Declined' && item.appearanceDate && !item.appearanceConfirmed" class="mt-3 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-clock-3" class="size-3.5" />Declined after the scheduled office visit on {{ formatAppearance(item.appearanceDate) }} was not confirmed.</p>
+            <p v-if="item.status === 'Declined' && item.appearanceDate && !item.appearanceConfirmed" class="mt-3 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-clock-3" class="size-3.5" />Declined because no office visit was recorded on {{ formatAppearance(item.appearanceDate) }}.</p>
 
             <p v-if="item.message" class="mt-4 text-sm leading-relaxed text-toned">{{ item.message }}</p>
 
