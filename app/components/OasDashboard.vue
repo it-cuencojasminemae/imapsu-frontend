@@ -66,18 +66,18 @@ const { data: announcementDataResponse, status: announcementDataStatus, refresh:
 })
 const { data: announcementData } = useRequestPresentation(announcementDataResponse, announcementDataStatus)
 
-const properties = computed(() => [])
+const totalSpaces = computed(() => summary.value?.properties?.total ?? 0)
 const occupiedSpaces = computed(() => summary.value?.properties?.occupied ?? 0)
 const vacantSpaces = computed(() => summary.value?.properties?.vacant ?? 0)
-const occupancy = computed(() => (summary.value?.properties?.total > 0 ? Math.round((occupiedSpaces.value / summary.value.properties.total) * 100) : 0))
+const occupancy = computed(() => (totalSpaces.value > 0 ? Math.round((occupiedSpaces.value / totalSpaces.value) * 100) : 0))
 
 const tenancies = computed(() => [])
 const activeTenancies = computed(() => summary.value?.tenancies?.active ?? 0)
 const tenancyCount = computed(() => summary.value?.tenancies?.total ?? 0)
 
 const bills = computed(() => billData.value?.data ?? [])
-const unverifiedBills = computed(() => bills.value.filter(bill => bill.status !== 'Verified'))
-const verifiedBills = computed(() => bills.value.filter(bill => bill.status === 'Verified'))
+const unverifiedBills = computed(() => summary.value?.billing?.unverifiedBills ?? 0)
+const verifiedBills = computed(() => summary.value?.billing?.verifiedBills ?? 0)
 const outstandingTotal = computed(() => summary.value?.billing?.outstanding ?? 0)
 const collectedTotal = computed(() => summary.value?.billing?.collected ?? 0)
 
@@ -214,14 +214,14 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
               <dt class="flex items-center gap-1.5 text-muted"><UIcon name="i-lucide-clock-3" class="size-4" :class="outstandingTotal > 0 ? 'text-warning' : 'text-muted'" aria-hidden="true" />Outstanding</dt>
               <dd class="font-semibold" :class="outstandingTotal > 0 ? 'text-warning' : 'text-highlighted'">{{ formatCurrency(outstandingTotal) }}</dd>
             </div>
-            <p class="mt-0.5 text-xs text-muted">{{ unverifiedBills.length }} unverified bill{{ unverifiedBills.length === 1 ? '' : 's' }}</p>
+            <p class="mt-0.5 text-xs text-muted">{{ unverifiedBills }} unverified bill{{ unverifiedBills === 1 ? '' : 's' }}</p>
           </div>
           <div>
             <div class="flex items-center justify-between text-sm">
               <dt class="flex items-center gap-1.5 text-muted"><UIcon name="i-lucide-badge-check" class="size-4 text-success" aria-hidden="true" />Collected</dt>
               <dd class="font-semibold text-success">{{ formatCurrency(collectedTotal) }}</dd>
             </div>
-            <p class="mt-0.5 text-xs text-muted">{{ verifiedBills.length }} verified bill{{ verifiedBills.length === 1 ? '' : 's' }}</p>
+            <p class="mt-0.5 text-xs text-muted">{{ verifiedBills }} verified bill{{ verifiedBills === 1 ? '' : 's' }}</p>
           </div>
           <div>
             <div class="flex items-center justify-between text-sm">
@@ -229,7 +229,7 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
               <dd class="font-semibold text-highlighted">{{ occupancy }}%</dd>
             </div>
             <UProgress :model-value="occupancy" aria-label="Occupied property spaces" class="mt-2" />
-            <p class="mt-1 text-xs text-muted">{{ occupiedSpaces }} of {{ properties.length }} spaces occupied</p>
+            <p class="mt-1 text-xs text-muted">{{ occupiedSpaces }} of {{ totalSpaces }} spaces occupied</p>
           </div>
         </dl>
       </UCard>

@@ -67,13 +67,13 @@ export async function startAccountDashboardApi(port = 1341) {
       send([{ id: 500 }]); return
     }
     if (path === '/api/dashboard/property-summary') { send(state.empty ? { total: 0, occupied: 0, vacant: 0 } : role === 'student' ? { total: 7, occupied: 7, vacant: 0 } : { total: 12, occupied: 7, vacant: 5 }); return }
-    if (path === '/api/dashboard/billing-summary') { send(state.empty ? { total: 0, outstanding: 0, overdueBills: 0, forVerification: 0 } : { total: 27, outstanding: 7500, overdueBills: 2, forVerification: 3 }); return }
+    if (path === '/api/dashboard/billing-summary') { send(state.empty ? { total: 0, verifiedBills: 0, unverifiedBills: 0, outstanding: 0, overdueBills: 0, forVerification: 0 } : { total: 27, verifiedBills: 0, unverifiedBills: 27, outstanding: 7500, overdueBills: 2, forVerification: 3 }); return }
     if (path === '/api/rental-applications') { send(list(Array.from({ length: 23 }, (_, i) => record(i, 'application', { propertySpace: { name: `Space ${i + 1}` }, status: 'For Review' })))); return }
     if (path === '/api/tenancies') { send(list(Array.from({ length: 4 }, (_, i) => record(i, 'tenancy', { status: 'Active', endDate: '2026-12-31', propertySpace: { name: `Tenant space ${i + 1}` } })))); return }
     if (path === '/api/maintenance-tickets') { send(list(Array.from({ length: 14 }, (_, i) => record(i, 'maintenance', { category: `Maintenance ${i + 1}`, status: 'Pending', propertySpace: { name: 'Campus Cafe' } })))); return }
     if (path === '/api/announcements') { send(list(Array.from({ length: 8 }, (_, i) => record(i, 'announcement', { title: `Campus announcement ${i + 1}`, publishedAt: new Date(Date.UTC(2026, 9, 15 - i)).toISOString() })))); return }
     if (path === '/api/notifications/unread-count') { send({ count: 0 }); return }
-    if (path === '/api/dashboard/oas-summary') { send({ properties: { total: 12, occupied: 7, vacant: 5 }, tenancies: { total: 4, active: 4, expiring: [] }, applications: { total: 23, pending: 3 }, maintenance: { total: 14, active: 2 }, feedback: { total: 0, unreviewed: 0 }, readings: 0, announcements: 8, billing: { total: 27, outstanding: 7500, collected: 0, overdueTotal: 1000, overdueAccounts: 1, overdueBills: 2, forVerification: 3 } }); return }
+    if (path === '/api/dashboard/oas-summary') { send({ properties: { total: 12, occupied: 7, vacant: 5 }, tenancies: { total: 4, active: 4, expiring: [] }, applications: { total: 23, pending: 3 }, maintenance: { total: 14, active: 2 }, feedback: { total: 0, unreviewed: 0 }, readings: 0, announcements: 8, billing: { total: 27, verifiedBills: 0, unverifiedBills: 27, outstanding: 7500, collected: 0, overdueTotal: 1000, overdueAccounts: 1, overdueBills: 2, forVerification: 3 } }); return }
     if (path === '/api/dashboard/admin-summary') { send({ users: { total: 5, active: 5, blocked: 0, unconfirmed: 0 }, roles: 5, roleCounts: Object.fromEntries(roles.map(type => [type, 1])), security: { lockedAccounts: 0, staffMfaEnabled: 2, staffEnrollmentPending: 0, staffEnrollmentOverdue: 0 } }); return }
     send(list([]))
   })

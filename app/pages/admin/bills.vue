@@ -136,9 +136,7 @@ const isOverdue = (bill: Bill) => {
   return due < today
 }
 
-const outstandingBills = computed(() => bills.value.filter(bill => !isVerified(bill)))
 const outstandingTotal = computed(() => billingSummary.value?.outstanding ?? null)
-const verifiedBills = computed(() => bills.value.filter(isVerified))
 const collectedTotal = computed(() => billingSummary.value?.collected ?? null)
 const overdueBills = computed(() => bills.value.filter(isOverdue))
 const overdueTotal = computed(() => billingSummary.value?.overdueTotal ?? null)
@@ -572,12 +570,12 @@ const recordColumns = [
         <UCard class="" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Outstanding</p>
           <p class="mt-1 text-xl font-semibold text-error">{{ formatCurrency(outstandingTotal) }}</p>
-          <p class="text-xs text-muted">{{ outstandingBills.length }} unverified</p>
+          <p class="text-xs text-muted">{{ billingSummary?.unverifiedBills ?? '—' }} unverified</p>
         </UCard>
         <UCard class="" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Collected</p>
           <p class="mt-1 text-xl font-semibold text-success-600">{{ formatCurrency(collectedTotal) }}</p>
-          <p class="text-xs text-muted">{{ verifiedBills.length }} verified</p>
+          <p class="text-xs text-muted">{{ billingSummary?.verifiedBills ?? '—' }} verified</p>
         </UCard>
         <UCard class="" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Receipts for Verification</p>
