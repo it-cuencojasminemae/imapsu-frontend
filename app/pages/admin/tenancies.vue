@@ -341,7 +341,7 @@ const filteredTenancies = computed(() => {
           </template>
 
           <UFormField v-else label="User" description="Reassigning the tenancy to another user is allowed.">
-            <USelect v-model="form.user" :items="userOptions" placeholder="Select a user" searchable />
+            <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{}" :fallback="userOptions" />
           </UFormField>
 
           <UFormField label="Property space" required>

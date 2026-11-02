@@ -148,6 +148,9 @@ const formatCurrency = (amount?: number | string) => amount == null || amount ==
   ? '—'
   : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 }).format(Number(amount))
 
+// Utility rates can carry up to four decimals (e.g. ₱11.0307 per kWh).
+const formatRate = (rate: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(rate)
+
 const formatDate = (value?: string) => value
   ? new Date(value + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
   : ''
@@ -219,8 +222,7 @@ const openCreate = () => {
     verificationNote: ''
   })
   formError.value = ''
-  latestReading.value = null
-  previousReading.value = null
+  resetReadingPrefill()
   formOpen.value = true
 }
 
@@ -241,8 +243,7 @@ const openEdit = (bill: Bill) => {
     verificationNote: bill.verificationNote ?? ''
   })
   formError.value = ''
-  latestReading.value = null
-  previousReading.value = null
+  resetReadingPrefill()
   formOpen.value = true
 }
 
@@ -252,21 +253,52 @@ const selectedTenancy = computed(() =>
 
 const latestReading = ref<MeterReading | null>(null)
 const previousReading = ref<MeterReading | null>(null)
+const previousCarriedOver = ref(false)
 const loadingReading = ref(false)
+
+type MeterField = 'electricPrevious' | 'electricCurrent' | 'waterPrevious' | 'waterCurrent'
+const METER_FIELDS: MeterField[] = ['electricPrevious', 'electricCurrent', 'waterPrevious', 'waterCurrent']
+// Values the form filled in itself; anything else in a meter field was typed.
+let prefilled: Partial<Record<MeterField, string>> = {}
+let readingRequest = 0
+
+const prefillMeter = (field: MeterField, value?: number | string | null) => {
+  if (form[field] !== '' || value == null) return
+  form[field] = String(value)
+  prefilled[field] = String(value)
+}
+
+const resetReadingPrefill = () => {
+  readingRequest++
+  prefilled = {}
+  latestReading.value = null
+  previousReading.value = null
+  previousCarriedOver.value = false
+  loadingReading.value = false
+}
+
+// Last day of the billing period, or null when the period is blank or unfinished.
+const periodEnd = (period: string) => {
+  const match = period.trim().match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/)
+  if (!match || Number(match[2]) < 1 || Number(match[2]) > 12) return null
+  const lastDay = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate()
+  return `${match[1]}-${match[2]!.padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
 
 // Pre-fill the meter fields from the field personnel readings recorded for the
 // selected tenancy (only when the fields are still blank). The latest reading
-// becomes "current"; the reading before it becomes "previous" so consumption is
-// derived from the reading history. Without a second reading, the previous
-// bill's current values are used as the fallback.
+// within the billing period becomes "current"; the reading before it becomes
+// "previous" so consumption is derived from the reading history. Without a
+// second reading, the previous bill's current values are used as the fallback.
 const applyLatestReading = async (tenancyDocId: string) => {
+  const request = ++readingRequest
+  const lastDay = periodEnd(form.period)
   loadingReading.value = true
-  latestReading.value = null
-  previousReading.value = null
   try {
     const readings = await $api<ListResponse<MeterReading>>('/api/meter-readings', {
       query: {
         'filters[tenancy][documentId][$eq]': tenancyDocId,
+        ...(lastDay ? { 'filters[readingDate][$lte]': lastDay } : {}),
         'sort[0]': 'readingDate:desc',
         'pagination[pageSize]': 2,
         'fields[0]': 'electricMeterReading',
@@ -274,17 +306,18 @@ const applyLatestReading = async (tenancyDocId: string) => {
         'fields[2]': 'readingDate'
       }
     })
+    if (request !== readingRequest) return
     const latest = readings.data[0]
     const previous = readings.data[1]
     if (latest) {
       latestReading.value = latest
-      if (form.electricCurrent === '' && latest.electricMeterReading != null) form.electricCurrent = String(latest.electricMeterReading)
-      if (form.waterCurrent === '' && latest.waterMeterReading != null) form.waterCurrent = String(latest.waterMeterReading)
+      prefillMeter('electricCurrent', latest.electricMeterReading)
+      prefillMeter('waterCurrent', latest.waterMeterReading)
     }
     if (previous) {
       previousReading.value = previous
-      if (form.electricPrevious === '' && previous.electricMeterReading != null) form.electricPrevious = String(previous.electricMeterReading)
-      if (form.waterPrevious === '' && previous.waterMeterReading != null) form.waterPrevious = String(previous.waterMeterReading)
+      prefillMeter('electricPrevious', previous.electricMeterReading)
+      prefillMeter('waterPrevious', previous.waterMeterReading)
     }
     if (!previous) {
       const prior = await $api<ListResponse<Bill>>('/api/bills', {
@@ -297,23 +330,43 @@ const applyLatestReading = async (tenancyDocId: string) => {
           'fields[1]': 'waterMeterCurrent'
         }
       })
+      if (request !== readingRequest) return
       const priorBill = prior.data[0]
       if (priorBill) {
-        if (form.electricPrevious === '' && priorBill.electricMeterCurrent != null) form.electricPrevious = String(priorBill.electricMeterCurrent)
-        if (form.waterPrevious === '' && priorBill.waterMeterCurrent != null) form.waterPrevious = String(priorBill.waterMeterCurrent)
+        const before = [form.electricPrevious, form.waterPrevious]
+        prefillMeter('electricPrevious', priorBill.electricMeterCurrent)
+        prefillMeter('waterPrevious', priorBill.waterMeterCurrent)
+        previousCarriedOver.value = before[0] !== form.electricPrevious || before[1] !== form.waterPrevious
       }
     }
   } catch {
     // Reading pre-fill is best-effort; the OAS can always type the values.
   } finally {
-    loadingReading.value = false
+    if (request === readingRequest) loadingReading.value = false
   }
 }
 
+// Readings belong to one tenancy, so switching tenancy never keeps the old ones.
 watch(() => form.tenancy, (docId) => {
-  if (!docId || editing.value) return
-  applyLatestReading(docId)
+  if (editing.value) return
+  for (const field of METER_FIELDS) form[field] = ''
+  resetReadingPrefill()
+  if (docId) applyLatestReading(docId)
 })
+
+// A new billing period picks different readings, but keeps anything typed by hand.
+watch(() => form.period, (period) => {
+  if (editing.value || !form.tenancy || (period.trim() && !periodEnd(period))) return
+  for (const field of METER_FIELDS) {
+    if (prefilled[field] != null && String(form[field]) === prefilled[field]) form[field] = ''
+  }
+  resetReadingPrefill()
+  applyLatestReading(form.tenancy)
+})
+
+// Same reading on both sides means no usage, so only rent and other charges are billed.
+const sameReading = (previous: string | number, current: string | number) =>
+  previous !== '' && current !== '' && Number(previous) === Number(current)
 
 const formatReadingDate = (value?: string) => value
   ? new Date(value + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -366,23 +419,26 @@ const save = async () => {
   }
   saving.value = true
   try {
+    // An edit has to send cleared values, or the bill keeps its old ones.
+    const blank = editing.value ? null : undefined
+    const noCharge = editing.value ? 0 : undefined
     const body = {
       data: {
         tenancy: form.tenancy,
-        period: form.period || undefined,
-        orNumber: form.orNumber?.trim() || undefined,
+        period: form.period || blank,
+        orNumber: form.orNumber?.trim() || blank,
         amount: Number(totalAmount.value.toFixed(2)),
-        electricMeterPrevious: form.electricPrevious === '' ? undefined : Number(form.electricPrevious),
-        electricMeterCurrent: form.electricCurrent === '' ? undefined : Number(form.electricCurrent),
-        electricRate: form.electricRate === '' ? undefined : Number(form.electricRate),
-        electricCharge: electricCharge.value === 0 ? undefined : Number(electricCharge.value.toFixed(2)),
-        waterMeterPrevious: form.waterPrevious === '' ? undefined : Number(form.waterPrevious),
-        waterMeterCurrent: form.waterCurrent === '' ? undefined : Number(form.waterCurrent),
-        waterRate: form.waterRate === '' ? undefined : Number(form.waterRate),
-        waterCharge: waterCharge.value === 0 ? undefined : Number(waterCharge.value.toFixed(2)),
-        additionalCharges: additionalChargesNum.value === 0 ? undefined : Number(additionalChargesNum.value.toFixed(2)),
+        electricMeterPrevious: form.electricPrevious === '' ? blank : Number(form.electricPrevious),
+        electricMeterCurrent: form.electricCurrent === '' ? blank : Number(form.electricCurrent),
+        electricRate: form.electricRate === '' ? blank : Number(form.electricRate),
+        electricCharge: electricCharge.value === 0 ? noCharge : Number(electricCharge.value.toFixed(2)),
+        waterMeterPrevious: form.waterPrevious === '' ? blank : Number(form.waterPrevious),
+        waterMeterCurrent: form.waterCurrent === '' ? blank : Number(form.waterCurrent),
+        waterRate: form.waterRate === '' ? blank : Number(form.waterRate),
+        waterCharge: waterCharge.value === 0 ? noCharge : Number(waterCharge.value.toFixed(2)),
+        additionalCharges: additionalChargesNum.value === 0 ? noCharge : Number(additionalChargesNum.value.toFixed(2)),
         status: form.status,
-        verificationNote: form.verificationNote?.trim() || undefined
+        verificationNote: form.verificationNote?.trim() || blank
       }
     }
     if (editing.value) {
@@ -663,7 +719,7 @@ const recordColumns = [
               :description="`Recorded on ${formatReadingDate(latestReading.readingDate)} — electric ${latestReading.electricMeterReading ?? '—'}, water ${latestReading.waterMeterReading ?? '—'}. Adjust before saving if needed.`"
             />
             <UAlert
-              v-if="!previousReading && (form.electricPrevious || form.waterPrevious)"
+              v-if="previousCarriedOver"
               color="info"
               icon="i-lucide-history"
               title="Previous reading carried over"
@@ -695,10 +751,11 @@ const recordColumns = [
                 <UInput v-model="form.electricCurrent" type="number" min="0" step="0.001" placeholder="e.g. 1045" />
               </UFormField>
               <UFormField label="Rate (PHP/unit)">
-                <UInput v-model="form.electricRate" type="number" min="0" step="0.01" placeholder="e.g. 35" />
+                <UInput v-model="form.electricRate" type="number" min="0" step="0.0001" placeholder="e.g. 11.0307" />
               </UFormField>
             </div>
             <UAlert v-if="form.electricPrevious && form.electricCurrent && Number(form.electricCurrent) < Number(form.electricPrevious)" color="warning" icon="i-lucide-triangle-alert" title="Electric readings out of order" description="Current reading is lower than the previous reading. Electric usage will be treated as 0." />
+            <UAlert v-if="sameReading(form.electricPrevious, form.electricCurrent)" class="mt-3" color="info" icon="i-lucide-info" title="No electric usage" description="Previous and current readings are the same, so no electricity will be charged. Check that the current reading is up to date." />
           </div>
 
           <div class="rounded-lg border border-default p-4">
@@ -711,10 +768,11 @@ const recordColumns = [
                 <UInput v-model="form.waterCurrent" type="number" min="0" step="0.001" placeholder="e.g. 512" />
               </UFormField>
               <UFormField label="Rate (PHP/unit)">
-                <UInput v-model="form.waterRate" type="number" min="0" step="0.01" placeholder="e.g. 25" />
+                <UInput v-model="form.waterRate" type="number" min="0" step="0.0001" placeholder="e.g. 25" />
               </UFormField>
             </div>
             <UAlert v-if="form.waterPrevious && form.waterCurrent && Number(form.waterCurrent) < Number(form.waterPrevious)" color="warning" icon="i-lucide-triangle-alert" title="Water readings out of order" description="Current reading is lower than the previous reading. Water usage will be treated as 0." />
+            <UAlert v-if="sameReading(form.waterPrevious, form.waterCurrent)" class="mt-3" color="info" icon="i-lucide-info" title="No water usage" description="Previous and current readings are the same, so no water will be charged. Check that the current reading is up to date." />
           </div>
 
           <UFormField label="Additional charges (PHP)" description="Maintenance and other fees.">
@@ -738,8 +796,8 @@ const recordColumns = [
             <p class="text-xs font-medium text-muted">Summary</p>
             <dl class="mt-2 space-y-1 text-sm">
               <div class="flex items-center justify-between"><dt class="text-muted">Rent</dt><dd class="font-medium text-highlighted">{{ formatCurrency(rentCharge) }}</dd></div>
-              <div class="flex items-center justify-between"><dt class="text-muted">Electric ({{ electricUsage }} units × {{ formatCurrency(Number(form.electricRate) || 0) }})</dt><dd class="font-medium text-highlighted">{{ formatCurrency(electricCharge) }}</dd></div>
-              <div class="flex items-center justify-between"><dt class="text-muted">Water ({{ waterUsage }} units × {{ formatCurrency(Number(form.waterRate) || 0) }})</dt><dd class="font-medium text-highlighted">{{ formatCurrency(waterCharge) }}</dd></div>
+              <div class="flex items-center justify-between"><dt class="text-muted">Electric ({{ electricUsage }} units × {{ formatRate(Number(form.electricRate) || 0) }})</dt><dd class="font-medium text-highlighted">{{ formatCurrency(electricCharge) }}</dd></div>
+              <div class="flex items-center justify-between"><dt class="text-muted">Water ({{ waterUsage }} units × {{ formatRate(Number(form.waterRate) || 0) }})</dt><dd class="font-medium text-highlighted">{{ formatCurrency(waterCharge) }}</dd></div>
               <div class="flex items-center justify-between"><dt class="text-muted">Additional charges</dt><dd class="font-medium text-highlighted">{{ formatCurrency(additionalChargesNum) }}</dd></div>
               <div class="flex items-center justify-between border-t border-default pt-2"><dt class="font-medium text-highlighted">Total</dt><dd class="font-semibold text-highlighted">{{ formatCurrency(totalAmount) }}</dd></div>
             </dl>

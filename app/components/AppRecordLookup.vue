@@ -1,29 +1,37 @@
 <script setup lang="ts">
 const props=defineProps<{modelValue?:any;endpoint:string;query?:Record<string,any>;fields:string[];label:(item:any)=>string;value:(item:any)=>any;fallback?:any[]}>()
 const emit=defineEmits(['update:modelValue'])
-const request=useSecureApi(),term=ref(''),page=ref(1),rows=ref<any[]>([]),total=ref(0),busy=ref(false),error=ref(false)
-let sequence=0
+const request=useSecureApi(),term=ref(''),page=ref(1),rows=ref<any[]>([]),total=ref(0),busy=ref(false),error=ref(false),chosen=ref<any>(null)
+let sequence=0,timer:ReturnType<typeof setTimeout>|undefined
+const options=computed(()=>rows.value.map(row=>({label:props.label(row),value:props.value(row)})))
+const selectedLabel=(value:any)=>(options.value.find(item=>item.value===value)??props.fallback?.find(item=>item.value===value)??(chosen.value?.value===value?chosen.value:null))?.label??''
+// The box shows the chosen record's label between searches; that text is not a search.
+const search=computed(()=>term.value===selectedLabel(props.modelValue)?'':term.value.trim())
 const load=async(append=false)=>{
   const id=++sequence;busy.value=true;error.value=false
   const query:Record<string,any>={...props.query,'pagination[page]':page.value,'pagination[pageSize]':25}
-  props.fields.forEach((field,index)=>{if(term.value.trim())query['filters[$or]['+index+']['+field.split('.').join('][')+'][$containsi]']=term.value.trim()})
+  const words=search.value.split(/\s+/).filter(word=>/[\p{L}\p{N}]/u.test(word))
+  words.forEach((word,index)=>props.fields.forEach((field,column)=>{query['filters[$and]['+index+'][$or]['+column+']['+field.split('.').join('][')+'][$containsi]']=word}))
   try{const result=await request<any>(props.endpoint,{query});if(id!==sequence)return;rows.value=append?[...rows.value,...result.data]:result.data;total.value=result.meta.pagination.total}
   catch{if(id===sequence)error.value=true}finally{if(id===sequence)busy.value=false}
 }
-watch(term,()=>{page.value=1;load()})
+watch(search,()=>{++sequence;busy.value=true;clearTimeout(timer);timer=setTimeout(()=>{page.value=1;load()},250)})
 onMounted(()=>load())
-const options=computed(()=>{
-  const result=rows.value.map(row=>({label:props.label(row),value:props.value(row)}))
-  const selected=props.fallback?.find(item=>item.value===props.modelValue)
-  if(selected&&!result.some(item=>item.value===selected.value))result.unshift(selected)
-  return result
-})
+onBeforeUnmount(()=>clearTimeout(timer))
+const loadMore=()=>{if(busy.value||rows.value.length>=total.value)return;page.value++;load(true)}
+const choose=(value:any)=>{chosen.value=options.value.find(item=>item.value===value)??null;emit('update:modelValue',value)}
+// Arrowing onto the last result fetches the next page so the keyboard can keep going.
+const onHighlight=(item:any)=>{if(item&&item.value===options.value.at(-1)?.value)loadMore()}
+const selectLabel=(event:Event)=>{if(!search.value)(event.target as HTMLInputElement|null)?.select?.()}
 </script>
 <template>
   <div class="space-y-2">
-    <UInput v-model="term" placeholder="Search records…" icon="i-lucide-search" aria-label="Search available records" class="w-full" />
-    <USelect :model-value="modelValue" :items="options" :loading="busy" class="w-full" @update:model-value="emit('update:modelValue',$event)" />
-    <UButton v-if="rows.length<total" size="xs" color="neutral" variant="ghost" label="Load more choices" :loading="busy" @click="page++;load(true)" />
+    <UInputMenu :model-value="modelValue" v-model:search-term="term" :items="options" value-key="value" ignore-filter open-on-click :displayValue="selectedLabel" :reset-model-value-on-clear="false" placeholder="Search records…" icon="i-lucide-search" aria-label="Search available records" :loading="busy" :ui="{ trailing: 'hidden', item: 'data-highlighted:not-data-disabled:before:bg-primary/25' }" class="w-full" @update:model-value="choose" @highlight="onHighlight($event)" @focus="selectLabel" @click="selectLabel" @keydown.enter.prevent>
+      <template #empty>{{ busy ? 'Searching…' : search ? `No records match “${search}”` : 'No records available' }}</template>
+      <template v-if="rows.length<total" #content-bottom>
+        <div class="border-t border-default p-1"><UButton size="xs" color="neutral" variant="ghost" block label="Load more choices" :loading="busy" @mousedown.prevent @click="loadMore" /></div>
+      </template>
+    </UInputMenu>
     <UButton v-if="error" size="xs" color="error" variant="ghost" label="Retry choices" @click="load()" />
   </div>
 </template>
