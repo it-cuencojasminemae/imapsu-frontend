@@ -294,7 +294,7 @@ const save = async () => {
             category: form.category,
             priority: form.priority,
             description: form.description.trim(),
-            actionNotes: form.actionNotes?.trim() || undefined,
+            actionNotes: form.actionNotes?.trim() || null,
             images: imageDrafts.value.map(image => image.id),
             status: form.status
           }

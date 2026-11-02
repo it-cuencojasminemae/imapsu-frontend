@@ -123,7 +123,7 @@ const saveAction = async (item: Feedback) => {
       body: {
         data: {
           category: item.category ?? 'Other',
-          staffAction: draftFor(item)?.trim() || undefined
+          staffAction: draftFor(item)?.trim() || null
         }
       }
     })

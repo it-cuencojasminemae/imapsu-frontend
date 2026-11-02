@@ -526,7 +526,7 @@ const confirmReject = async () => {
   const target = rejectTarget.value
   try {
     await setBillStatus(target, 'Rejected', {
-      verificationNote: rejectNote.value?.trim() || undefined
+      verificationNote: rejectNote.value?.trim() || null
     })
     rejectOpen.value = false
   } catch (err) {

@@ -12,7 +12,7 @@ const submit = async () => {
 </script>
 <template>
   <UModal :open="open" title="Verify this sensitive action" description="Enter an authenticator or recovery code. Your unsaved work will remain on this page." @update:open="value => { if(!value)finish(false) }">
-    <template #body><form class="space-y-4" @submit.prevent="submit">
+    <template #body><form method="post" class="space-y-4" @submit.prevent="submit">
       <UFormField label="Authenticator or recovery code"><UInput v-model="code" autocomplete="one-time-code" class="w-full" autofocus /></UFormField>
       <UAlert v-if="error" color="error" :title="error" />
       <a href="/account" target="_blank" rel="noopener" class="text-sm text-primary underline">Set up or manage your authenticator</a>

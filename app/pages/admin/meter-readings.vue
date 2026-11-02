@@ -173,13 +173,15 @@ const save = async () => {
       waterMeterImage = null
     }
 
+    // An edit has to send cleared values, or the reading keeps its old ones.
+    const blank = editing.value ? null : undefined
     const body = {
       data: {
         tenancy: form.tenancy,
         readingDate: form.readingDate,
-        electricMeterReading: form.electricMeterReading === '' ? undefined : Number(form.electricMeterReading),
-        waterMeterReading: form.waterMeterReading === '' ? undefined : Number(form.waterMeterReading),
-        notes: form.notes?.trim() || undefined,
+        electricMeterReading: form.electricMeterReading === '' ? blank : Number(form.electricMeterReading),
+        waterMeterReading: form.waterMeterReading === '' ? blank : Number(form.waterMeterReading),
+        notes: form.notes?.trim() || blank,
         electricMeterImage,
         waterMeterImage
       }

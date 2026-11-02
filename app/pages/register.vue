@@ -156,7 +156,7 @@ const resendVerification = async () => {
         </NuxtLink>
       </div>
 
-      <form v-else class="space-y-5" @submit.prevent="handleRegister">
+      <form method="post" v-else class="space-y-5" @submit.prevent="handleRegister">
         <UAlert v-if="registrationError" color="error" icon="i-lucide-triangle-alert" title="Unable to create your account" :description="registrationError" />
         <UFormField label="I want to use iMapSU as" name="role" required>
           <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" class="w-full" />

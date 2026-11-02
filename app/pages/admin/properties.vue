@@ -230,15 +230,17 @@ const save = async () => {
         })
       })
     }
+    // An edit has to send cleared values, or the space keeps its old ones.
+    const blank = editing.value ? null : undefined
     const body = {
       data: {
         name: form.name,
         building: form.building,
-        campus: form.campus?.trim() || undefined,
-        floor: form.floor || undefined,
-        description: form.description || undefined,
-        area: form.area !== '' ? Number(form.area) : undefined,
-        monthlyRent: form.monthlyRent !== '' ? Number(form.monthlyRent) : undefined,
+        campus: form.campus?.trim() || blank,
+        floor: form.floor || blank,
+        description: form.description || blank,
+        area: form.area !== '' ? Number(form.area) : blank,
+        monthlyRent: form.monthlyRent !== '' ? Number(form.monthlyRent) : blank,
         rentalClassification: form.rentalClassification,
         photos: [...photoDrafts.value.filter(photo => photo.serverId != null).map(photo => photo.serverId as number), ...uploadedIds.filter(photo => photo?.id != null).map(photo => photo.id)],
         space_status: form.space_status,

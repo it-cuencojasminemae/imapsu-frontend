@@ -183,17 +183,19 @@ const save = async () => {
     } else {
       userId = Number(form.user)
     }
+    // An edit has to send cleared values, or the tenancy keeps its old ones.
+    const blank = editing.value ? null : undefined
     const body = {
       data: {
         user: userId,
         propertySpace: form.propertySpace,
         startDate: form.startDate,
-        endDate: form.endDate || undefined,
+        endDate: form.endDate || blank,
         status: form.status,
-        monthlyRent: form.monthlyRent === '' ? undefined : Number(form.monthlyRent),
-        businessName: form.businessName.trim() || undefined,
-        productsServices: form.productsServices.trim() || undefined,
-        operatingDetails: form.operatingDetails.trim() || undefined
+        monthlyRent: form.monthlyRent === '' ? blank : Number(form.monthlyRent),
+        businessName: form.businessName.trim() || blank,
+        productsServices: form.productsServices.trim() || blank,
+        operatingDetails: form.operatingDetails.trim() || blank
       }
     }
     if (editing.value) {
@@ -310,7 +312,7 @@ const filteredTenancies = computed(() => {
 
     <UModal v-model:open="formOpen" class="max-w-2xl" :title="editing ? 'Edit tenancy' : 'Create tenancy'" description="Assign a vacant space to a user.">
       <template #body>
-        <form class="space-y-4" @submit.prevent="save">
+        <form method="post" class="space-y-4" @submit.prevent="save">
           <template v-if="!editing">
             <UFormField label="Tenant account">
               <URadioGroup v-model="form.accountMode" variant="table" orientation="horizontal" :items="[

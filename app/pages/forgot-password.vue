@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
         <UButton block size="lg" icon="i-lucide-log-in" :to="{ path: '/login' }">Sign in</UButton>
       </div>
 
-      <form v-else-if="step === 'request'" class="space-y-5" @submit.prevent="requestCode">
+      <form method="post" v-else-if="step === 'request'" class="space-y-5" @submit.prevent="requestCode">
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
         <UFormField label="Email address" name="email" required>
           <UInput v-model="email" required type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
         </UButton>
       </form>
 
-      <form v-else-if="step === 'verify'" class="space-y-5" @submit.prevent="verifyCode">
+      <form method="post" v-else-if="step === 'verify'" class="space-y-5" @submit.prevent="verifyCode">
         <UAlert color="info" variant="soft" icon="i-lucide-mail" :description="`If an active account uses ${email}, we sent a reset code to it. Check your spam folder too.`" />
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 
@@ -281,7 +281,7 @@ onBeforeUnmount(() => {
         </div>
       </form>
 
-      <form v-else class="space-y-5" @submit.prevent="resetPassword">
+      <form method="post" v-else class="space-y-5" @submit.prevent="resetPassword">
         <UAlert color="success" variant="soft" icon="i-lucide-badge-check" :description="`Code verified for ${email}. Choose a new password.`" />
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 

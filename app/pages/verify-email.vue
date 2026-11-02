@@ -182,7 +182,7 @@ watch(code, (value) => {
         <UButton block size="lg" icon="i-lucide-arrow-right" @click="goToDashboard">Continue to your dashboard</UButton>
       </div>
 
-      <form v-else class="space-y-5" @submit.prevent="verify">
+      <form method="post" v-else class="space-y-5" @submit.prevent="verify">
         <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 
         <div v-if="email" class="flex items-center gap-3 rounded-xl border border-default bg-elevated/60 px-4 py-3">

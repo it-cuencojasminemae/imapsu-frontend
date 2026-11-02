@@ -56,7 +56,7 @@ defineExpose({ dirty, reset: () => { currentPassword.value = ''; newPassword.val
 <template>
 <UCard>
 <template #header><h2 class="text-base font-semibold text-highlighted">Change password</h2><p class="mt-1 text-sm text-muted">Choose a new password to secure your account. You will sign in again after saving.</p></template>
-        <form class="space-y-4" @submit.prevent="savePassword">
+        <form method="post" class="space-y-4" @submit.prevent="savePassword">
           <div class="rounded-lg border border-default bg-muted/20 px-4 py-3 text-sm">
             <p class="font-medium text-highlighted">{{ auth.user.value?.username }}</p>
             <p class="text-muted">{{ auth.user.value?.email }}</p>

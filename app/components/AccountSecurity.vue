@@ -44,7 +44,7 @@ defineExpose({ start })
       <code class="block break-all rounded bg-muted p-3 select-all">{{ secret }}</code>
       <a :href="uri" class="text-sm text-primary underline">Open in an authenticator app</a>
     </div>
-    <form v-if="secret || auth.user.value?.security?.mfaEnabled" class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="verify">
+    <form method="post" v-if="secret || auth.user.value?.security?.mfaEnabled" class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="verify">
       <UFormField :label="secret ? 'Authenticator code' : 'Verify a sensitive action'" description="Authenticator or recovery code"><UInput v-model="code" autocomplete="one-time-code" :disabled="busy" required /></UFormField>
       <UButton type="submit" :label="secret ? 'Enable authenticator' : 'Verify'" :loading="busy" />
     </form>

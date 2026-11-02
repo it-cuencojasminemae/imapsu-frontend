@@ -385,8 +385,8 @@ const saveReview = async () => {
       body: {
         data: {
           status: reviewForm.status,
-          evaluation: reviewForm.evaluation?.trim() || undefined,
-          recommendation: reviewForm.recommendation?.trim() || undefined
+          evaluation: reviewForm.evaluation?.trim() || null,
+          recommendation: reviewForm.recommendation?.trim() || null
         }
       }
     })

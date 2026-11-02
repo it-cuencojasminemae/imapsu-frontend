@@ -362,7 +362,7 @@ const filteredUsers = computed(() => {
 
     <UModal v-model:open="createOpen" class="max-w-2xl" title="Create account" description="Provision a new account. New passwords must satisfy the configured password policy.">
       <template #body>
-        <form class="space-y-4" @submit.prevent="createUser">
+        <form method="post" class="space-y-4" @submit.prevent="createUser">
           <UFormField label="Username" required>
             <UInput required v-model="createUsername" type="text" autocomplete="off" :disabled="creating" />
           </UFormField>
@@ -391,7 +391,7 @@ const filteredUsers = computed(() => {
 
     <UModal v-model:open="resetOpen" class="max-w-xl" title="Reset password" :description="resetUser ? `Set a new password for ${resetUser.username}.` : ''">
       <template #body>
-        <form class="space-y-4" @submit.prevent="submitReset">
+        <form method="post" class="space-y-4" @submit.prevent="submitReset">
           <UFormField label="New password" required>
             <UInput required v-model="resetPassword" type="password" autocomplete="new-password" :disabled="resetting" />
           </UFormField>

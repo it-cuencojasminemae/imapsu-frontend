@@ -79,7 +79,7 @@ const resendVerification = async () => {
 
     <div class="imapsu-auth">
       <UCard :ui="{ root: 'shadow-none ring-1 ring-default', header: 'px-6 pb-4 pt-8 sm:px-8', body: 'px-6 pb-6 sm:px-8', footer: 'px-6 pb-8 sm:px-8' }">
-        <form v-if="auth.mfaPending.value" class="mb-6 space-y-4" @submit.prevent="submitMfa">
+        <form method="post" v-if="auth.mfaPending.value" class="mb-6 space-y-4" @submit.prevent="submitMfa">
           <h2 class="text-lg font-semibold">Verify your sign-in</h2>
           <p class="text-sm text-muted">Enter your authenticator code or a single-use recovery code.</p>
           <UFormField label="Authenticator or recovery code"><UInput v-model="authenticatorCode" autocomplete="one-time-code" /></UFormField>
@@ -107,7 +107,7 @@ const resendVerification = async () => {
 
         <UAlert v-if="sessionEnded && !loginError" color="info" icon="i-lucide-log-in" variant="soft" title="Please sign in again" description="Your session ended because your account changed, for example when your lease became active. Sign in to continue." class="mb-5" />
 
-        <form class="space-y-5" @submit.prevent="handleLogin">
+        <form method="post" class="space-y-5" @submit.prevent="handleLogin">
           <UAlert v-if="loginError" color="error" icon="i-lucide-triangle-alert" title="Unable to sign in" :description="loginError" />
           <UFormField label="Email or username" name="identifier" required>
             <UInput v-model="identifier" required type="text" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="username" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
