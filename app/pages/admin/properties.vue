@@ -347,9 +347,9 @@ const remove = async (property: PropertySpace) => {
             </div>
 
             <dl class="space-y-3 text-sm">
-              <div class="flex items-center justify-between">
-                <dt class="text-xs text-muted">Location</dt>
-                <dd class="font-medium text-highlighted">
+              <div class="flex items-start justify-between gap-4">
+                <dt class="shrink-0 text-xs text-muted">Location</dt>
+                <dd class="text-right font-medium text-highlighted">
                   {{ [property.building, property.campus].filter(Boolean).join(' · ') }}<span v-if="property.floor"> · {{ property.floor }}</span>
                 </dd>
               </div>
