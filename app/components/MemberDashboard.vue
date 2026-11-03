@@ -9,7 +9,7 @@ const actions = computed(() => [
     { label: 'Bills', to: '/bills', icon: 'i-lucide-receipt', description: 'Review billing notices and submit official receipts.' },
     { label: 'Maintenance', to: '/maintenance', icon: 'i-lucide-wrench', description: 'Report an issue and track your requests.' }
   ] : [
-    { label: 'Rentable spaces', to: '/properties', icon: 'i-lucide-store', description: auth.isStudent.value ? 'View listed occupied campus spaces.' : 'Browse spaces and rental information.' },
+    { label: auth.isStudent.value ? 'Campus spaces' : 'Rentable spaces', to: '/properties', icon: 'i-lucide-store', description: auth.isStudent.value ? 'See the stalls and other spaces in use on campus.' : 'Browse spaces and rental information.' },
     auth.isAspiringTenant.value
       ? { label: 'Rental applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list', description: 'Apply for a space and track your applications.' }
       : { label: 'Student feedback', to: '/feedback', icon: 'i-lucide-message-square-text', description: 'Share feedback about campus stall services.' }
@@ -35,14 +35,14 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
   </section>
 
   <div class="grid items-start gap-6 xl:grid-cols-2">
-    <DashboardSection v-if="!auth.isCurrentTenant.value" title="Property overview" endpoint="/api/dashboard/property-summary" resource="properties" to="/properties">
+    <DashboardSection v-if="!auth.isCurrentTenant.value" :title="auth.isStudent.value ? 'Campus spaces overview' : 'Property overview'" endpoint="/api/dashboard/property-summary" resource="properties" to="/properties">
       <template #default="{ data }">
-        <dl class="grid grid-cols-2 gap-4" :class="!auth.isStudent.value && 'sm:grid-cols-3'">
-          <div><dt class="text-sm text-muted">Listed spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.total }}</dd></div>
-          <div><dt class="text-sm text-muted">Occupied spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.occupied }}</dd></div>
+        <dl class="grid gap-4" :class="!auth.isStudent.value && 'grid-cols-2 sm:grid-cols-3'">
+          <div v-if="!auth.isStudent.value"><dt class="text-sm text-muted">Listed spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.total }}</dd></div>
+          <div><dt class="text-sm text-muted">{{ auth.isStudent.value ? 'Occupied campus spaces' : 'Occupied spaces' }}</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.occupied }}</dd></div>
           <div v-if="!auth.isStudent.value"><dt class="text-sm text-muted">Available spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.vacant }}</dd></div>
         </dl>
-        <p class="mt-4 text-xs text-muted">Property spaces permitted for your account. These totals describe spaces, not buildings.</p>
+        <p class="mt-4 text-xs text-muted">{{ auth.isStudent.value ? 'Spaces currently in use across campus. Buildings are not counted.' : 'Property spaces permitted for your account. These totals describe spaces, not buildings.' }}</p>
       </template>
     </DashboardSection>
 

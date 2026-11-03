@@ -8,6 +8,7 @@ type PropertySpace = {
   documentId?: string
   propertyCode: string
   name: string
+  businessName?: string
   building: string
   floor?: string
   description?: string
@@ -21,22 +22,21 @@ type PropertySpace = {
 type Feedback = {
   id: number | string
   documentId?: string
-  tenantName?: string
+  forCurrentTenant?: boolean
   rating: number
   comment?: string
   createdAt?: string
   propertySpace?: { documentId?: string } | null
 }
 
-type ActiveTenant = { propertyDocumentId: string; tenantName: string | null }
+type ActiveTenant = { propertyDocumentId: string; hasActiveTenant: boolean }
 
 type PropertyResponse = { data: PropertySpace[] }
 type ListResponse<T> = { data: T[] }
 
-useHead({ title: 'Rentable Spaces | iMapSU' })
-
 const config = useRuntimeConfig()
 const auth = useAuth()
+useHead({ title: () => `${auth.isStudent.value ? 'Campus' : 'Rentable'} Spaces | iMapSU` })
 const headers = {}
 const recordsPage = useRecordPage([], {  })
 const { data: responseData, status, error, refresh } = await useFetch<PropertyResponse>('/api/properties', {
@@ -50,7 +50,7 @@ const { data: responseData, status, error, refresh } = await useFetch<PropertyRe
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: tenantData } = await useFetch<ListResponse<ActiveTenant>>('/api/properties/active-tenants', {
+const { data: tenantData, refresh: refreshTenants } = await useFetch<ListResponse<ActiveTenant>>('/api/properties/active-tenants', {
   baseURL: '',
   headers
 })
@@ -87,17 +87,18 @@ const properties = computed(() => {
   // cached response while the backend is still restarting.
   return auth.isStudent.value ? all.filter(property => property.space_status !== 'Vacant') : all
 })
-const { data: propertySummaryResponse } = await useFetch<any>('/api/dashboard/property-summary')
+const { data: propertySummaryResponse, refresh: refreshSummary } = await useFetch<any>('/api/dashboard/property-summary')
+// The listing is paginated, so the current page cannot supply the total.
+const totalCount = computed(() => propertySummaryResponse.value?.total ?? properties.value.length)
 const vacantCount = computed(() => propertySummaryResponse.value?.vacant ?? 0)
 
-const activeTenantByProperty = computed(() => new Map((tenantData.value?.data ?? []).map(entry => [entry.propertyDocumentId, entry.tenantName])))
+const rentedProperties = computed(() => new Set((tenantData.value?.data ?? []).filter(entry => entry.hasActiveTenant).map(entry => entry.propertyDocumentId)))
 
 const feedbacksForCurrentTenant = computed(() => {
   const map = new Map<string, Feedback[]>()
   for (const feedback of feedbackData.value?.data ?? []) {
     const propertyId = feedback.propertySpace?.documentId
-    const tenantName = activeTenantByProperty.value.get(propertyId ?? '')
-    if (!propertyId || !tenantName || feedback.tenantName !== tenantName) continue
+    if (!propertyId || !feedback.forCurrentTenant) continue
     const list = map.get(propertyId) ?? []
     list.push(feedback)
     map.set(propertyId, list)
@@ -106,12 +107,12 @@ const feedbacksForCurrentTenant = computed(() => {
 })
 
 type Card = PropertySpace & {
-  tenantName: string | null
+  hasTenant: boolean
   feedback: { count: number; avg: number; latest: Feedback } | null
 }
 
 const toCard = (property: PropertySpace): Card => {
-  const tenantName = activeTenantByProperty.value.get(property.documentId ?? '') ?? null
+  const hasTenant = rentedProperties.value.has(property.documentId ?? '')
   const list = feedbacksForCurrentTenant.value.get(property.documentId ?? '')
   const feedback = list?.length
     ? {
@@ -120,7 +121,7 @@ const toCard = (property: PropertySpace): Card => {
         latest: list[0]
       }
     : null
-  return { ...property, tenantName, feedback }
+  return { ...property, hasTenant, feedback }
 }
 
 const focusedCard = computed<Card | null>(() => {
@@ -135,6 +136,8 @@ const cards = computed<Card[]>(() => {
   return focusedCard.value ? [focusedCard.value, ...all.filter(card => card.documentId !== focusId.value)] : all
 })
 
+// Students look for the business, the same name the campus map shows them.
+const cardTitle = (card: Card) => (auth.isStudent.value && card.businessName?.trim()) || card.name
 const isFocused = (card: Card) => !!focusId.value && card.documentId === focusId.value
 const clearFocus = () => {
   const { focus: _focus, ...query } = route.query
@@ -155,7 +158,7 @@ const photosForCard = (card: Card) =>
   card.space_status === 'Occupied' ? (card.tenantPhotos ?? []) : (card.photos ?? [])
 
 const refreshAll = async () => {
-  await Promise.all([refresh(), refreshFeedback()])
+  await Promise.all([refresh(), refreshFeedback(), refreshSummary(), refreshTenants()])
 }
 
 const formatCurrency = (amount?: number | string) => {
@@ -174,14 +177,14 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Property portfolio</template>
-      <template #title>Rentable Spaces</template>
-      <template #description><p class="mt-2 max-w-xl text-muted">Browse registered campus stalls and other rentable spaces. Information shown depends on your account access.</p></template>
+      <template #eyebrow>{{ auth.isStudent.value ? 'Campus directory' : 'Property portfolio' }}</template>
+      <template #title>{{ auth.isStudent.value ? 'Campus' : 'Rentable' }} Spaces</template>
+      <template #description><p class="mt-2 max-w-xl text-muted">{{ auth.isStudent.value ? 'Browse occupied campus stalls and other spaces in use.' : 'Browse registered campus stalls and other rentable spaces. Information shown depends on your account access.' }}</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
         <UCard class="min-w-28" :ui="{ body: 'p-3' }">
-          <p class="text-xs text-muted">Total spaces</p><p class="text-xl font-semibold text-highlighted">{{ properties.length }}</p>
+          <p class="text-xs text-muted">Total spaces</p><p class="text-xl font-semibold text-highlighted">{{ totalCount }}</p>
         </UCard>
-        <UCard class="min-w-28" :ui="{ body: 'p-3' }">
+        <UCard v-if="!auth.isStudent.value" class="min-w-28" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Vacant</p><p class="text-xl font-semibold text-secondary">{{ vacantCount }}</p>
         </UCard>
         <div class="flex items-center">
@@ -194,9 +197,9 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
     <AppLoadingState v-if="isInitialLoading" :count="6" height="h-64" />
 
-    <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load property spaces" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
+    <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" :title="auth.isStudent.value ? 'Unable to load campus spaces' : 'Unable to load property spaces'" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="properties.length === 0" icon="i-lucide-store" title="No property spaces found" description="Property spaces will appear here once they are added to iMapSU." />
+    <UEmpty v-else-if="properties.length === 0" icon="i-lucide-store" :title="auth.isStudent.value ? 'No campus spaces found' : 'No property spaces found'" :description="auth.isStudent.value ? 'Campus spaces will appear here once they are in use.' : 'Property spaces will appear here once they are added to iMapSU.'" />
 
     <template v-else>
     <UAlert
@@ -205,7 +208,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
       color="primary"
       variant="subtle"
       icon="i-lucide-map-pin"
-      :title="`${focusedCard.name} is shown first`"
+      :title="`${cardTitle(focusedCard)} is shown first`"
       description="This is the space you selected on the campus map."
     >
       <template #actions>
@@ -227,9 +230,9 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <div class="min-w-0">
               <UBadge v-if="isFocused(card)" class="mb-2" color="primary" variant="solid" size="sm" icon="i-lucide-map-pin" label="Selected on map" />
               <p class="font-mono text-xs text-muted">{{ card.propertyCode }}</p>
-              <h2 class="mt-1 truncate text-lg font-semibold text-highlighted">{{ card.name }}</h2>
+              <h2 class="mt-1 break-words text-lg font-semibold text-highlighted">{{ cardTitle(card) }}</h2>
             </div>
-            <UBadge :color="card.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ card.space_status }}</UBadge>
+            <UBadge v-if="!auth.isStudent.value" :color="card.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ card.space_status }}</UBadge>
           </div>
         </template>
 
@@ -238,7 +241,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             v-for="photo in photosForCard(card)"
             :key="photo.id"
             :src="`${''}${photo.url}`"
-            :alt="photo.name || card.name"
+            :alt="photo.name || cardTitle(card)"
             class="h-24 w-24 shrink-0 rounded-lg object-cover"
           />
         </div>
@@ -248,15 +251,15 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <dt class="mb-1 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-map-pin" /> Location</dt>
             <dd class="font-medium text-highlighted">{{ card.building }}<span v-if="card.floor"> · {{ card.floor }}</span></dd>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div v-if="!auth.isStudent.value" class="grid grid-cols-2 gap-4">
             <div><dt class="mb-1 text-xs text-muted">Area</dt><dd class="font-medium text-highlighted">{{ formatArea(card.area) }}</dd></div>
             <div><dt class="mb-1 text-xs text-muted">Monthly rent</dt><dd class="font-semibold text-primary">{{ formatCurrency(card.monthlyRent) }}</dd></div>
           </div>
           <div v-if="card.description"><dt class="mb-1 text-xs text-muted">Description</dt><dd class="line-clamp-2 text-toned">{{ card.description }}</dd></div>
         </dl>
 
-        <div v-if="auth.isStudent.value && card.tenantName" class="mt-4 border-t pt-4">
-          <p class="mb-2 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-message-square-text" /> Feedback for {{ card.tenantName }}</p>
+        <div v-if="auth.isStudent.value && card.hasTenant" class="mt-4 border-t pt-4">
+          <p class="mb-2 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-message-square-text" /> Student feedback</p>
           <template v-if="card.feedback">
             <div class="flex items-center gap-2">
               <span class="flex items-center gap-0.5">
@@ -273,7 +276,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             </div>
             <p v-if="card.feedback.latest.comment" class="mt-1.5 line-clamp-2 text-sm text-toned">{{ card.feedback.latest.comment }}</p>
           </template>
-          <p v-else class="text-sm text-toned">No feedback yet for this tenant.</p>
+          <p v-else class="text-sm text-toned">No feedback yet for this stall.</p>
           <UButton v-if="card.documentId" class="mt-3" size="sm" color="neutral" variant="outline" block :to="`/feedback?property=${card.documentId}`" label="Rate this stall" icon="i-lucide-star" />
         </div>
 

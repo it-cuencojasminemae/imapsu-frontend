@@ -26,7 +26,7 @@ const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
   if (auth.isAuthenticated.value && !auth.isStaff.value) {
     sections.push({
       label: 'Explore',
-      links: [{ label: 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' }]
+      links: [{ label: auth.isStudent.value ? 'Campus spaces' : 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' }]
     })
   }
 

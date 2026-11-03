@@ -23,6 +23,8 @@ useHead({
 definePageMeta({ pageTransition: false })
 
 const auth = useAuth()
+// Students only see occupied spaces, which they cannot rent.
+const spaceLabel = computed(() => auth.isStudent.value ? 'campus space' : 'rentable space')
 const toast = useToast()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 
@@ -394,7 +396,7 @@ onBeforeUnmount(() => {
         :active-building-order="selected?.buildingOrder ?? null"
         :view-insets="viewInsets"
         @campus-aspect="campusAspect = $event"
-        :occupied-label="auth.isStudent.value ? 'Occupied space listed' : 'Occupied'"
+        occupied-label="Occupied"
         :show-names="showNames"
         :pins="stallPins"
         :active-pin-id="stallOpen ? selectedStallKey : null"
@@ -562,8 +564,8 @@ onBeforeUnmount(() => {
             />
             <h3 class="break-words text-base font-semibold">{{ selected ? displayName(selected) : '' }}</h3>
           </div>
-          <p v-if="pinnedStall" class="mt-1 text-xs font-medium text-toned">Outdoor rentable space</p>
-          <p v-else class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${buildingProperties.length === 1 ? 'rentable space listed' : 'rentable spaces listed'}` : status === 'error' ? 'Rental-space information unavailable' : 'Loading rentable spaces…' }}</p>
+          <p v-if="pinnedStall" class="mt-1 text-xs font-medium text-toned">Outdoor {{ spaceLabel }}</p>
+          <p v-else class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${spaceLabel}${buildingProperties.length === 1 ? '' : 's'} listed` : status === 'error' ? (auth.isStudent.value ? 'Campus space information unavailable' : 'Rental-space information unavailable') : `Loading ${spaceLabel}s…` }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <UButton
@@ -580,7 +582,7 @@ onBeforeUnmount(() => {
       <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <template v-if="buildingProperties.length">
           <div class="space-y-2">
-            <p class="mb-3 text-xs text-muted">{{ labelMode ? 'Select a building to edit its map label.' : 'Choose a rentable space to view photos and details.' }}</p>
+            <p class="mb-3 text-xs text-muted">{{ labelMode ? 'Select a building to edit its map label.' : `Choose a ${spaceLabel} to view photos and details.` }}</p>
             <button
               v-for="property in buildingProperties"
               :key="stallKey(property)"
@@ -614,7 +616,7 @@ onBeforeUnmount(() => {
         <p v-else-if="status === 'error'" class="text-sm text-muted">Property information is unavailable. Use Retry to reload it.</p>
         <p v-else-if="status === 'pending'" class="text-sm text-muted">Loading property information…</p>
         <p v-else class="text-sm text-muted">
-          No rentable spaces are currently listed for this building.
+          No {{ spaceLabel }}s are currently listed for this building.
         </p>
       </div>
 
@@ -645,7 +647,6 @@ onBeforeUnmount(() => {
             </dl>
             <UBadge variant="subtle" :color="propertyBadgeColor(selectedStall)">{{ mapPropertyStatus(selectedStall.space_status) ?? 'Status unavailable' }}</UBadge>
           </div>
-          <p v-if="selectedStall.name && selectedStall.name !== stallTitle(selectedStall)" class="text-sm text-toned">{{ selectedStall.name }}</p>
           <template v-if="selectedStall.space_status === 'Occupied'">
             <div v-if="selectedStall.productsServices"><h4 class="text-sm font-semibold">Products / services</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.productsServices }}</p></div>
             <div v-if="selectedStall.operatingDetails"><h4 class="text-sm font-semibold">Operating details</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.operatingDetails }}</p></div>
@@ -655,15 +656,15 @@ onBeforeUnmount(() => {
     </DefineStallBody>
     <DefineStallFooter>
         <UButton color="neutral" variant="ghost" label="Back to spaces" icon="i-lucide-arrow-left" @click="stallOpen = false" />
-        <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="rateStallLink ? 'neutral' : 'primary'" :variant="rateStallLink ? 'outline' : 'solid'" icon="i-lucide-store" label="View property listing" />
+        <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="rateStallLink ? 'neutral' : 'primary'" :variant="rateStallLink ? 'outline' : 'solid'" icon="i-lucide-store" :label="auth.isStudent.value ? 'View in Campus spaces' : 'View property listing'" />
         <UButton v-if="rateStallLink" :to="rateStallLink" size="sm" icon="i-lucide-star" label="Rate this stall" />
     </DefineStallFooter>
 
     <UModal
       v-if="!isMobile"
       v-model:open="stallOpen"
-      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
-      :description="selected ? displayName(selected) : 'Campus rental space'"
+      :title="selectedStall ? stallTitle(selectedStall) : `${auth.isStudent.value ? 'Campus' : 'Rental'}-space details`"
+      :description="selected ? displayName(selected) : auth.isStudent.value ? 'Campus space' : 'Campus rental space'"
       portal="#campus-map-root"
       :content="{ onCloseAutoFocus: restoreStallFocus }"
       :ui="{ overlay: 'absolute z-40 bg-black/45 backdrop-blur-[2px]', content: 'absolute z-50 w-[calc(100%-2rem)] max-w-[800px] max-h-[calc(100%-2rem)] sm:max-h-[calc(100%-2rem)] rounded-xl', wrapper: 'min-w-0 pr-8', title: 'break-words', body: 'min-h-0 overflow-y-auto p-4 sm:p-6', footer: 'justify-between gap-3' }"
@@ -676,8 +677,8 @@ onBeforeUnmount(() => {
     <UDrawer
       v-else
       v-model:open="stallOpen"
-      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
-      :description="selected ? displayName(selected) : 'Campus rental space'"
+      :title="selectedStall ? stallTitle(selectedStall) : `${auth.isStudent.value ? 'Campus' : 'Rental'}-space details`"
+      :description="selected ? displayName(selected) : auth.isStudent.value ? 'Campus space' : 'Campus rental space'"
       portal="#campus-map-root"
       :content="{ onCloseAutoFocus: restoreStallFocus }"
       :ui="{ overlay: 'z-40 bg-black/45', content: 'z-50 max-h-[85dvh] rounded-t-2xl', container: 'gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]', title: 'break-words', footer: 'flex-row flex-wrap items-center justify-between gap-2' }"
@@ -702,7 +703,7 @@ onBeforeUnmount(() => {
         </span>
         <span class="flex items-center gap-1.5">
           <span class="size-2.5 rounded-full" :style="{ backgroundColor: MAP_STATUS_COLORS.occupied }" />
-          {{ auth.isStudent.value ? 'Occupied spaces listed' : 'Fully occupied' }}
+          {{ auth.isStudent.value ? 'Has occupied spaces' : 'Fully occupied' }}
         </span>
       </div>
       <p class="map-legend-note mt-2 text-[10px] text-muted">Building colors show listed property status.</p>

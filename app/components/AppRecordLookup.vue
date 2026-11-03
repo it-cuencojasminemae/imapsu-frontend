@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props=defineProps<{modelValue?:any;endpoint:string;query?:Record<string,any>;fields:string[];label:(item:any)=>string;value:(item:any)=>any;fallback?:any[]}>()
+const props=defineProps<{modelValue?:any;endpoint:string;query?:Record<string,any>;fields:string[];label:(item:any)=>string;value:(item:any)=>any;fallback?:any[];placeholder?:string}>()
 const emit=defineEmits(['update:modelValue'])
 const request=useSecureApi(),term=ref(''),page=ref(1),rows=ref<any[]>([]),total=ref(0),busy=ref(false),error=ref(false),chosen=ref<any>(null)
 let sequence=0,timer:ReturnType<typeof setTimeout>|undefined
@@ -26,7 +26,7 @@ const selectLabel=(event:Event)=>{if(!search.value)(event.target as HTMLInputEle
 </script>
 <template>
   <div class="space-y-2">
-    <UInputMenu :model-value="modelValue" v-model:search-term="term" :items="options" value-key="value" ignore-filter open-on-click :displayValue="selectedLabel" :reset-model-value-on-clear="false" placeholder="Search records…" icon="i-lucide-search" aria-label="Search available records" :loading="busy" :ui="{ trailing: 'hidden', item: 'data-highlighted:not-data-disabled:before:bg-primary/25' }" class="w-full" @update:model-value="choose" @highlight="onHighlight($event)" @focus="selectLabel" @click="selectLabel" @keydown.enter.prevent>
+    <UInputMenu :model-value="modelValue" v-model:search-term="term" :items="options" value-key="value" ignore-filter open-on-click :displayValue="selectedLabel" :reset-model-value-on-clear="false" :placeholder="placeholder ?? 'Search records…'" icon="i-lucide-search" :aria-label="placeholder ?? 'Search available records'" :loading="busy" :ui="{ trailing: 'hidden', item: 'data-highlighted:not-data-disabled:before:bg-primary/25' }" class="w-full" @update:model-value="choose" @highlight="onHighlight($event)" @focus="selectLabel" @click="selectLabel" @keydown.enter.prevent>
       <template #empty>{{ busy ? 'Searching…' : search ? `No records match “${search}”` : 'No records available' }}</template>
       <template v-if="rows.length<total" #content-bottom>
         <div class="border-t border-default p-1"><UButton size="xs" color="neutral" variant="ghost" block label="Load more choices" :loading="busy" @mousedown.prevent @click="loadMore" /></div>

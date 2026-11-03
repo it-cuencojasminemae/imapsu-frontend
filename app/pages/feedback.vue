@@ -12,10 +12,10 @@ type Feedback = {
   category?: string
   comment?: string
   createdAt?: string
-  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
+  propertySpace?: { documentId?: string; name?: string; businessName?: string; propertyCode?: string; building?: string } | null
 }
 
-type PropertySpace = { documentId: string; name: string; propertyCode: string; building: string }
+type PropertySpace = { documentId: string; name: string; businessName?: string; propertyCode: string; building: string }
 type ListResponse<T> = { data: T[] }
 
 useHead({ title: 'Feedback | iMapSU' })
@@ -43,19 +43,17 @@ const { data: propertyData } = await useCompleteFetch<ListResponse<PropertySpace
     'fields[0]': 'name',
     'fields[1]': 'propertyCode',
     'fields[2]': 'building',
+    'fields[3]': 'businessName',
     'pagination[pageSize]': 100
   }
 })
 
-const { data: tenantData } = await useFetch<ListResponse<{ propertyDocumentId: string; tenantName: string | null }>>('/api/properties/active-tenants', {
-  baseURL,
-  headers
-})
-
 const feedbacks = computed(() => data.value?.data ?? [])
 const properties = computed(() => propertyData.value?.data ?? [])
+// The business name is what students see on the map and the campus spaces page.
+const stallName = (property: { name?: string; businessName?: string }) => property.businessName?.trim() || property.name
 const propertyOptions = computed(() => properties.value.map(property => ({
-  label: `${property.name} (${property.propertyCode})`,
+  label: `${stallName(property)} (${property.propertyCode})`,
   value: property.documentId
 })))
 
@@ -72,10 +70,6 @@ const comment = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
-const tenantMap = computed(() => new Map((tenantData.value?.data ?? []).map(entry => [entry.propertyDocumentId, entry.tenantName ?? ''])))
-
-const tenantName = computed(() => tenantMap.value.get(selectedProperty.value ?? '') ?? '')
-
 const toggleCategory = (value: string) => {
   category.value = category.value === value ? undefined : value
 }
@@ -83,7 +77,7 @@ const toggleCategory = (value: string) => {
 const submit = async () => {
   errorMessage.value = ''
   if (!selectedProperty.value) {
-    errorMessage.value = 'Please choose a property.'
+    errorMessage.value = 'Please choose a stall.'
     return
   }
   if (rating.value < 1) {
@@ -137,8 +131,7 @@ const formatDate = (value?: string) => value
 
         <form class="space-y-5" @submit.prevent="submit">
           <UFormField label="Stall" name="propertySpace" required>
-            <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
-            <p v-if="tenantName" class="mt-1.5 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-user-round" class="size-3.5" /> Run by {{ tenantName }}</p>
+            <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" placeholder="Search stalls…" :fields="['name','businessName','propertyCode','building']" :label="item => stallName(item) + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
           </UFormField>
 
           <UFormField label="Rating" name="rating" required>
@@ -198,7 +191,7 @@ const formatDate = (value?: string) => value
 
         <div v-else class="space-y-4">
           <UCard v-for="item in feedbacks" :key="item.documentId ?? item.id" :ui="{ body: 'p-5' }">
-            <div class="flex items-start justify-between gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="flex items-center gap-1">
                 <UIcon
                   v-for="star in 5"
@@ -210,14 +203,14 @@ const formatDate = (value?: string) => value
               </div>
               <div class="flex items-center gap-2">
                 <UBadge v-if="item.category && item.category !== 'Other'" color="neutral" variant="subtle" size="sm">{{ item.category }}</UBadge>
-                <p class="text-xs text-muted">{{ formatDate(item.createdAt) }}</p>
+                <p class="whitespace-nowrap text-xs text-muted">{{ formatDate(item.createdAt) }}</p>
               </div>
             </div>
             <p class="mt-3 text-sm leading-relaxed text-toned">{{ item.comment || 'No comment left.' }}</p>
             <p class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span v-if="item.propertySpace" class="flex items-center gap-1">
                 <UIcon name="i-lucide-building-2" class="size-3.5" />
-                {{ item.propertySpace.name }}
+                {{ stallName(item.propertySpace) }}
                 <span class="font-mono">({{ item.propertySpace.propertyCode }})</span>
               </span>
               <span v-if="item.tenantName">· Tenant: {{ item.tenantName }}</span>
