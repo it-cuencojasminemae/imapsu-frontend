@@ -3,7 +3,8 @@ import { prepareUpload } from '~/utils/uploadFile'
 
 definePageMeta({
   middleware: ['auth', 'role'],
-  roles: ['current-tenant']
+  // An aspiring tenant here is a former tenant reading past bills, or someone with none.
+  roles: ['current-tenant', 'aspiring-tenant']
 })
 
 type Bill = {
@@ -213,15 +214,16 @@ const statusLabel = (bill: Bill) => {
   }
 }
 
-const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
+const readOnly = computed(() => !auth.isCurrentTenant.value)
+const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Verified'
 </script>
 
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Current tenant</template>
-      <template #title>Bills</template>
-      <template #description><p class="mt-2 max-w-xl text-muted">Review advance billing information for rent and utilities. Make payments through the University Cashier, then submit the official receipt for verification.</p></template>
+      <template #eyebrow>{{ readOnly ? 'Past tenancy' : 'Current tenant' }}</template>
+      <template #title>{{ readOnly ? 'Past bills' : 'Bills' }}</template>
+      <template #description><p class="mt-2 max-w-xl text-muted">{{ readOnly ? 'Review the rent and utility bills from your past tenancy. These records are read-only.' : 'Review advance billing information for rent and utilities. Make payments through the University Cashier, then submit the official receipt for verification.' }}</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
         <UCard class="min-w-32" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Bills</p><p class="text-xl font-semibold text-primary">{{ billingSummary?.total ?? '—' }}</p>
@@ -242,7 +244,7 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load bills" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="bills.length === 0" icon="i-lucide-receipt" title="No bills yet" description="Bills for your tenancy will appear here once issued." />
+    <UEmpty v-else-if="bills.length === 0" icon="i-lucide-receipt" :title="readOnly ? 'No past bills' : 'No bills yet'" :description="readOnly ? 'Bills from a past tenancy would appear here.' : 'Bills for your tenancy will appear here once issued.'" />
 
     <div v-else class="space-y-4">
       <UCard v-for="bill in bills" :key="bill.documentId ?? bill.id" :ui="{ body: 'p-5' }">
@@ -282,6 +284,8 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
             </dd>
           </div>
         </dl>
+
+        <UAlert v-if="readOnly && bill.status !== 'Verified'" class="mt-5" color="info" icon="i-lucide-info" title="Settle this bill with the Office of Auxiliary Services" description="Your tenancy has ended, so receipts can no longer be submitted here." />
 
         <div v-if="canSubmitPayment(bill)" class="mt-5 border-t border-default pt-4">
           <h2 class="mb-2 text-base font-semibold text-highlighted">Submit Payment Receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>

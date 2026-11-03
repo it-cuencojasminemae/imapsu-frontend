@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const auth = useAuth()
+const { hasPastBills } = usePastBills()
 const roleTitle = computed(() => auth.isStudent.value ? 'Student dashboard' : auth.isAspiringTenant.value ? 'Aspiring tenant dashboard' : 'Tenant dashboard')
 const actions = computed(() => [
   { label: 'Campus map', to: '/campus-map', icon: 'i-lucide-map-pinned', description: 'Explore campus buildings and listed spaces.' },
@@ -12,7 +13,8 @@ const actions = computed(() => [
     auth.isAspiringTenant.value
       ? { label: 'Rental applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list', description: 'Apply for a space and track your applications.' }
       : { label: 'Student feedback', to: '/feedback', icon: 'i-lucide-message-square-text', description: 'Share feedback about campus stall services.' }
-  ])
+  ]),
+  ...(hasPastBills.value ? [{ label: 'Past bills', to: '/bills', icon: 'i-lucide-receipt', description: 'Review the bills from your past tenancy.' }] : [])
 ])
 const money = (value: number | string) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value))
 const date = (value?: string) => value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }) : ''
@@ -24,7 +26,7 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
     <template #actions><UButton to="/campus-map" label="Open campus map" icon="i-lucide-map-pinned" data-prominent="true" /></template>
   </AppPageHeader>
 
-  <section aria-label="Quick actions" class="mb-6 grid gap-3 sm:grid-cols-2" :class="auth.isCurrentTenant.value ? 'xl:grid-cols-4' : 'xl:grid-cols-3'">
+  <section aria-label="Quick actions" class="mb-6 grid gap-3 sm:grid-cols-2" :class="actions.length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'">
     <NuxtLink v-for="action in actions" :key="action.to" :to="action.to" class="rounded-xl border border-default bg-default p-5 transition-colors hover:border-primary/50 hover:bg-elevated focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-primary">
       <UIcon :name="action.icon" class="mb-3 size-5 text-primary" aria-hidden="true" />
       <h2 class="font-semibold text-highlighted">{{ action.label }}</h2>

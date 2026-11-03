@@ -5,6 +5,7 @@ const props = withDefaults(defineProps<{ collapsed?: boolean; onNavigate?: () =>
 
 const auth = useAuth()
 const route = useRoute()
+const { hasPastBills } = usePastBills()
 
 type NavLink = { label: string; icon: string; to: string }
 
@@ -39,7 +40,10 @@ const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
   if (auth.isAspiringTenant.value) {
     sections.push({
       label: 'Aspiring tenant',
-      links: [{ label: 'Rental applications', icon: 'i-lucide-clipboard-list', to: '/rental-applications' }]
+      links: [
+        { label: 'Rental applications', icon: 'i-lucide-clipboard-list', to: '/rental-applications' },
+        ...(hasPastBills.value ? [{ label: 'Past bills', icon: 'i-lucide-receipt', to: '/bills' }] : [])
+      ]
     })
   }
 
