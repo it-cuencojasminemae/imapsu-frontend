@@ -5,7 +5,9 @@ import { landingPath } from '~/utils/accountNavigation'
 definePageMeta({
   title: 'Verify your email',
   description: 'Enter the verification code to activate your iMapSU account.',
-  middleware: 'guest'
+  middleware: 'guest',
+  // Each state has its own root, which would replay the route fade on every change.
+  pageTransition: false
 })
 
 const route = useRoute()
@@ -159,110 +161,93 @@ watch(code, (value) => {
 </script>
 
 <template>
-  <div class="imapsu-auth">
-    <UCard class="w-full max-w-md" :ui="{ body: 'p-6 sm:p-8' }">
-      <template #header>
-        <div class="flex flex-col items-center text-center">
-          <span class="imapsu-brand-tile mb-4 grid size-12 place-items-center rounded-xl shadow-sm">
-            <UIcon name="i-lucide-mail-check" class="size-6" />
-          </span>
-          <h1 class="text-2xl font-bold tracking-tight text-highlighted">Verify your email</h1>
-          <p class="mt-1 text-sm text-muted">Enter the 6-digit code we emailed you to activate your account.</p>
-        </div>
-      </template>
+  <AuthShell
+    v-if="verifiedUser"
+    variant="center"
+    heading="Your email is verified"
+    description="Your account is now active and you're signed in."
+  >
+    <div class="space-y-5">
+      <AuthEmailStatus tone="success" :label="`Hello, ${verifiedUser.username}! This address is now confirmed:`" :email="email" />
+      <UButton data-prominent="true" block size="xl" trailing-icon="i-lucide-arrow-right" @click="goToDashboard">Continue to your dashboard</UButton>
+    </div>
+  </AuthShell>
 
-      <div v-if="verifiedUser" class="space-y-5 text-center">
-        <span class="mx-auto grid size-14 place-items-center rounded-full bg-success/10 text-success">
-          <UIcon name="i-lucide-mail-check" class="size-7" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">Your email is verified</h2>
-          <p class="mt-1 text-sm text-muted">
-            Hello, <span class="font-medium text-highlighted">{{ verifiedUser.username }}</span>! Your account is now active and
-            you're signed in.
-          </p>
+  <AuthShell
+    v-else-if="bounced"
+    variant="center"
+    heading="This email address can't receive mail"
+    description="The mail server rejected our verification code, so the address may not exist. Your registration was cancelled."
+  >
+    <div class="space-y-5">
+      <AuthEmailStatus tone="error" label="We could not deliver the code to" :email="email" hint="Check the spelling, or register with another address." />
+      <UButton data-prominent="true" block size="xl" to="/register">Register with a different email</UButton>
+    </div>
+    <template #footer>
+      <NuxtLink to="/login" class="imapsu-auth-link flex items-center justify-center gap-2">
+        <UIcon name="i-lucide-arrow-left" class="size-4" />
+        Back to sign in
+      </NuxtLink>
+    </template>
+  </AuthShell>
+
+  <AuthShell
+    v-else
+    variant="center"
+    heading="Verify your email"
+    description="We need to confirm that your email address is valid before you can create an account."
+  >
+    <form method="post" class="space-y-5" @submit.prevent="verify">
+      <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+
+      <AuthEmailStatus v-if="email" label="A 6-digit verification code was sent to" :email="email" hint="Enter the code to continue with your registration. It expires in 10 minutes." />
+      <UAlert
+        v-else
+        color="warning"
+        icon="i-lucide-mail-question"
+        title="No email address found"
+        description="Open the verification link from the registration page, or sign in to request a new code."
+      />
+
+      <UFormField label="Verification code" name="code" required>
+        <div class="mx-auto grid max-w-sm grid-cols-6 gap-2 sm:gap-3" role="group" aria-label="6-digit verification code">
+          <input
+            v-for="(_, idx) in OTP_LENGTH"
+            :key="idx"
+            :ref="(el) => setInputRef(idx, el)"
+            :value="digits[idx]"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="1"
+            placeholder="0"
+            class="h-14 w-full min-w-0 rounded-xl border border-accented bg-elevated text-center text-xl font-semibold tracking-wide text-highlighted outline-none transition-all placeholder:text-dimmed/40 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-50"
+            :class="digits[idx] ? 'border-primary' : ''"
+            :disabled="verifying"
+            :aria-label="`Digit ${idx + 1}`"
+            @input="onDigitInput(idx, ($event.target as HTMLInputElement).value)"
+            @keydown="onDigitKeydown(idx, $event)"
+            @paste="onDigitPaste(idx, $event)"
+          />
         </div>
-        <UButton block size="lg" icon="i-lucide-arrow-right" @click="goToDashboard">Continue to your dashboard</UButton>
+      </UFormField>
+
+      <UButton data-prominent="true" type="submit" block size="xl" :loading="verifying" :disabled="!codeComplete">
+        Verify &amp; activate account
+      </UButton>
+
+      <AuthResendButton :cooldown="resendCooldown" :loading="resending" :disabled="!email" @click="resend" />
+    </form>
+
+    <template #footer>
+      <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
+        <NuxtLink to="/register" class="imapsu-auth-link inline-flex items-center gap-2">
+          <UIcon name="i-lucide-arrow-left" class="size-4" />
+          Back to registration
+        </NuxtLink>
+        <span class="text-dimmed" aria-hidden="true">|</span>
+        <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
       </div>
-
-      <div v-else-if="bounced" class="space-y-5 text-center">
-        <span class="mx-auto grid size-14 place-items-center rounded-full bg-error/10 text-error">
-          <UIcon name="i-lucide-mail-x" class="size-7" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">This email address can't receive mail</h2>
-          <p class="mt-1 text-sm text-muted">
-            The mail server for <span class="font-medium text-highlighted">{{ email }}</span> rejected our verification
-            code, so the address may not exist. Your registration was cancelled.
-          </p>
-        </div>
-        <UButton block size="lg" icon="i-lucide-user-plus" to="/register">Register with a different email</UButton>
-      </div>
-
-      <form method="post" v-else class="space-y-5" @submit.prevent="verify">
-        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
-
-        <div v-if="email" class="flex items-center gap-3 rounded-xl border border-default bg-elevated/60 px-4 py-3">
-          <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-            <UIcon name="i-lucide-mail" class="size-4" />
-          </span>
-          <div class="min-w-0 text-left">
-            <p class="text-xs text-muted">Code sent to</p>
-            <p class="truncate text-sm font-medium text-highlighted" :title="email">{{ email }}</p>
-          </div>
-        </div>
-        <UAlert
-          v-else
-          color="warning"
-          icon="i-lucide-mail-question"
-          title="No email address found"
-          description="Open the verification link from the registration page, or sign in to request a new code."
-        />
-
-        <UFormField label="Verification code" name="code" required>
-          <div class="flex items-center justify-center gap-2 sm:gap-3" role="group" aria-label="6-digit verification code">
-            <input
-              v-for="(_, idx) in OTP_LENGTH"
-              :key="idx"
-              :ref="(el) => setInputRef(idx, el)"
-              :value="digits[idx]"
-              type="text"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="1"
-              placeholder="0"
-              class="h-14 w-11 rounded-xl border border-default bg-elevated text-center text-xl font-semibold tracking-wide text-highlighted outline-none transition-all placeholder:text-dimmed/40 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-50 sm:w-12"
-              :class="digits[idx] ? 'border-primary' : ''"
-              :disabled="verifying"
-              :aria-label="`Digit ${idx + 1}`"
-              @input="onDigitInput(idx, ($event.target as HTMLInputElement).value)"
-              @keydown="onDigitKeydown(idx, $event)"
-              @paste="onDigitPaste(idx, $event)"
-            />
-          </div>
-          <p class="mt-2 text-center text-xs text-muted">
-            Enter the code from your email. It expires in 10 minutes.
-          </p>
-        </UFormField>
-
-        <UButton data-prominent="true" type="submit" block size="lg" :loading="verifying" :disabled="!codeComplete" icon="i-lucide-check-check">
-          Verify &amp; activate account
-        </UButton>
-
-        <div class="flex items-center justify-center gap-1.5 text-sm">
-          <span class="text-muted">Haven't received it?</span>
-          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0 || !email" @click="resend">
-            {{ resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code' }}
-          </UButton>
-        </div>
-      </form>
-
-      <template #footer>
-        <p class="text-center text-sm text-muted">
-          Need to sign in instead?
-          <NuxtLink to="/login" class="font-medium text-primary hover:underline">Sign in</NuxtLink>
-        </p>
-      </template>
-    </UCard>
-  </div>
+    </template>
+  </AuthShell>
 </template>

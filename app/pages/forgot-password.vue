@@ -203,134 +203,122 @@ const changeEmail = () => {
 onBeforeUnmount(() => {
   if (cooldownTimer) clearInterval(cooldownTimer)
 })
+
+const heading = computed(() => step.value === 'done' ? 'Password updated' : 'Reset your password')
+const description = computed(() => ({
+  request: 'We will email you a 6-digit code to confirm it is you.',
+  verify: 'Enter the 6-digit code we emailed you.',
+  reset: 'Choose a new password for your account.',
+  done: 'You can now sign in with your new password.'
+})[step.value])
 </script>
 
 <template>
-  <div class="imapsu-auth">
-    <UCard class="w-full max-w-md ring-1 ring-default" :ui="{ body: 'p-6 sm:p-8' }">
-      <template #header>
-        <div class="flex flex-col items-center text-center">
-          <span class="imapsu-brand-tile mb-4 grid size-12 place-items-center rounded-xl shadow-sm">
-            <UIcon name="i-lucide-key-round" class="size-6" />
-          </span>
-          <h1 class="text-2xl font-bold tracking-tight text-highlighted">Reset your password</h1>
-          <p class="mt-1 text-sm text-muted">
-            {{ step === 'request' ? 'We will email you a 6-digit code to confirm it is you.' : step === 'verify' ? 'Enter the 6-digit code we emailed you.' : step === 'reset' ? 'Choose a new password for your account.' : 'You can now sign in with your new password.' }}
-          </p>
+  <AuthShell variant="center" :heading="heading" :description="description">
+    <div v-if="step === 'done'" class="space-y-5">
+      <AuthEmailStatus tone="success" label="For your security, every device that was signed in to your account has been signed out." />
+      <UButton data-prominent="true" block size="xl" :to="{ path: '/login' }">Sign in</UButton>
+    </div>
+
+    <form method="post" v-else-if="step === 'request'" class="space-y-5" @submit.prevent="requestCode">
+      <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+      <UFormField label="Email Address" name="email" required>
+        <UInput v-model="email" required type="email" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
+      </UFormField>
+      <UButton data-prominent="true" type="submit" block size="xl" :loading="loading">
+        Send reset code
+      </UButton>
+    </form>
+
+    <form method="post" v-else-if="step === 'verify'" class="space-y-5" @submit.prevent="verifyCode">
+      <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+      <AuthEmailStatus label="If an active account uses this address, we sent a reset code to" :email="email" hint="Check your spam folder too. The code expires in 10 minutes and works once." />
+
+      <UFormField label="Reset code" name="code" required>
+        <div class="mx-auto grid max-w-sm grid-cols-6 gap-2 sm:gap-3" role="group" aria-label="6-digit reset code">
+          <input
+            v-for="(_, idx) in OTP_LENGTH"
+            :key="idx"
+            :ref="(el) => setInputRef(idx, el)"
+            :value="digits[idx]"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="1"
+            placeholder="0"
+            class="h-14 w-full min-w-0 rounded-xl border border-accented bg-elevated text-center text-xl font-semibold tracking-wide text-highlighted outline-none transition-all placeholder:text-dimmed/40 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-50"
+            :class="digits[idx] ? 'border-primary' : ''"
+            :disabled="loading"
+            :aria-label="`Digit ${idx + 1}`"
+            @input="onDigitInput(idx, ($event.target as HTMLInputElement).value)"
+            @keydown="onDigitKeydown(idx, $event)"
+            @paste="onDigitPaste"
+          />
         </div>
-      </template>
+      </UFormField>
 
-      <div v-if="step === 'done'" class="space-y-5 text-center">
-        <span class="mx-auto grid size-14 place-items-center rounded-full bg-success/10 text-success">
-          <UIcon name="i-lucide-shield-check" class="size-7" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">Password updated</h2>
-          <p class="mt-1 text-sm text-muted">For your security, every device that was signed in to your account has been signed out.</p>
-        </div>
-        <UButton block size="lg" icon="i-lucide-log-in" :to="{ path: '/login' }">Sign in</UButton>
-      </div>
+      <UButton data-prominent="true" type="submit" block size="xl" :loading="loading" :disabled="!codeComplete">
+        Verify code
+      </UButton>
 
-      <form method="post" v-else-if="step === 'request'" class="space-y-5" @submit.prevent="requestCode">
-        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
-        <UFormField label="Email address" name="email" required>
-          <UInput v-model="email" required type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
-        </UFormField>
-        <UButton data-prominent="true" type="submit" block size="lg" icon="i-lucide-send" :loading="loading">
-          Send reset code
-        </UButton>
-      </form>
-
-      <form method="post" v-else-if="step === 'verify'" class="space-y-5" @submit.prevent="verifyCode">
-        <UAlert color="info" variant="soft" icon="i-lucide-mail" :description="`If an active account uses ${email}, we sent a reset code to it. Check your spam folder too.`" />
-        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
-
-        <UFormField label="Reset code" name="code" required>
-          <div class="flex items-center justify-center gap-2 sm:gap-3" role="group" aria-label="6-digit reset code">
-            <input
-              v-for="(_, idx) in OTP_LENGTH"
-              :key="idx"
-              :ref="(el) => setInputRef(idx, el)"
-              :value="digits[idx]"
-              type="text"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="1"
-              placeholder="0"
-              class="h-14 w-11 rounded-xl border border-default bg-elevated text-center text-xl font-semibold tracking-wide text-highlighted outline-none transition-all placeholder:text-dimmed/40 focus:border-primary focus:ring-4 focus:ring-primary/15 disabled:opacity-50 sm:w-12"
-              :class="digits[idx] ? 'border-primary' : ''"
-              :disabled="loading"
-              :aria-label="`Digit ${idx + 1}`"
-              @input="onDigitInput(idx, ($event.target as HTMLInputElement).value)"
-              @keydown="onDigitKeydown(idx, $event)"
-              @paste="onDigitPaste"
-            />
-          </div>
-          <p class="mt-2 text-center text-xs text-muted">The code expires in 10 minutes and works once.</p>
-        </UFormField>
-
-        <UButton data-prominent="true" type="submit" block size="lg" icon="i-lucide-badge-check" :loading="loading" :disabled="!codeComplete">
-          Verify code
-        </UButton>
-
-        <div class="flex flex-wrap items-center justify-center gap-1.5 text-sm">
-          <UButton variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0 || loading" @click="resend">
-            {{ resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code' }}
-          </UButton>
+      <div class="space-y-1">
+        <AuthResendButton label="Resend code" :cooldown="resendCooldown" :loading="resending" :disabled="loading" @click="resend" />
+        <div class="flex justify-center">
           <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Use a different email</UButton>
         </div>
-      </form>
+      </div>
+    </form>
 
-      <form method="post" v-else class="space-y-5" @submit.prevent="resetPassword">
-        <UAlert color="success" variant="soft" icon="i-lucide-badge-check" :description="`Code verified for ${email}. Choose a new password.`" />
-        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+    <form method="post" v-else class="space-y-5" @submit.prevent="resetPassword">
+      <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
+      <AuthEmailStatus tone="success" label="Code verified for" :email="email" />
 
-        <UFormField label="New password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
-          <UInput v-model="password" required :type="showPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }">
-            <template #trailing>
-              <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
-                <UIcon :name="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
-              </button>
-            </template>
-          </UInput>
-          <ul v-if="password" class="mt-1.5 space-y-1">
-            <li
-              v-for="requirement in PASSWORD_REQUIREMENTS"
-              :key="requirement.key"
-              class="flex items-center gap-1.5 text-xs"
-              :class="passwordCheck.missing.includes(requirement.key) ? 'text-muted' : 'text-success'"
-            >
-              <UIcon :name="passwordCheck.missing.includes(requirement.key) ? 'i-lucide-circle' : 'i-lucide-check-circle-2'" class="size-3.5 shrink-0" />
-              {{ requirement.label }}
-            </li>
-          </ul>
-        </UFormField>
+      <UFormField label="New Password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
+        <UInput v-model="password" required :type="showPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }">
+          <template #trailing>
+            <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
+              <UIcon :name="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
+            </button>
+          </template>
+        </UInput>
+        <ul v-if="password" class="mt-1.5 space-y-1">
+          <li
+            v-for="requirement in PASSWORD_REQUIREMENTS"
+            :key="requirement.key"
+            class="flex items-center gap-1.5 text-xs"
+            :class="passwordCheck.missing.includes(requirement.key) ? 'text-muted' : 'text-success'"
+          >
+            <UIcon :name="passwordCheck.missing.includes(requirement.key) ? 'i-lucide-circle' : 'i-lucide-check-circle-2'" class="size-3.5 shrink-0" />
+            {{ requirement.label }}
+          </li>
+        </ul>
+      </UFormField>
 
-        <UFormField label="Confirm new password" name="confirmPassword" required :error="attempted && password !== confirmPassword ? 'Passwords do not match.' : undefined">
-          <UInput v-model="confirmPassword" required :type="showConfirmPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
-            <template #trailing>
-              <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">
-                <UIcon :name="showConfirmPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
-              </button>
-            </template>
-          </UInput>
-        </UFormField>
+      <UFormField label="Confirm New Password" name="confirmPassword" required :error="attempted && password !== confirmPassword ? 'Passwords do not match.' : undefined">
+        <UInput v-model="confirmPassword" required :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
+          <template #trailing>
+            <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">
+              <UIcon :name="showConfirmPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
+            </button>
+          </template>
+        </UInput>
+      </UFormField>
 
-        <UButton data-prominent="true" type="submit" block size="lg" icon="i-lucide-shield-check" :loading="loading">
-          Reset password
-        </UButton>
+      <UButton data-prominent="true" type="submit" block size="xl" :loading="loading">
+        Reset password
+      </UButton>
 
-        <div class="flex justify-center text-sm">
-          <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Start over</UButton>
-        </div>
-      </form>
+      <div class="flex justify-center">
+        <UButton variant="ghost" size="sm" color="neutral" :disabled="loading" @click="changeEmail">Start over</UButton>
+      </div>
+    </form>
 
-      <template #footer>
-        <div class="flex items-center justify-center gap-1.5 text-sm text-muted">
-          <UIcon name="i-lucide-arrow-left" class="size-3.5" />
-          <NuxtLink to="/login" class="font-medium text-primary hover:underline">Back to sign in</NuxtLink>
-        </div>
-      </template>
-    </UCard>
-  </div>
+    <template v-if="step !== 'done'" #footer>
+      <NuxtLink to="/login" class="imapsu-auth-link flex items-center justify-center gap-2">
+        <UIcon name="i-lucide-arrow-left" class="size-4" />
+        Back to sign in
+      </NuxtLink>
+    </template>
+  </AuthShell>
 </template>
+

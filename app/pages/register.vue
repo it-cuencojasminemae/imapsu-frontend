@@ -1,5 +1,6 @@
 <script setup lang="ts">
-definePageMeta({ middleware: 'guest' })
+// Each sign-up state has its own root, which would replay the route fade on every change.
+definePageMeta({ middleware: 'guest', pageTransition: false })
 useHead({ title: 'Create Account | iMapSU' })
 
 const auth = useAuth()
@@ -53,6 +54,27 @@ const useDifferentEmail = () => {
   email.value = ''
 }
 
+// The pending account keeps its email and username until it is verified or removed,
+// so returning to the form with those details has to say why they are refused.
+const pendingEmail = ref('')
+const backToRegistration = () => {
+  stopBounceWatch()
+  pendingEmail.value = registeredEmail.value
+  registeredEmail.value = ''
+}
+
+const panelFeatures = ['Explore campus stalls', 'Apply for rental spaces', 'Get announcements & updates']
+
+// Phones open on a short introduction; from 1024px up the form is always beside the panel.
+const showMobileForm = ref(false)
+const formCard = useTemplateRef<HTMLElement>('formCard')
+const openMobileForm = async () => {
+  showMobileForm.value = true
+  await nextTick()
+  window.scrollTo({ top: 0 })
+  formCard.value?.focus({ preventScroll: true })
+}
+
 const roleOptions = [
   { label: 'Student', value: 'student', description: 'View the map and submit feedback about tenants.' },
   { label: 'Aspiring Tenant', value: 'aspiring-tenant', description: 'Browse vacant spaces and apply to rent one.' }
@@ -101,6 +123,7 @@ const handleRegister = async () => {
       ...(role.value === 'student' ? {} : { businessName: businessName.value })
     })
     deliveryFailed.value = result.verificationEmailSent === false
+    pendingEmail.value = ''
     registeredEmail.value = email.value
     if (!deliveryFailed.value) startResendCooldown()
     watchForBounce()
@@ -129,92 +152,116 @@ const resendVerification = async () => {
 </script>
 
 <template>
-  <div class="imapsu-auth">
-    <UCard class="ring-1 ring-default">
-      <template #header>
-        <div class="flex flex-col items-center text-center">
-          <span class="imapsu-brand-tile mb-4 grid size-12 place-items-center rounded-xl shadow-sm">
-            <UIcon name="i-lucide-map-pinned" class="size-6" />
-          </span>
-          <h1 class="text-2xl font-bold tracking-tight text-highlighted">Create your account</h1>
-          <p class="mt-1 text-sm text-muted">Choose how you'll use iMapSU.</p>
-        </div>
-      </template>
+  <AuthShell
+    v-if="bounced"
+    variant="center"
+    heading="This email address can't receive mail"
+    description="The mail server rejected our verification code, so the address may not exist. Your registration was cancelled."
+  >
+    <div class="space-y-5">
+      <AuthEmailStatus tone="error" label="We could not deliver the code to" :email="registeredEmail" hint="Check the spelling, or register with another address." />
+      <UButton data-prominent="true" block size="xl" @click="useDifferentEmail">Use a different email</UButton>
+    </div>
+    <template #footer>
+      <NuxtLink to="/login" class="imapsu-auth-link flex items-center justify-center gap-2">
+        <UIcon name="i-lucide-arrow-left" class="size-4" />
+        Back to sign in
+      </NuxtLink>
+    </template>
+  </AuthShell>
 
-      <div v-if="bounced" class="space-y-5 text-center">
-        <span class="mx-auto grid size-14 place-items-center rounded-full bg-error/10 text-error">
-          <UIcon name="i-lucide-mail-x" class="size-7" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">This email address can't receive mail</h2>
-          <p class="mt-2 text-sm text-muted">
-            The mail server for <span class="font-medium text-highlighted">{{ registeredEmail }}</span> rejected our
-            verification code, so the address may not exist. Your registration was cancelled.
-          </p>
-        </div>
-        <UButton block size="lg" icon="i-lucide-mail" @click="useDifferentEmail">Use a different email</UButton>
-      </div>
+  <AuthShell
+    v-else-if="registeredEmail"
+    variant="center"
+    heading="Verify your email"
+    description="We need to confirm that your email address is valid before you can create an account."
+  >
+    <div class="space-y-5">
+      <AuthEmailStatus
+        v-if="deliveryFailed"
+        tone="warning"
+        label="We could not confirm delivery to"
+        :email="registeredEmail"
+        hint="Please request another code below."
+      />
+      <AuthEmailStatus
+        v-else
+        label="A 6-digit verification code was sent to"
+        :email="registeredEmail"
+        hint="Enter the code to continue with your registration."
+      />
+      <UButton data-prominent="true" block size="xl" :to="`/verify-email?email=${encodeURIComponent(registeredEmail)}`">
+        Enter verification code
+      </UButton>
+      <AuthResendButton :cooldown="resendCooldown" :loading="resending" @click="resendVerification" />
+    </div>
+    <template #footer>
+      <button type="button" class="imapsu-auth-link flex w-full items-center justify-center gap-2" @click="backToRegistration">
+        <UIcon name="i-lucide-arrow-left" class="size-4" />
+        Back to registration
+      </button>
+    </template>
+  </AuthShell>
 
-      <div v-else-if="registeredEmail" class="space-y-5 text-center">
-        <span class="mx-auto grid size-14 place-items-center rounded-full bg-success/10 text-success">
-          <UIcon name="i-lucide-mail-check" class="size-7" />
-        </span>
-        <div>
-          <h2 class="text-lg font-semibold text-highlighted">{{ deliveryFailed ? 'Account created; email delivery failed' : 'Check your inbox' }}</h2>
-          <p class="mt-2 text-sm text-muted">
-            <span v-if="deliveryFailed">Delivery could not be confirmed. Please request another code. </span>
-            <span v-else>We emailed a </span><span class="font-medium text-highlighted">6-digit verification code</span> to
-            <span class="font-medium text-highlighted">{{ registeredEmail }}</span>. Enter it to activate your account — you
-            can only sign in after verifying your email. The code expires in 10 minutes, and accounts not verified within
-            24 hours are removed.
-          </p>
-        </div>
-        <UButton block size="lg" icon="i-lucide-key-round" :to="`/verify-email?email=${encodeURIComponent(registeredEmail)}`">
-          Enter verification code
-        </UButton>
-        <UButton block variant="ghost" size="sm" :loading="resending" :disabled="resendCooldown > 0" icon="i-lucide-refresh-cw" @click="resendVerification">
-          {{ resendCooldown > 0 ? `Resend verification email in ${resendCooldown}s` : 'Resend verification email' }}
-        </UButton>
-        <NuxtLink to="/login" class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-          <UIcon name="i-lucide-log-in" class="size-4" />
-          Go to sign in
-        </NuxtLink>
-      </div>
+  <AuthShell
+    v-else
+    heading="Create your account"
+    description="Join iMapSU to explore the campus map, find rentable spaces, and manage stall applications."
+    :features="panelFeatures"
+    :compact="showMobileForm"
+  >
+    <div v-if="!showMobileForm" class="imapsu-auth-card lg:hidden">
+      <UButton data-prominent="true" block size="xl" @click="openMobileForm">Create account</UButton>
+      <p class="mt-4 text-center text-sm text-muted">
+        Already have an account?
+        <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
+      </p>
+    </div>
 
-      <form method="post" v-else class="space-y-5" @submit.prevent="handleRegister">
+    <div ref="formCard" tabindex="-1" class="imapsu-auth-card imapsu-auth-card--open outline-none lg:block" :class="showMobileForm ? 'block' : 'hidden'">
+      <h2 class="hidden text-4xl font-bold tracking-tight text-white lg:block">Create your account</h2>
+      <p class="text-base text-muted lg:mt-2">Fill in the information below to get started with iMapSU.</p>
+
+      <form method="post" class="mt-6 space-y-4" @submit.prevent="handleRegister">
         <UAlert v-if="registrationError" color="error" icon="i-lucide-triangle-alert" title="Unable to create your account" :description="registrationError" />
+        <UAlert v-if="pendingEmail" color="info" variant="soft" icon="i-lucide-mail-question" title="Your account is still waiting for verification">
+          <template #description>
+            The email and username you used for {{ pendingEmail }} stay reserved for up to 24 hours, so use different ones to register again, or
+            <NuxtLink :to="`/verify-email?email=${encodeURIComponent(pendingEmail)}`" class="font-medium underline">enter your code</NuxtLink>.
+          </template>
+        </UAlert>
+
         <UFormField label="I want to use iMapSU as" name="role" required>
-          <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" class="w-full" />
-          <p class="mt-1 text-xs text-muted">{{ roleOptions.find(option => option.value === role)?.description }}</p>
+          <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" :portal="false" :ui="{ content: 'z-50' }" class="w-full" />
         </UFormField>
 
-        <UFormField label="Full name" name="fullName" required>
-          <UInput required v-model="fullName" type="text" leading-icon="i-lucide-id-card" placeholder="Juan Dela Cruz" autocomplete="name" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
+        <UFormField label="Full Name" name="fullName" required>
+          <UInput required v-model="fullName" type="text" placeholder="Juan Dela Cruz" autocomplete="name" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
         </UFormField>
 
-        <div class="grid gap-5 sm:grid-cols-2">
+        <div class="grid gap-4 min-[375px]:grid-cols-2">
           <UFormField label="Username" name="username" required>
-            <UInput required v-model="username" type="text" leading-icon="i-lucide-circle-user-round" placeholder="jdoe" autocomplete="username" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+            <UInput required v-model="username" type="text" placeholder="e.g. jdoe" autocomplete="username" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
 
-          <UFormField label="Email" name="email" required>
-            <UInput required v-model="email" type="email" leading-icon="i-lucide-mail" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
-          </UFormField>
-        </div>
-
-        <div class="grid gap-5 sm:grid-cols-2">
-          <UFormField label="Contact number" name="contactNumber" required :class="{ 'sm:col-span-2': role === 'student' }">
-            <UInput required v-model="contactNumber" type="tel" leading-icon="i-lucide-phone" placeholder="0917 000 0000" autocomplete="tel" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
-          </UFormField>
-
-          <UFormField v-if="role !== 'student'" label="Business name" name="businessName" hint="Optional">
-            <UInput v-model="businessName" type="text" leading-icon="i-lucide-store" placeholder="Store or trade name" autocomplete="organization" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          <UFormField label="Email Address" name="email" required>
+            <UInput required v-model="email" type="email" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
         </div>
 
-        <div class="grid gap-5 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <UFormField label="Contact Number" name="contactNumber" required :class="{ 'sm:col-span-2': role === 'student' }">
+            <UInput required v-model="contactNumber" type="tel" placeholder="0917 000 0000" autocomplete="tel" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+
+          <UFormField v-if="role !== 'student'" label="Business Name" name="businessName" hint="Optional">
+            <UInput v-model="businessName" type="text" placeholder="Store or trade name" autocomplete="organization" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
+          </UFormField>
+        </div>
+
+        <div class="grid gap-4 min-[375px]:grid-cols-2">
           <UFormField label="Password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
-            <UInput required v-model="password" :type="showPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
+            <UInput required v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
               <template #trailing>
                 <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
                   <UIcon :name="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
@@ -234,8 +281,8 @@ const resendVerification = async () => {
             </ul>
           </UFormField>
 
-          <UFormField label="Confirm password" name="confirmPassword" required :error="confirmPasswordError">
-            <UInput required v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" leading-icon="i-lucide-lock" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
+          <UFormField label="Confirm Password" name="confirmPassword" required :error="confirmPasswordError">
+            <UInput required v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
               <template #trailing>
                 <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">
                   <UIcon :name="showConfirmPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="size-4" />
@@ -250,31 +297,29 @@ const resendVerification = async () => {
         </div>
 
         <UFormField name="privacyConsent" :error="attempted && !privacyConsent ? 'You must agree to the Data Privacy Notice.' : undefined">
-          <UCheckbox v-model="privacyConsent" :disabled="loading">
+          <UCheckbox v-model="privacyConsent" :disabled="loading" size="lg">
             <template #label>
               <span class="text-sm text-default">
                 I have read the
-                <button type="button" class="font-medium text-primary hover:underline" @click.prevent="privacyOpen = true">Data Privacy Notice</button>
+                <button type="button" class="imapsu-auth-link underline" @click.prevent="privacyOpen = true">Data Privacy Notice</button>
                 and agree to iMapSU collecting and using my personal data as described, in line with the Data Privacy Act of 2012 (RA 10173).
               </span>
             </template>
           </UCheckbox>
         </UFormField>
 
-        <UButton data-prominent="true" type="submit" block size="lg" :loading="loading">
+        <UButton data-prominent="true" type="submit" block size="xl" :loading="loading">
           Create account
         </UButton>
       </form>
 
-      <template #footer>
-        <p class="text-center text-sm text-muted">
-          Already have an account?
-          <NuxtLink to="/login" class="font-medium text-primary hover:underline">Sign in</NuxtLink>
-        </p>
-      </template>
-    </UCard>
+      <p class="mt-5 text-center text-sm text-muted">
+        Already have an account?
+        <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
+      </p>
+    </div>
 
-    <UModal v-model:open="privacyOpen" title="Data Privacy Notice" description="How iMapSU collects, uses and protects your personal data." :ui="{ content: 'max-w-2xl' }">
+    <UModal v-model:open="privacyOpen" :portal="false" title="Data Privacy Notice" description="How iMapSU collects, uses and protects your personal data." :ui="{ content: 'max-w-2xl' }">
       <template #body>
         <PrivacyNotice />
       </template>
@@ -285,5 +330,6 @@ const resendVerification = async () => {
         </div>
       </template>
     </UModal>
-  </div>
+  </AuthShell>
 </template>
+

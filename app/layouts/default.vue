@@ -135,16 +135,16 @@ const userItems = computed(() => {
         <header v-if="!isStandalonePage" class="sticky top-0 z-40 shrink-0">
           <div class="imapsu-brand-bar h-1" />
           <div class="imapsu-appbar">
-            <div class="mx-auto flex h-[59px] max-w-7xl items-center gap-4 px-4 sm:px-6">
-              <div class="flex min-w-0 items-center gap-2">
+            <div class="mx-auto flex h-[59px] max-w-7xl items-center gap-2 px-3 sm:gap-4 sm:px-6">
+              <div class="flex min-w-0 items-center gap-1 sm:gap-2">
                 <UButton ref="navigationTrigger" class="imapsu-appbar-btn size-9" :class="isMapPage ? '' : 'lg:hidden'" color="neutral" variant="ghost" square icon="i-lucide-menu" aria-label="Open navigation" :aria-expanded="drawerOpen" @click="drawerOpen = true" />
                 <NuxtLink :to="entryPath" class="group flex min-w-0 shrink-0 items-center gap-2.5" :class="isMapPage ? '' : 'lg:hidden'">
                   <BrandLogo size="size-10" />
-                  <span class="truncate text-base font-bold tracking-tight text-primary dark:text-secondary">iMapSU</span>
+                  <span class="truncate text-base font-bold tracking-tight text-primary max-[339px]:hidden dark:text-secondary">iMapSU</span>
                 </NuxtLink>
               </div>
 
-              <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
+              <div class="ml-auto flex items-center gap-1 sm:gap-2">
                 <UButton class="imapsu-appbar-btn size-9" color="neutral" variant="ghost" square aria-label="Toggle color theme" title="Toggle color theme" @click="toggleColorMode">
                   <UIcon name="i-lucide-moon" class="imapsu-theme-light size-4" />
                   <UIcon name="i-lucide-sun" class="imapsu-theme-dark size-4" />
@@ -166,8 +166,8 @@ const userItems = computed(() => {
                   </UDropdownMenu>
                 </template>
                 <template v-else>
-                  <UButton to="/login" color="neutral" variant="ghost" label="Sign in" />
-                  <UButton to="/register" label="Register" class="hidden sm:inline-flex" data-prominent="true" />
+                  <UButton to="/login" color="neutral" variant="ghost" label="Sign in" class="shrink-0 max-sm:px-2 max-sm:text-xs" />
+                  <UButton to="/register" label="Register" class="shrink-0 max-sm:px-2 max-sm:text-xs" data-prominent="true" />
                 </template>
               </div>
             </div>
