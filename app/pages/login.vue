@@ -77,18 +77,10 @@ const resendVerification = async () => {
 <template>
   <AuthShell heading="Your campus map, your stalls, your opportunities." description="Easily explore campus stalls, manage your space, and stay connected with iMapSU.">
     <div class="imapsu-auth-card imapsu-auth-card--login">
-      <!-- On small screens the panel above the card already shows the brand. -->
-      <div class="hidden flex-col items-center text-center lg:flex">
-        <BrandLogo size="size-16" />
-        <p class="imapsu-auth-brand-name mt-2">iMapSU</p>
-        <p class="mt-1 text-sm leading-snug text-toned">Interactive Map-Driven<br />Stall Management System</p>
-        <hr class="imapsu-auth-rule w-full" />
-      </div>
-
       <form method="post" v-if="auth.mfaPending.value" class="space-y-5" @submit.prevent="submitMfa">
         <div>
-          <h2 class="text-xl font-semibold tracking-tight text-highlighted">Verify your sign-in</h2>
-          <p class="mt-1 text-sm text-muted">Enter your authenticator code or a single-use recovery code.</p>
+          <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold lg:text-white">Verify your sign-in</h2>
+          <p class="mt-1 text-sm text-muted lg:mt-2 lg:text-base">Enter your authenticator code or a single-use recovery code.</p>
         </div>
         <UAlert v-if="loginError" color="error" icon="i-lucide-triangle-alert" title="Unable to sign in" :description="loginError" />
         <UFormField label="Authenticator or recovery code" name="authenticatorCode" required>
@@ -101,8 +93,8 @@ const resendVerification = async () => {
       </form>
 
       <template v-else>
-        <h2 class="text-xl font-semibold tracking-tight text-highlighted">Sign in to your account</h2>
-        <p class="mt-1 text-sm text-muted">Access your university stall management account.</p>
+        <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold lg:text-white">Sign in to your account</h2>
+        <p class="mt-1 text-sm text-muted lg:mt-2 lg:text-base">Access your university stall management account.</p>
 
         <UAlert v-if="needsVerification" color="warning" icon="i-lucide-mail-warning" variant="soft" title="Email not verified yet" class="mt-5">
           <template #description>

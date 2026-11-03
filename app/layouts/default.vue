@@ -4,6 +4,14 @@ const auth = useAuth()
 const colorMode = useColorMode()
 const route = useRoute()
 const entryPath = computed(() => landingPath(auth.user.value))
+const brandTagline = computed(() => {
+  if (auth.isOas.value) return 'OAS Management'
+  if (auth.isAdmin.value) return 'MIS Administration'
+  if (auth.isCurrentTenant.value) return 'Tenant Portal'
+  if (auth.isAspiringTenant.value) return 'Aspiring Tenant Portal'
+  if (auth.isStudent.value) return 'Student Portal'
+  return 'Interactive Map-Driven Stall Management System'
+})
 
 const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password', '/privacy'].includes(route.path))
 const isMapPage = computed(() => route.path === '/campus-map')
@@ -51,19 +59,16 @@ function toggleSidebar() {
 const userItems = computed(() => {
   const items: Record<string, unknown>[] = [
     {
-      type: 'label',
-      label: auth.displayName.value,
-      avatar: {
-        src: auth.avatarUrl.value ?? undefined,
-        text: (auth.displayName.value ?? '?').charAt(0).toUpperCase(),
-        size: 'xl'
-      }
-    },
-    {
       label: 'My account',
       icon: 'i-lucide-circle-user-round',
       to: '/account?section=profile',
       // The router ignores the query, so on any /account page this would always render as highlighted
+      active: false
+    },
+    {
+      label: 'Settings',
+      icon: 'i-lucide-settings',
+      to: '/account?section=preferences',
       active: false
     }
   ]
@@ -72,6 +77,7 @@ const userItems = computed(() => {
   items.push({
     label: 'Sign out',
     icon: 'i-lucide-log-out',
+    color: 'error',
     onSelect: signOut
   })
 
@@ -85,28 +91,15 @@ const userItems = computed(() => {
     <div class="flex items-stretch" :class="{ 'h-full': isMapPage }">
       <aside
         v-if="!isStandalonePage && !isMapPage"
-        class="sticky top-0 z-30 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-maroon-950/60 bg-maroon-950 transition-[width] duration-200 ease-in-out lg:flex"
+        class="sticky top-0 z-30 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-maroon-950/60 bg-maroon-950 transition-[width] duration-400 ease-(--app-ease) lg:flex"
         :class="sidebarCollapsed ? 'w-16' : 'w-64'"
       >
-        <div class="imapsu-brand-bar h-1 shrink-0" />
-
-        <div class="flex items-center justify-between gap-2 pb-3 pt-4" :class="sidebarCollapsed ? 'flex-col px-2' : 'px-3'">
-          <div class="flex min-w-0 items-center gap-2.5 overflow-hidden">
-            <BrandLogo :size="sidebarCollapsed ? 'size-8' : 'size-11'" />
-            <div v-if="!sidebarCollapsed" class="min-w-0">
-              <p class="truncate font-semibold tracking-tight text-white">iMapSU</p>
-              <p class="text-xs leading-relaxed text-maroon-200">Interactive Map-Driven Stall Management System</p>
-            </div>
+        <div class="flex items-center gap-2.5 overflow-hidden pb-3 pt-4" :class="sidebarCollapsed ? 'justify-center px-2' : 'px-3'">
+          <BrandLogo :size="sidebarCollapsed ? 'size-8' : 'size-11'" />
+          <div v-if="!sidebarCollapsed" class="min-w-0">
+            <p class="truncate font-semibold tracking-tight text-white">iMapSU</p>
+            <p class="text-xs leading-relaxed text-maroon-200">{{ brandTagline }}</p>
           </div>
-          <button
-            type="button"
-            class="grid size-8 shrink-0 place-items-center rounded-lg text-maroon-100 transition-colors hover:bg-white/10 hover:text-gold-300"
-            :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-            @click="toggleSidebar"
-          >
-            <UIcon :name="sidebarCollapsed ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'" class="size-4" />
-          </button>
         </div>
 
         <div class="imapsu-scrollbar-maroon flex-1 overflow-y-auto px-2.5 py-3">
@@ -129,15 +122,22 @@ const userItems = computed(() => {
             <UButton square variant="ghost" color="error" icon="i-lucide-log-out" aria-label="Sign out" :title="'Sign out'" class="text-maroon-100 hover:bg-white/10 hover:text-white" @click="signOut" />
           </div>
         </div>
+        <div v-else class="px-2.5 py-3">
+          <NavGuestCard v-if="!sidebarCollapsed" />
+          <div v-else class="flex flex-col items-center gap-1 border-t border-white/10 pt-3">
+            <UButton to="/login" square variant="ghost" color="neutral" icon="i-lucide-log-in" aria-label="Sign in" title="Sign in" class="text-maroon-100 hover:bg-white/10 hover:text-white" />
+            <UButton to="/register" square variant="ghost" color="neutral" icon="i-lucide-user-plus" aria-label="Create an account" title="Create an account" class="text-maroon-100 hover:bg-white/10 hover:text-white" />
+          </div>
+        </div>
       </aside>
 
       <div class="min-w-0 flex-1" :class="{ 'flex min-h-0 flex-col': isMapPage }">
         <header v-if="!isStandalonePage" class="sticky top-0 z-40 shrink-0">
-          <div class="imapsu-brand-bar h-1" />
           <div class="imapsu-appbar">
-            <div class="mx-auto flex h-[59px] max-w-7xl items-center gap-2 px-3 sm:gap-4 sm:px-6">
+            <div class="flex h-[63px] items-center gap-2 px-3 sm:gap-4 sm:px-6">
               <div class="flex min-w-0 items-center gap-1 sm:gap-2">
                 <UButton ref="navigationTrigger" class="imapsu-appbar-btn size-9" :class="isMapPage ? '' : 'lg:hidden'" color="neutral" variant="ghost" square icon="i-lucide-menu" aria-label="Open navigation" :aria-expanded="drawerOpen" @click="drawerOpen = true" />
+                <UButton v-if="!isMapPage" class="imapsu-appbar-btn hidden size-9 lg:inline-flex" color="neutral" variant="ghost" square icon="i-lucide-menu" :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'" :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar" />
                 <NuxtLink :to="entryPath" class="group flex min-w-0 shrink-0 items-center gap-2.5" :class="isMapPage ? '' : 'lg:hidden'">
                   <BrandLogo size="size-10" />
                   <span class="truncate text-base font-bold tracking-tight text-primary max-[339px]:hidden dark:text-secondary">iMapSU</span>
@@ -151,7 +151,7 @@ const userItems = computed(() => {
                 </UButton>
                 <NotificationBell />
                 <template v-if="auth.isAuthenticated.value">
-                  <UDropdownMenu :items="userItems">
+                  <UDropdownMenu :items="userItems" size="lg" :content="{ align: 'end', sideOffset: 8 }" :ui="{ content: 'w-64 rounded-xl', group: 'p-1.5', separator: 'mx-1 my-1.5' }">
                     <template #default>
                       <button
                         type="button"
@@ -162,6 +162,16 @@ const userItems = computed(() => {
                         <span class="hidden max-w-32 truncate text-sm font-medium sm:block">{{ auth.user.value?.username }}</span>
                         <UIcon name="i-lucide-chevron-down" class="size-3.5 text-toned" />
                       </button>
+                    </template>
+                    <template #content-top>
+                      <div class="imapsu-account-head">
+                        <svg class="imapsu-account-head-accent" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C45 38 85 28 120 6" /></svg>
+                        <UAvatar :src="auth.avatarUrl.value ?? undefined" :text="(auth.displayName.value ?? '?').charAt(0).toUpperCase()" :alt="auth.displayName.value" size="2xl" />
+                        <div class="relative min-w-0">
+                          <p class="truncate text-sm font-semibold text-white">{{ auth.displayName.value }}</p>
+                          <p v-if="auth.user.value?.email" class="truncate text-xs text-maroon-100">{{ auth.user.value.email }}</p>
+                        </div>
+                      </div>
                     </template>
                   </UDropdownMenu>
                 </template>
@@ -186,7 +196,7 @@ const userItems = computed(() => {
           <BrandLogo size="size-11" />
           <div>
             <p class="font-semibold tracking-tight text-white">iMapSU</p>
-            <p class="text-xs text-gold-200">Interactive Map-Driven Stall Management System</p>
+            <p class="text-xs text-gold-200">{{ brandTagline }}</p>
           </div>
         </div>
       </template>
@@ -208,6 +218,7 @@ const userItems = computed(() => {
           </div>
           <UButton block variant="subtle" color="error" icon="i-lucide-log-out" label="Sign out" @click="signOut" />
         </div>
+        <NavGuestCard v-else :on-navigate="closeDrawer" />
       </template>
     </UDrawer>
 

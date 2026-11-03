@@ -18,8 +18,8 @@ test('a successful empty response counts as loaded and stays visible during refr
   assert.equal(requestPresentation('error', false).isInitialError, true)
 })
 
-test('reduced motion removes staggering and later cards never accumulate delay', () => {
+test('reduced motion removes staggering and later cards stop adding delay', () => {
   assert.equal(revealTransition(3, true).delay, 0)
-  assert.equal(revealTransition(10).delay, 0)
-  assert.equal(revealTransition(3).delay, 0.09)
+  assert.equal(revealTransition(1).delay, 0.1)
+  assert.equal(revealTransition(10).delay, revealTransition(3).delay)
 })

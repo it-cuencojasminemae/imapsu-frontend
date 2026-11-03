@@ -785,7 +785,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ui-border);
   border-radius: 14px;
   background: var(--ui-bg);
-  transition: border-color 160ms, background-color 160ms;
+  transition: border-color var(--app-motion-fast), background-color var(--app-motion-fast);
 }
 .map-stall-card:not(:disabled):hover { border-color: var(--ui-primary); background: var(--ui-bg-elevated); }
 .map-stall-card.is-active { border-color: var(--color-gold-500); }
@@ -820,8 +820,8 @@ onBeforeUnmount(() => {
   .map-data-status { top: 160px; left: 196px; right: 12px; bottom: auto; max-width: none; padding: 6px 9px; border-radius: 12px; font-size: 10px; }
   .map-data-status > div { flex-wrap: wrap; gap: 4px; }
 }
-/* Phones: the map fills everything below the app bar (4px brand bar + 59px
-   bar + 1px border) and the overlays shrink to a search bar, a corner button
+/* Phones: the map fills everything below the app bar (63px bar + 1px
+   border) and the overlays shrink to a search bar, a corner button
    stack and a legend chip. */
 @media (max-width: 959px) {
   .campus-map-page:not(:fullscreen) { height: calc(100dvh - 64px); }

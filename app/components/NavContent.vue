@@ -23,24 +23,21 @@ const generalLinks = computed<NavLink[]>(() => {
 const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
   const sections: { label: string; links: NavLink[] }[] = []
 
-  if (auth.isAuthenticated.value && !auth.isStaff.value) {
-    sections.push({
-      label: 'Explore',
-      links: [{ label: auth.isStudent.value ? 'Campus spaces' : 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' }]
-    })
-  }
-
   if (auth.isStudent.value) {
     sections.push({
-      label: 'Student',
-      links: [{ label: 'Student feedback', icon: 'i-lucide-message-square-text', to: '/feedback' }]
+      label: 'Campus',
+      links: [
+        { label: 'Campus spaces', icon: 'i-lucide-store', to: '/properties' },
+        { label: 'Student feedback', icon: 'i-lucide-message-square-text', to: '/feedback' }
+      ]
     })
   }
 
   if (auth.isAspiringTenant.value) {
     sections.push({
-      label: 'Aspiring tenant',
+      label: 'Renting',
       links: [
+        { label: 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' },
         { label: 'Rental applications', icon: 'i-lucide-clipboard-list', to: '/rental-applications' },
         ...(hasPastBills.value ? [{ label: 'Past bills', icon: 'i-lucide-receipt', to: '/bills' }] : [])
       ]
@@ -49,11 +46,17 @@ const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
 
   if (auth.isCurrentTenant.value) {
     sections.push({
-      label: 'Current tenant',
+      label: 'My stall',
       links: [
         { label: 'My tenancy', icon: 'i-lucide-key-round', to: '/tenancy' },
         { label: 'Bills', icon: 'i-lucide-receipt', to: '/bills' },
-        { label: 'Maintenance', icon: 'i-lucide-wrench', to: '/maintenance' },
+        { label: 'Maintenance', icon: 'i-lucide-wrench', to: '/maintenance' }
+      ]
+    })
+    sections.push({
+      label: 'Campus',
+      links: [
+        { label: 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' },
         { label: 'Student feedback', icon: 'i-lucide-message-square-text', to: '/feedback' }
       ]
     })
@@ -98,7 +101,7 @@ const iconClasses = () => ['imapsu-nav-icon size-4.5']
 <template>
   <div :class="collapsed ? 'space-y-4' : 'space-y-5'">
     <div>
-      <p v-if="!collapsed" class="imapsu-nav-section-label">General</p>
+      <p v-if="!collapsed" class="imapsu-nav-section-label">{{ auth.isAuthenticated.value ? 'General' : 'Explore' }}</p>
       <div class="space-y-1">
         <UTooltip v-for="link in generalLinks" :key="link.to" :text="link.label" :disabled="!collapsed">
         <NuxtLink :to="link.to" :class="linkClasses(link.to)" :aria-label="link.label" :aria-current="route.path === link.to ? 'page' : undefined" :title="collapsed ? link.label : undefined" @click="onNavigate?.()">

@@ -1253,7 +1253,7 @@ function zoomAtPoint(clientX: number, clientY: number) {
   focusAnim = {
     fromPos: camera.position.clone(), fromTarget: controls.target.clone(), fromZoom: camera.zoom,
     toPos: toTarget.clone().add(camera.position.clone().sub(controls.target)), toTarget, toZoom,
-    start: performance.now(), duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 280
+    start: performance.now(), duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600
   }
   requestRender()
 }
@@ -1744,7 +1744,7 @@ defineExpose({ resetCamera, focusOn, focusBuilding, getBuildingZone, getBuilding
   white-space: nowrap;
   box-shadow: 0 2px 8px rgb(20 35 27 / 15%);
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--app-motion-fast) ease;
   pointer-events: none;
 }
 .campus-map-pin.is-active .campus-map-pin-label { bottom: 48px; }
