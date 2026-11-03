@@ -18,7 +18,7 @@ export function useEmailBounceWatch(email: () => string) {
     stop()
     bounced.value = false
     const startedAt = Date.now()
-    timer = setInterval(async () => {
+    const check = async () => {
       if (Date.now() - startedAt > WATCH_DURATION_MS) return stop()
       try {
         const status = await auth.verificationStatus(email())
@@ -29,7 +29,9 @@ export function useEmailBounceWatch(email: () => string) {
       } catch {
         // A failed check is simply retried on the next tick.
       }
-    }, POLL_INTERVAL_MS)
+    }
+    timer = setInterval(check, POLL_INTERVAL_MS)
+    check()
   }
 
   onBeforeUnmount(stop)

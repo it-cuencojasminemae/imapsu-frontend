@@ -5,7 +5,7 @@ import { landingPath } from '~/utils/accountNavigation'
 definePageMeta({
   title: 'Verify your email',
   description: 'Enter the verification code to activate your iMapSU account.',
-  middleware: 'guest',
+  middleware: ['guest', 'verify-email'],
   // Each state has its own root, which would replay the route fade on every change.
   pageTransition: false
 })
@@ -181,10 +181,10 @@ watch(code, (value) => {
   >
     <div class="space-y-5">
       <AuthEmailStatus tone="error" label="We could not deliver the code to" :email="email" hint="Check the spelling, or register with another address." />
-      <UButton data-prominent="true" block size="xl" to="/register">Register with a different email</UButton>
+      <UButton data-prominent="true" block size="xl" to="/register" replace>Register with a different email</UButton>
     </div>
     <template #footer>
-      <NuxtLink to="/login" class="imapsu-auth-link flex items-center justify-center gap-2">
+      <NuxtLink to="/login" replace class="imapsu-auth-link flex items-center justify-center gap-2">
         <UIcon name="i-lucide-arrow-left" class="size-4" />
         Back to sign in
       </NuxtLink>

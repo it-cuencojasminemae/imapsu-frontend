@@ -44,7 +44,7 @@ export const useAuth = () => {
     register: (input: RegisterInput) => request<AuthResponse>('/api/auth/register-with-role', { method: 'POST', body: input }),
     confirmEmail: async (email: string, code: string) => { const result = await request<AuthResponse>('/api/auth/confirm-email', { method: 'POST', body: { email, code } }); mfaPending.value = !!result.mfaRequired; setUser(mfaPending.value ? null : result.user ?? null); if (mfaPending.value) await navigateTo('/login'); else await refreshMe(); return result.user },
     resendConfirmation: (email: string) => request('/api/auth/resend-confirmation', { method: 'POST', body: { email } }),
-    verificationStatus: (email: string) => request<{ undeliverable: boolean }>('/api/auth/verification-status', { method: 'POST', body: { email } }),
+    verificationStatus: (email: string, options: { timeout?: number } = {}) => request<{ undeliverable: boolean }>('/api/auth/verification-status', { ...options, method: 'POST', body: { email } }),
     requestPasswordReset: (email: string) => request('/api/auth/password-recovery/request', { method: 'POST', body: { email } }),
     verifyPasswordReset: async (email: string, code: string) => (await request<{ resetToken: string }>('/api/auth/password-recovery/verify', { method: 'POST', body: { email, code } })).resetToken,
     // The server signs out every session, so drop any local account state too.
