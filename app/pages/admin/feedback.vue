@@ -152,7 +152,7 @@ const saveAction = async (item: Feedback) => {
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load feedback" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="feedbacks.length === 0" icon="i-lucide-message-square-text" title="No feedback yet" description="Feedback submitted by students will appear here." />
+    <UEmpty v-else-if="feedbacks.length === 0 && filterCount === 0" icon="i-lucide-message-square-text" title="No feedback yet" description="Feedback submitted by students will appear here." />
 
     <div v-else class="space-y-4">
       <div v-if="recurringConcerns.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

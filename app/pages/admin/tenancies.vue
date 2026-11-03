@@ -267,7 +267,7 @@ const filteredTenancies = computed(() => {
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load tenancies" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="tenancies.length === 0" icon="i-lucide-key-round" title="No tenancies yet" description="Assigned tenancies will appear here. Use Create tenancy to record a tenancy." />
+    <UEmpty v-else-if="tenancies.length === 0 && !recordSearch.trim()" icon="i-lucide-key-round" title="No tenancies yet" description="Assigned tenancies will appear here. Use Create tenancy to record a tenancy." />
 
     <div v-else class="space-y-4">
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search tenancies"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Tenant, property, code, or status…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredTenancies.length }} of {{ tenancies.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>

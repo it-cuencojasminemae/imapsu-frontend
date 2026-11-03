@@ -283,7 +283,7 @@ const filteredUsers = computed(() => {
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load users" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="users.length === 0" icon="i-lucide-users-round" title="No users found" description="Registered users will appear here." />
+    <UEmpty v-else-if="users.length === 0 && !recordSearch.trim()" icon="i-lucide-users-round" title="No users found" description="Registered users will appear here." />
 
     <div v-else class="space-y-3">
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search users"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Name, email, or role…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredUsers.length }} of {{ users.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>

@@ -293,7 +293,7 @@ const remove = async (property: PropertySpace) => {
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load property spaces" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="properties.length === 0" icon="i-lucide-store" title="No property spaces found" description="Registered rentable spaces will appear here. Use Add property space to create a record." />
+    <UEmpty v-else-if="properties.length === 0 && filterCount === 0" icon="i-lucide-store" title="No property spaces found" description="Registered rentable spaces will appear here. Use Add property space to create a record." />
 
     <div v-else>
       <UCard :ui="{ body: 'p-4' }">

@@ -357,7 +357,7 @@ const remove = async (ticket: MaintenanceTicket) => {
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load maintenance requests" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="tickets.length === 0" icon="i-lucide-wrench" title="No maintenance tickets" description="Tickets reported by tenants will appear here." />
+    <UEmpty v-else-if="tickets.length === 0 && filterCount === 0" icon="i-lucide-wrench" title="No maintenance tickets" description="Tickets reported by tenants will appear here." />
 
     <div v-else class="space-y-4">
       <div class="flex flex-wrap gap-2">

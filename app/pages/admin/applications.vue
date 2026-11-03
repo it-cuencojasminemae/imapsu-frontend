@@ -422,7 +422,7 @@ const recordColumns = [
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load rental applications" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="items.length === 0" icon="i-lucide-clipboard-list" title="No rental applications found" description="Applications and renewal intents will appear here." />
+    <UEmpty v-else-if="items.length === 0 && filterCount === 0" icon="i-lucide-clipboard-list" title="No rental applications found" description="Applications and renewal intents will appear here." />
 
     <div v-else class="space-y-4">
       <UCard :ui="{ body: 'p-4' }">

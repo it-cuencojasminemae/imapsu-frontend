@@ -122,7 +122,7 @@ const columns = [
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load audit logs" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="entries.length === 0" icon="i-lucide-scroll-text" title="No audit entries yet" description="Administrative activity will appear here once recorded." />
+    <UEmpty v-else-if="entries.length === 0 && !search.trim() && actionFilter === 'all'" icon="i-lucide-scroll-text" title="No audit entries yet" description="Administrative activity will appear here once recorded." />
 
     <UEmpty v-else-if="filtered.length === 0" icon="i-lucide-list-filter" title="No matching audit entries" description="Try another search or clear the filters above." />
 
