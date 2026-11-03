@@ -18,7 +18,7 @@ type Tenancy = {
 }
 
 type ListResponse<T> = { data: T[] }
-type DirectoryUser = { id: number; username: string; email: string; role?: { type?: string } | null }
+type DirectoryUser = { id: number; username: string; email: string; confirmed?: boolean; role?: { type?: string } | null }
 
 useHead({ title: 'Manage Tenancies | iMapSU' })
 
@@ -53,7 +53,7 @@ const { data: propertyData } = await useCompleteFetch<ListResponse<{ documentId:
 const tenancies = computed(() => data.value?.data ?? [])
 const TENANT_ROLE_TYPES = ['aspiring-tenant', 'current-tenant']
 const userOptions = computed(() => (userData.value?.data ?? [])
-  .filter(user => TENANT_ROLE_TYPES.includes(user.role?.type ?? ''))
+  .filter(user => user.confirmed && TENANT_ROLE_TYPES.includes(user.role?.type ?? ''))
   .map(user => ({ label: `${user.username} (${user.email})`, value: String(user.id) })))
 const propertyOptions = computed(() => (propertyData.value?.data ?? []).map(property => ({ label: `${property.name} (${property.propertyCode})`, value: property.documentId })))
 
@@ -323,7 +323,7 @@ const filteredTenancies = computed(() => {
 
             <template v-if="form.accountMode === 'existing'">
               <UFormField label="User" required>
-                <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{}" :fallback="userOptions" />
+                <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true }" :fallback="userOptions" />
               </UFormField>
             </template>
 
@@ -343,7 +343,7 @@ const filteredTenancies = computed(() => {
           </template>
 
           <UFormField v-else label="User" description="Reassigning the tenancy to another user is allowed.">
-            <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{}" :fallback="userOptions" />
+            <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true }" :fallback="userOptions" />
           </UFormField>
 
           <UFormField label="Property space" required>

@@ -247,11 +247,16 @@ const resetAuthenticator = async (user: DirectoryUser) => {
   catch (error) { toast.add({ title: 'Unable to reset authenticator', description: getErrorMessage(error), color: 'error' }) }
   finally { updating.value = null }
 }
+const accountStatus = (user: DirectoryUser) => {
+  if (user.blocked) return { label: 'Deactivated', color: 'error' }
+  if (!user.confirmed) return { label: 'Pending verification', color: 'warning' }
+  return { label: 'Active', color: 'success' }
+}
 const recordColumns = [
  { key: 'user', label: 'Account', value: (user: DirectoryUser) => user.username },
  { key: 'email', label: 'Email', value: (user: DirectoryUser) => user.email },
  { key: 'role', label: 'Role', value: (user: DirectoryUser) => roleLabel(user.role?.type), badge: true, color: (user: DirectoryUser) => roleColor(user.role?.type) },
- { key: 'status', label: 'Status', value: (user: DirectoryUser) => user.blocked ? 'Deactivated' : 'Active', badge: true, color: (user: DirectoryUser) => user.blocked ? 'error' : 'success' }
+ { key: 'status', label: 'Status', value: (user: DirectoryUser) => accountStatus(user).label, badge: true, color: (user: DirectoryUser) => accountStatus(user).color }
 ]
 const filteredUsers = computed(() => {
   const query = recordSearch.value.trim().toLowerCase()
@@ -287,6 +292,7 @@ const filteredUsers = computed(() => {
         <template #actions="{ item }"><UButton v-if="auth.isAdmin.value && !isSelf(item)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
         <template #details="{ item: user }"><UCard  :ui="{ body: 'p-4' }">
           <UAlert v-if="user.security?.lockedUntil && user.security.lockedUntil > Date.now()" class="mb-3" color="warning" :title="'Sign-in limited until ' + new Date(user.security.lockedUntil).toLocaleString()" />
+          <UAlert v-if="!user.confirmed && !user.blocked" class="mb-3" color="warning" icon="i-lucide-mail-question" title="Email not verified" description="This account cannot sign in. A self-registered account is removed automatically if its email is still unverified after 24 hours." />
           <UButton v-if="auth.user.value?.security?.mfaRequired && !isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
@@ -295,7 +301,7 @@ const filteredUsers = computed(() => {
               <p class="truncate font-medium text-highlighted">
                 {{ user.username }}
                 <span v-if="isSelf(user)" class="ml-1 text-xs text-muted">(you)</span>
-                <UBadge v-if="user.blocked" color="error" variant="subtle" class="ml-1">Deactivated</UBadge>
+                <UBadge v-if="accountStatus(user).label !== 'Active'" :color="accountStatus(user).color" variant="subtle" class="ml-1">{{ accountStatus(user).label }}</UBadge>
               </p>
               <p class="truncate text-sm text-muted">{{ user.email }}</p>
             </div>

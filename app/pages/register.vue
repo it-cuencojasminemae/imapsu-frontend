@@ -44,6 +44,15 @@ onBeforeUnmount(() => {
   if (cooldownTimer) clearInterval(cooldownTimer)
 })
 
+const { bounced, start: watchForBounce, stop: stopBounceWatch } = useEmailBounceWatch(() => registeredEmail.value)
+
+const useDifferentEmail = () => {
+  stopBounceWatch()
+  bounced.value = false
+  registeredEmail.value = ''
+  email.value = ''
+}
+
 const roleOptions = [
   { label: 'Student', value: 'student', description: 'View the map and submit feedback about tenants.' },
   { label: 'Aspiring Tenant', value: 'aspiring-tenant', description: 'Browse vacant spaces and apply to rent one.' }
@@ -94,6 +103,7 @@ const handleRegister = async () => {
     deliveryFailed.value = result.verificationEmailSent === false
     registeredEmail.value = email.value
     if (!deliveryFailed.value) startResendCooldown()
+    watchForBounce()
   } catch (error: unknown) {
     const message = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
     registrationError.value = message ?? 'Unable to complete the request. Please try again.'
@@ -131,7 +141,21 @@ const resendVerification = async () => {
         </div>
       </template>
 
-      <div v-if="registeredEmail" class="space-y-5 text-center">
+      <div v-if="bounced" class="space-y-5 text-center">
+        <span class="mx-auto grid size-14 place-items-center rounded-full bg-error/10 text-error">
+          <UIcon name="i-lucide-mail-x" class="size-7" />
+        </span>
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">This email address can't receive mail</h2>
+          <p class="mt-2 text-sm text-muted">
+            The mail server for <span class="font-medium text-highlighted">{{ registeredEmail }}</span> rejected our
+            verification code, so the address may not exist. Your registration was cancelled.
+          </p>
+        </div>
+        <UButton block size="lg" icon="i-lucide-mail" @click="useDifferentEmail">Use a different email</UButton>
+      </div>
+
+      <div v-else-if="registeredEmail" class="space-y-5 text-center">
         <span class="mx-auto grid size-14 place-items-center rounded-full bg-success/10 text-success">
           <UIcon name="i-lucide-mail-check" class="size-7" />
         </span>
@@ -141,7 +165,8 @@ const resendVerification = async () => {
             <span v-if="deliveryFailed">Delivery could not be confirmed. Please request another code. </span>
             <span v-else>We emailed a </span><span class="font-medium text-highlighted">6-digit verification code</span> to
             <span class="font-medium text-highlighted">{{ registeredEmail }}</span>. Enter it to activate your account — you
-            can only sign in after verifying your email. The code expires in 10 minutes.
+            can only sign in after verifying your email. The code expires in 10 minutes, and accounts not verified within
+            24 hours are removed.
           </p>
         </div>
         <UButton block size="lg" icon="i-lucide-key-round" :to="`/verify-email?email=${encodeURIComponent(registeredEmail)}`">

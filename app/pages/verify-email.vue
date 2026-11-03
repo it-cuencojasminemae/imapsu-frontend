@@ -139,9 +139,12 @@ const goToDashboard = async () => {
   await navigateTo(landingPath(verifiedUser.value), { replace: true })
 }
 
+const { bounced, start: watchForBounce } = useEmailBounceWatch(() => email.value)
+
 onMounted(() => {
   focusInput(0)
   startResendCooldown()
+  if (email.value) watchForBounce()
 })
 
 onBeforeUnmount(() => {
@@ -180,6 +183,20 @@ watch(code, (value) => {
           </p>
         </div>
         <UButton block size="lg" icon="i-lucide-arrow-right" @click="goToDashboard">Continue to your dashboard</UButton>
+      </div>
+
+      <div v-else-if="bounced" class="space-y-5 text-center">
+        <span class="mx-auto grid size-14 place-items-center rounded-full bg-error/10 text-error">
+          <UIcon name="i-lucide-mail-x" class="size-7" />
+        </span>
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">This email address can't receive mail</h2>
+          <p class="mt-1 text-sm text-muted">
+            The mail server for <span class="font-medium text-highlighted">{{ email }}</span> rejected our verification
+            code, so the address may not exist. Your registration was cancelled.
+          </p>
+        </div>
+        <UButton block size="lg" icon="i-lucide-user-plus" to="/register">Register with a different email</UButton>
       </div>
 
       <form method="post" v-else class="space-y-5" @submit.prevent="verify">

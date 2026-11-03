@@ -41,7 +41,8 @@ const sections = [
   {
     title: 'How long we keep it',
     items: [
-      'iMapSU is a capstone project prototype. Your data is kept only while the system is being demonstrated and evaluated, and is permanently deleted when the system is taken offline. You may ask for earlier deletion at any time.'
+      'iMapSU is a capstone project prototype. Your data is kept only while the system is being demonstrated and evaluated, and is permanently deleted when the system is taken offline. You may ask for earlier deletion at any time.',
+      'If you register but do not verify your email within 24 hours, your account and the details you entered are deleted automatically.'
     ]
   },
   {
