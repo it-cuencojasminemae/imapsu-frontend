@@ -563,7 +563,7 @@ const recordColumns = [
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load bills" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
-    <UEmpty v-else-if="bills.length === 0" icon="i-lucide-receipt" title="No bills yet" description="Advance billing records will appear here once issued." />
+    <UEmpty v-else-if="bills.length === 0 && filterCount === 0" icon="i-lucide-receipt" title="No bills yet" description="Advance billing records will appear here once issued." />
 
     <div v-else class="space-y-4">
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
