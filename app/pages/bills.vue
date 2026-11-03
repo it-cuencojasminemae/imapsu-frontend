@@ -106,6 +106,7 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
       body: { data: { receipt: fileId } }
     })
     const detected = updated?.data?.orNumber
+    orNumberDraft[key] = detected ?? ''
     toast.add({
       title: 'Receipt attached',
       description: detected
@@ -283,9 +284,11 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
         </dl>
 
         <div v-if="canSubmitPayment(bill)" class="mt-5 border-t border-default pt-4">
-          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit Payment Receipt</h2><p class="mb-4 text-sm text-muted">Upload the official receipt issued by the University Cashier for payment recording and verification.</p>
+          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit Payment Receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>
 
-          <UAlert v-if="bill.status === 'For Verification'" color="info" icon="i-lucide-clock-3" title="For Verification" description="Your receipt has been submitted and is being reviewed by the Office of Auxiliary Services." class="mb-4" />
+          <UAlert v-if="bill.status === 'For Verification' && !bill.receipt" color="warning" icon="i-lucide-image-up" title="Receipt picture needed" description="The Office of Auxiliary Services cannot verify this payment until you upload a picture of your official receipt." class="mb-4" />
+          <UAlert v-else-if="bill.status === 'For Verification' && !bill.orNumber" color="warning" icon="i-lucide-send" title="Receipt not submitted yet" description="Enter the official receipt number below and click Submit receipt so the Office of Auxiliary Services can review it." class="mb-4" />
+          <UAlert v-else-if="bill.status === 'For Verification'" color="info" icon="i-lucide-clock-3" title="For Verification" description="Your receipt has been submitted and is being reviewed by the Office of Auxiliary Services." class="mb-4" />
           <UAlert v-else-if="bill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected" :description="bill.verificationNote || 'Your submitted receipt was not accepted. Please review it and try again.'" class="mb-4" />
           <UAlert v-else-if="bill.status === 'Overdue'" color="warning" icon="i-lucide-alarm-clock" title="Overdue" description="This bill is past its due date. Please settle it as soon as possible." class="mb-4" />
 
@@ -293,8 +296,8 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
             <div class="flex flex-wrap items-center gap-3">
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
                 <UIcon :name="isUploading(bill) ? 'i-lucide-loader-2' : 'i-lucide-file-up'" class="size-4" :class="{ 'animate-spin': isUploading(bill) }" />
-                {{ isUploading(bill) ? 'Uploading…' : 'Choose receipt' }}
-                <input type="file" accept="image/*,.pdf" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
+                {{ isUploading(bill) ? 'Uploading…' : 'Choose receipt picture' }}
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
               </label>
               <span v-if="selectedFiles[billKey(bill)]" class="max-w-64 truncate text-sm text-muted">{{ selectedFiles[billKey(bill)].name }}</span>
               <span v-else-if="isUploading(bill)" class="text-sm text-muted">Reading official receipt number…</span>
@@ -310,7 +313,7 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
               </a>
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-default px-2.5 py-1.5 text-xs font-medium text-muted hover:border-primary hover:text-primary" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
                 <UIcon name="i-lucide-repeat" class="size-3.5" /> Replace
-                <input type="file" accept="image/*,.pdf" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
               </label>
               <UButton
                 icon="i-lucide-trash-2"
@@ -324,7 +327,7 @@ const canSubmitPayment = (bill: Bill) => bill.status !== 'Verified'
               />
             </div>
             <div class="mt-3 flex flex-wrap items-end gap-3">
-              <UFormField label="Official Receipt Number" description="Review the receipt number before submitting. Enter or correct it manually if needed." class="min-w-56">
+              <UFormField label="Official Receipt Number" description="Enter or correct the number if needed, then click Submit receipt to send it for review." class="min-w-56">
                 <UInput v-model="orNumberDraft[billKey(bill)]" placeholder="e.g. 8823109" :disabled="isSubmitting(bill)" @keyup.enter="submitPayment(bill)" />
               </UFormField>
               <UButton :loading="isSubmitting(bill)" :disabled="!orValue(bill)" icon="i-lucide-send" @click="submitPayment(bill)">Submit receipt</UButton>

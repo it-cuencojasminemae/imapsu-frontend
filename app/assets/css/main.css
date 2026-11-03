@@ -92,6 +92,7 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-record-table tbody tr:hover { background: var(--ui-bg-muted); }
 .imapsu-record-table td:last-child:not([colspan]) { width: 1%; white-space: nowrap; }
 .imapsu-record-table td .imapsu-record-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.imapsu-record-table td .imapsu-record-actions--compact { flex-wrap: nowrap; align-items: center; justify-content: flex-end; }
 .imapsu-auth { max-width: 28rem; margin-inline: auto; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding: 2rem 1rem; }
 .imapsu-hero { border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
 .imapsu-hero-panel { background: var(--color-maroon-900); color: white; border-radius: var(--app-radius-card); padding: 2rem; }

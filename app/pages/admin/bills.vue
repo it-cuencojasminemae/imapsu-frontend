@@ -25,7 +25,7 @@ type Bill = {
   verificationNote?: string
   paidAt?: string
   orNumber?: string
-  receipt?: { id: number; url?: string } | null
+  receipt?: { id: number; url?: string; name?: string } | null
   tenancy?: {
     documentId?: string
     monthlyRent?: number | string
@@ -113,6 +113,10 @@ const clearFilters = () => {
   filterStatus.value = 'All'
   filterPeriod.value = ''
   filterSearch.value = ''
+}
+
+const toggleVerificationFilter = () => {
+  filterStatus.value = filterStatus.value === 'For Verification' ? 'All' : 'For Verification'
 }
 
 const STATUS_FILTER_OPTIONS = [
@@ -244,6 +248,18 @@ const openEdit = (bill: Bill) => {
   resetReadingPrefill()
   formOpen.value = true
 }
+
+// Overdue follows the due date on the server, and a payment needs a receipt picture on the bill.
+const formStatusOptions = computed(() => {
+  const noReceipt = !editing.value?.receipt
+  return [
+    { label: 'Unpaid', value: 'Unpaid' },
+    { label: 'For Verification', value: 'For Verification', disabled: noReceipt },
+    { label: 'Verified', value: 'Verified', disabled: noReceipt },
+    { label: 'Rejected', value: 'Rejected' },
+    { label: 'Overdue', value: 'Overdue', disabled: true }
+  ]
+})
 
 const selectedTenancy = computed(() =>
   (tenancyData.value?.data ?? []).find(tenancy => tenancy.documentId === form.tenancy) ?? null
@@ -489,7 +505,7 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
       body: { data: { status: nextStatus, ...extra } }
     })
     toast.add({
-      title: `Bill ${nextStatus === 'Verified' ? 'verified' : nextStatus === 'Rejected' ? 'rejected' : nextStatus === 'Overdue' ? 'marked overdue' : 'reset to Unpaid'}`,
+      title: `Bill ${nextStatus === 'Verified' ? 'verified' : nextStatus === 'Rejected' ? 'rejected' : 'reset to Unpaid'}`,
       color: nextStatus === 'Verified' ? 'success' : 'neutral',
       icon: 'i-lucide-check-circle-2'
     })
@@ -501,9 +517,42 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
   }
 }
 
-const verifyBill = async (bill: Bill) => {
-  if (!await confirm({ title: 'Verify receipt?', description: `Mark the ${formatCurrency(bill.amount)} payment${bill.orNumber ? ` (OR ${bill.orNumber})` : ''} as verified.`, confirmLabel: 'Verify receipt', tone: 'primary', icon: 'i-lucide-badge-check' })) return
-  setBillStatus(bill, 'Verified')
+const isBusy = (bill: Bill) => workflowBusy.value === String(bill.documentId ?? bill.id)
+
+const billMenuItems = (bill: Bill) => [
+  [
+    { label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(bill) },
+    { label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(bill) }
+  ],
+  [{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(bill) }]
+]
+
+const billContext = (bill: Bill) => [
+  bill.tenancy?.user?.username ? bill.tenancy?.propertySpace?.name : null,
+  bill.status === 'For Verification' && bill.orNumber ? `OR ${bill.orNumber}` : null,
+  bill.status === 'For Verification' && !bill.receipt ? 'No receipt picture' : null,
+  bill.status === 'For Verification' && !bill.orNumber ? 'No receipt number' : null
+].filter(Boolean).join(' · ')
+
+// Why a bill under review cannot be verified yet, if anything.
+const verifyBlocked = (bill: Bill) => {
+  if (!bill.receipt) return 'The tenant has not uploaded a receipt picture yet.'
+  if (!bill.orNumber) return 'The tenant has not submitted the official receipt number yet.'
+  return undefined
+}
+
+const verifyOpen = ref(false)
+const verifyTarget = ref<Bill | null>(null)
+
+const verifyBill = (bill: Bill) => {
+  verifyTarget.value = bill
+  verifyOpen.value = true
+}
+
+const confirmVerify = async () => {
+  if (!verifyTarget.value) return
+  await setBillStatus(verifyTarget.value, 'Verified')
+  verifyOpen.value = false
 }
 
 const rejectOpen = ref(false)
@@ -514,7 +563,7 @@ const rejectError = ref('')
 
 const openReject = (bill: Bill) => {
   rejectTarget.value = bill
-  rejectNote.value = bill.verificationNote ?? ''
+  rejectNote.value = bill.verificationNote ?? (bill.receipt ? '' : 'Please upload a clear picture of your official receipt.')
   rejectError.value = ''
   rejectOpen.value = true
 }
@@ -577,10 +626,11 @@ const recordColumns = [
           <p class="mt-1 text-xl font-semibold text-success-600">{{ formatCurrency(collectedTotal) }}</p>
           <p class="text-xs text-muted">{{ billingSummary?.verifiedBills ?? '—' }} verified</p>
         </UCard>
-        <UCard class="" :ui="{ body: 'p-3' }">
-          <p class="text-xs text-muted">Receipts for Verification</p>
+        <UCard class="relative transition-colors hover:bg-elevated" :class="{ 'ring-2 ring-warning': filterStatus === 'For Verification' }" :ui="{ body: 'p-3' }">
+          <p class="flex items-start justify-between gap-2 text-xs text-muted">Receipts for Verification<UIcon name="i-lucide-list-filter" class="size-3.5 shrink-0" /></p>
           <p class="mt-1 text-xl font-semibold text-warning">{{ billingSummary?.forVerification ?? '—' }}</p>
           <p class="text-xs text-muted">receipts to review</p>
+          <button type="button" class="absolute inset-0 cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" :aria-pressed="filterStatus === 'For Verification'" aria-label="Show only bills with receipts to review" @click="toggleVerificationFilter" />
         </UCard>
         <UCard class="" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Overdue</p>
@@ -617,8 +667,26 @@ const recordColumns = [
 
       <UEmpty v-if="filteredBills.length === 0" icon="i-lucide-list-filter" title="No matching bills" description="No bills match the current filters." />
       <template v-else>
-        <AppRecordTable :items="filteredBills" :columns="recordColumns" :item-key="bill => bill.documentId ?? bill.id" caption="Bills">
-        <template #actions="{ item }"><UButton v-if="item.status === 'For Verification'" label="Verify" icon="i-lucide-file-check-2" color="success" variant="subtle" size="sm" :loading="workflowBusy === String(item.documentId ?? item.id)" @click="verifyBill(item)" /></template>
+        <AppRecordTable :items="filteredBills" :columns="recordColumns" :item-key="bill => bill.documentId ?? bill.id" caption="Bills" compact-actions>
+        <template #cell-tenant="{ item }">
+          <p class="text-toned">{{ item.tenancy?.user?.username || item.tenancy?.propertySpace?.name || '—' }}</p>
+          <p v-if="billContext(item)" class="mt-0.5 text-xs text-muted">{{ billContext(item) }}</p>
+        </template>
+        <template #cell-status="{ item }">
+          <div class="flex flex-wrap items-center gap-1">
+            <UBadge :color="statusColor(item)" variant="subtle">{{ item.status || 'Unknown' }}</UBadge>
+            <UBadge v-if="isOverdue(item) && item.status !== 'Overdue'" color="error" variant="solid">Overdue</UBadge>
+          </div>
+        </template>
+        <template #actions="{ item }">
+          <template v-if="item.status === 'For Verification'">
+            <UButton label="Verify" icon="i-lucide-file-check-2" color="success" variant="subtle" size="sm" :loading="isBusy(item)" :disabled="!!verifyBlocked(item)" :title="verifyBlocked(item)" @click="verifyBill(item)" />
+            <UButton label="Reject" icon="i-lucide-x-circle" color="error" variant="subtle" size="sm" :disabled="isBusy(item)" @click="openReject(item)" />
+          </template>
+          <UDropdownMenu :items="billMenuItems(item)" :content="{ align: 'end' }">
+            <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="More actions" title="More actions" :disabled="isBusy(item)" />
+          </UDropdownMenu>
+        </template>
         <template #details="{ item: bill }">
           <UAlert v-if="bill.reviewFlags?.length" class="mb-3" color="warning" title="Billing review flags" :description="bill.reviewFlags.join('; ')" /><UCard  :ui="{ body: 'p-5' }">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -663,12 +731,12 @@ const recordColumns = [
           </div>
         </dl>
 
-        <div class="mt-4 flex flex-wrap gap-2 border-t border-default pt-4">
+        <!-- Phones have no table row, so their cards keep the full set of actions. -->
+        <div class="mt-4 flex flex-wrap gap-2 border-t border-default pt-4 lg:hidden">
           <template v-if="bill.status === 'For Verification'">
-            <UButton label="Verify receipt" icon="i-lucide-file-check-2" color="success" size="sm" :loading="workflowBusy === String(bill.documentId ?? bill.id)" @click="verifyBill(bill)" />
+            <UButton label="Verify receipt" icon="i-lucide-file-check-2" color="success" size="sm" :loading="workflowBusy === String(bill.documentId ?? bill.id)" :disabled="!!verifyBlocked(bill)" :title="verifyBlocked(bill)" @click="verifyBill(bill)" />
             <UButton label="Reject" icon="i-lucide-x-circle" color="error" variant="subtle" size="sm" :disabled="workflowBusy === String(bill.documentId ?? bill.id)" @click="openReject(bill)" />
           </template>
-          <UButton v-if="(bill.status === 'Unpaid' || bill.status === 'For Verification' || bill.status === 'Rejected') && !isVerified(bill)" label="Mark overdue" icon="i-lucide-alarm-clock" color="neutral" variant="subtle" size="sm" @click="setBillStatus(bill, 'Overdue')" />
           <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(bill)" />
           <UButton label="History" icon="i-lucide-history" color="neutral" variant="subtle" size="sm" @click="openHistory(bill)" />
           <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(bill)" />
@@ -677,6 +745,31 @@ const recordColumns = [
       </AppRecordTable>
       </template>
     </div>
+
+    <UModal v-model:open="verifyOpen" class="max-w-xl" title="Verify receipt" description="Check the receipt against this bill before marking the payment as verified.">
+      <template #body>
+        <form v-if="verifyTarget" class="space-y-4" @submit.prevent="confirmVerify">
+          <UAlert v-if="verifyTarget.reviewFlags?.length" color="warning" icon="i-lucide-triangle-alert" title="Billing review flags" :description="verifyTarget.reviewFlags.join('; ')" />
+          <div class="space-y-4">
+            <dl class="grid grid-cols-2 content-start gap-4 text-sm">
+              <div><dt class="text-xs text-muted">Tenant</dt><dd class="font-medium text-highlighted">{{ verifyTarget.tenancy?.user?.username || '—' }}</dd></div>
+              <div><dt class="text-xs text-muted">Stall</dt><dd class="font-medium text-highlighted">{{ verifyTarget.tenancy?.propertySpace?.name || '—' }}</dd></div>
+              <div><dt class="text-xs text-muted">Period</dt><dd class="font-medium text-highlighted">{{ verifyTarget.period || '—' }}</dd></div>
+              <div><dt class="text-xs text-muted">Total</dt><dd class="font-semibold text-highlighted">{{ formatCurrency(verifyTarget.amount) }}</dd></div>
+              <div class="col-span-2"><dt class="text-xs text-muted">Official Receipt Number</dt><dd class="font-mono font-medium text-highlighted">{{ verifyTarget.orNumber || '—' }}</dd></div>
+            </dl>
+            <a v-if="verifyTarget.receipt" :href="`${baseURL}${verifyTarget.receipt.url}`" target="_blank" rel="noopener" class="group block text-sm font-medium text-primary">
+              <img :src="`${baseURL}${verifyTarget.receipt.url}`" :alt="verifyTarget.receipt.name || 'Payment receipt'" class="max-h-72 w-full rounded-md border border-default object-contain" />
+              <span class="mt-1 inline-flex items-center gap-1 group-hover:underline"><UIcon name="i-lucide-external-link" class="size-3.5" />View full size</span>
+            </a>
+          </div>
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" :disabled="isBusy(verifyTarget)" @click="verifyOpen = false" />
+            <UButton data-prominent="true" type="submit" color="success" icon="i-lucide-file-check-2" :loading="isBusy(verifyTarget)">Verify receipt</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
 
     <UModal v-model:open="rejectOpen" class="max-w-xl" title="Reject receipt" description="Reject the submitted receipt and optionally record the reason.">
       <template #body>
@@ -778,11 +871,11 @@ const recordColumns = [
           </UFormField>
 
           <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Due date" description="Bills are always due on the 10th of the month after the billing period.">
+            <UFormField label="Due date" description="Bills are always due on the 10th of the month after the billing period, and become Overdue automatically the day after.">
               <UInput :model-value="dueDatePreview" disabled />
             </UFormField>
-            <UFormField label="Status" description="Choose Verified only after reviewing the official receipt.">
-              <USelect v-model="form.status" :items="[{ label: 'Unpaid', value: 'Unpaid' }, { label: 'For Verification', value: 'For Verification' }, { label: 'Verified', value: 'Verified' }, { label: 'Rejected', value: 'Rejected' }, { label: 'Overdue', value: 'Overdue' }]" />
+            <UFormField label="Status" description="For Verification and Verified need the tenant's receipt picture and number on the bill.">
+              <USelect v-model="form.status" :items="formStatusOptions" />
             </UFormField>
           </div>
 

@@ -1,7 +1,8 @@
 <script setup lang="ts" generic="T">
 type Column = { key: string; label: string; value: (item: T) => string | number; badge?: boolean; color?: (item: T) => 'primary' | 'secondary' | 'neutral' | 'success' | 'warning' | 'error' | 'info' }
-const props = withDefaults(defineProps<{ items: T[]; columns: Column[]; itemKey: (item: T) => string | number; caption: string; expandable?: boolean }>(), { expandable: true })
+const props = withDefaults(defineProps<{ items: T[]; columns: Column[]; itemKey: (item: T) => string | number; caption: string; expandable?: boolean; compactActions?: boolean }>(), { expandable: true, compactActions: false })
 const expanded = ref<string | number | null>(null)
+const detailsLabel = (item: T) => expanded.value === props.itemKey(item) ? 'Close details' : 'Details'
 const detailId = useId()
 watch(() => props.items, items => {
   if (!items.some(item => props.itemKey(item) === expanded.value)) expanded.value = null
@@ -27,9 +28,9 @@ function toggle(item: T) {
                   <span v-else :class="column.key === 'amount' ? 'font-semibold tabular-nums text-highlighted' : 'text-toned'">{{ column.value(item) }}</span>
                 </slot>
               </td>
-              <td v-if="expandable"><div class="imapsu-record-actions">
+              <td v-if="expandable"><div class="imapsu-record-actions" :class="{ 'imapsu-record-actions--compact': compactActions }">
                 <slot name="actions" :item="item" />
-                <UButton :label="expanded === itemKey(item) ? 'Close details' : 'Details'" :icon="expanded === itemKey(item) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" variant="ghost" color="neutral" size="sm" :aria-expanded="expanded === itemKey(item)" :aria-controls="`${detailId}-${itemKey(item)}`" @click="toggle(item)" />
+                <UButton :label="compactActions ? undefined : detailsLabel(item)" :aria-label="detailsLabel(item)" :title="compactActions ? detailsLabel(item) : undefined" :icon="expanded === itemKey(item) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" variant="ghost" color="neutral" size="sm" :aria-expanded="expanded === itemKey(item)" :aria-controls="`${detailId}-${itemKey(item)}`" @click="toggle(item)" />
               </div></td>
             </tr>
             <tr v-if="expanded === itemKey(item)"><td :colspan="columns.length + 1"><div :id="`${detailId}-${itemKey(item)}`"><slot name="details" :item="item" /></div></td></tr>
