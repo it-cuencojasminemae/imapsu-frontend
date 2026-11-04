@@ -20,8 +20,15 @@ type AuditEntry = {
 type HealthResponse = {
   uptime: number
   startedAt: string
-  memory: { total: number; free: number; used: number }
-  disk: { ok: boolean; total?: number; free?: number; used?: number }
+  memory: { used: number; limit: number | null }
+  storage: {
+    ok: boolean
+    remote?: boolean
+    files?: number
+    bytes?: number
+    areas?: Record<'uploads' | 'media' | 'backups', { files: number; bytes: number }>
+    checkedAt?: string
+  }
   database: { ok: boolean; latency?: number | null; client?: string | null; error?: string }
   logins: { failed24h: number; failed7d: number; failedTotal: number; recentFailed: AuditEntry[]; recentLogins: AuditEntry[] }
   errors: { total: number; recent: AuditEntry[] }
@@ -75,13 +82,29 @@ const formatBytes = (bytes?: number) => {
 }
 
 const memoryPercent = computed(() => {
-  const total = health.value?.memory?.total ?? 0
-  return total > 0 ? Math.round(((health.value?.memory?.used ?? 0) / total) * 100) : 0
+  const limit = health.value?.memory?.limit ?? 0
+  return limit > 0 ? Math.min(100, Math.round(((health.value?.memory?.used ?? 0) / limit) * 100)) : 0
 })
 
-const diskPercent = computed(() => {
-  const total = health.value?.disk?.total ?? 0
-  return total > 0 ? Math.round(((health.value?.disk?.used ?? 0) / total) * 100) : 0
+const formatFileCount = (files = 0) => `${files.toLocaleString('en-PH')} ${files === 1 ? 'file' : 'files'}`
+
+const storageAreas = computed(() => {
+  const areas = health.value?.storage?.areas
+  return areas
+    ? [
+        { label: 'Public uploads', ...areas.uploads },
+        { label: 'Private files', ...areas.media },
+        { label: 'Database backups', ...areas.backups }
+      ]
+    : []
+})
+
+const storageSource = computed(() => {
+  const storage = health.value?.storage
+  if (!storage?.ok) return ''
+  const place = storage.remote ? 'Cloudflare R2' : 'Local disk'
+  const counted = storage.checkedAt ? new Date(storage.checkedAt).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' }) : ''
+  return counted ? `${place} · counted ${counted}` : place
 })
 
 const formatDate = (value?: string) => value
@@ -178,18 +201,28 @@ watch(health, () => { checkedAt.value = new Date().toISOString() })
           <dl class="space-y-5">
             <div>
               <div class="mb-1.5 flex items-center justify-between text-sm">
-                <dt class="text-muted">Memory</dt>
-                <dd class="font-medium text-highlighted">{{ formatBytes(health?.memory?.used) }} / {{ formatBytes(health?.memory?.total) }}</dd>
+                <dt class="text-muted">App memory</dt>
+                <dd v-if="health?.memory?.limit" class="font-medium text-highlighted">{{ formatBytes(health.memory.used) }} / {{ formatBytes(health.memory.limit) }}</dd>
+                <dd v-else class="font-medium text-highlighted">{{ formatBytes(health?.memory?.used) }} used</dd>
               </div>
-              <UProgress :model-value="memoryPercent" color="primary" />
+              <UProgress v-if="health?.memory?.limit" :model-value="memoryPercent" color="primary" />
+              <p v-else class="text-xs text-muted">The server reports no memory limit for this app.</p>
             </div>
             <div>
               <div class="mb-1.5 flex items-center justify-between text-sm">
-                <dt class="text-muted">Uploads disk</dt>
-                <dd v-if="health?.disk?.ok" class="font-medium text-highlighted">{{ formatBytes(health?.disk?.free) }} free</dd>
+                <dt class="text-muted">File storage</dt>
+                <dd v-if="health?.storage?.ok" class="font-medium text-highlighted">{{ formatBytes(health.storage.bytes) }} · {{ formatFileCount(health.storage.files) }}</dd>
                 <dd v-else class="font-medium text-muted">Unavailable</dd>
               </div>
-              <UProgress :model-value="diskPercent" color="secondary" />
+              <template v-if="health?.storage?.ok">
+                <p class="text-xs text-muted">{{ storageSource }}</p>
+                <ul class="mt-3 space-y-1.5 text-xs">
+                  <li v-for="area in storageAreas" :key="area.label" class="flex items-center justify-between gap-3">
+                    <span class="text-muted">{{ area.label }}</span>
+                    <span class="text-toned">{{ formatBytes(area.bytes) }} · {{ formatFileCount(area.files) }}</span>
+                  </li>
+                </ul>
+              </template>
             </div>
           </dl>
         </UCard>

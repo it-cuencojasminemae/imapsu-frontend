@@ -33,8 +33,8 @@ type AuditListResponse = { data: AuditEntry[]; meta: { pagination: { total: numb
 type HealthResponse = {
   uptime: number
   startedAt: string
-  memory: { total: number; free: number; used: number }
-  disk: { ok: boolean; total?: number; free?: number; used?: number }
+  memory: { used: number; limit: number | null }
+  storage: { ok: boolean; bytes?: number }
   database: { ok: boolean; latency?: number | null; client?: string | null; error?: string }
   logins: { failed24h: number; failed7d: number; failedTotal: number; recentFailed: AuditEntry[]; recentLogins: AuditEntry[] }
   errors: { total: number; recent: AuditEntry[] }
@@ -226,12 +226,12 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
             <dd class="font-medium text-highlighted">{{ formatUptime(health?.uptime) }}</dd>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <dt class="text-muted">Memory</dt>
-            <dd class="font-medium text-highlighted">{{ formatBytes(health?.memory?.used) }} / {{ formatBytes(health?.memory?.total) }}</dd>
+            <dt class="text-muted">App memory</dt>
+            <dd class="font-medium text-highlighted">{{ formatBytes(health?.memory?.used) }}{{ health?.memory?.limit ? ` / ${formatBytes(health.memory.limit)}` : ' used' }}</dd>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <dt class="text-muted">Disk free</dt>
-            <dd class="font-medium text-highlighted">{{ health?.disk?.ok ? formatBytes(health?.disk?.free) : '—' }}</dd>
+            <dt class="text-muted">File storage</dt>
+            <dd class="font-medium text-highlighted">{{ health?.storage?.ok ? formatBytes(health.storage.bytes) : '—' }}</dd>
           </div>
           <div class="flex flex-wrap items-start justify-between gap-2 border-t border-default pt-4 text-sm">
             <dt class="text-muted">Recorded server errors<span class="mt-1 block text-xs">Historical total</span></dt>
