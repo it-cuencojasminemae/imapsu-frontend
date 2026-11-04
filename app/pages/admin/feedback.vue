@@ -60,7 +60,7 @@ const CATEGORY_OPTIONS = [
 const filteredFeedbacks = computed(() => {
   const query = filterSearch.value.trim().toLowerCase()
   return feedbacks.value.filter(item => {
-    if (filterRating.value !== 'All' && item.rating !== filterRating.value) return false
+    if (filterRating.value !== 'All' && String(item.rating) !== String(filterRating.value)) return false
     if (filterCategory.value !== 'All' && (item.category ?? 'Other') !== filterCategory.value) return false
     if (filterUnaddressed.value && item.staffAction) return false
     if (query) {
@@ -172,7 +172,7 @@ const saveAction = async (item: Feedback) => {
         <UButton size="sm" variant="ghost" :color="filterRating === 'All' ? 'primary' : 'neutral'" @click="filterRating = 'All'">
           All <span class="text-xs opacity-80">{{ counts.All }}</span>
         </UButton>
-        <UButton v-for="star in 5" :key="star" size="sm" variant="ghost" :color="filterRating === star ? 'primary' : 'neutral'" @click="filterRating = star">
+        <UButton v-for="star in 5" :key="star" size="sm" variant="ghost" :color="String(filterRating) === String(star) ? 'primary' : 'neutral'" @click="filterRating = star">
           <UIcon name="i-lucide-star" class="size-3.5" />
           {{ star }}
           <span class="text-xs opacity-80">{{ counts[star] }}</span>

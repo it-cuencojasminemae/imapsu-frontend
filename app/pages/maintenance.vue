@@ -228,6 +228,7 @@ const submitFollowUp = async () => {
 </script>
 
 <template>
+  <div>
   <main class="imapsu-page">
     <AppPageHeader>
       <template #eyebrow>Current tenant</template>
@@ -369,4 +370,5 @@ const submitFollowUp = async () => {
       </form>
     </template>
   </UModal>
+  </div>
 </template>

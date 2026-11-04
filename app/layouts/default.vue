@@ -15,6 +15,15 @@ const brandTagline = computed(() => {
 
 const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password', '/privacy'].includes(route.path))
 const isMapPage = computed(() => route.path === '/campus-map')
+const { baseURL } = useStrapi()
+const { data: systemStatus } = useFetch<{ systemStatus?: string; maintenanceBanner?: string }>('/api/system-settings/public', { baseURL, key: 'system-status', default: () => ({}) })
+const systemNotice = computed(() => {
+  const status = systemStatus.value?.systemStatus
+  const custom = systemStatus.value?.maintenanceBanner?.trim()
+  if (status === 'maintenance') return { color: 'warning' as const, icon: 'i-lucide-construction', text: custom || 'iMapSU is under maintenance. Some features may be unavailable.' }
+  if (status === 'degraded') return { color: 'warning' as const, icon: 'i-lucide-triangle-alert', text: custom || 'iMapSU is running with reduced performance. Some features may respond slowly.' }
+  return null
+})
 const drawerOpen = ref(false)
 const accountDirty = useState('account-unsaved-changes', () => false)
 const { confirm } = useConfirmDialog()
@@ -88,6 +97,10 @@ const userItems = computed(() => {
 <template>
   <div class="imapsu-page-bg" :class="isMapPage ? 'h-dvh overflow-hidden' : 'min-h-screen'">
     <a href="#main-content" class="imapsu-skip-link">Skip to content</a>
+    <div v-if="systemNotice" role="status" class="relative z-50 flex items-center justify-center gap-2 bg-warning/15 px-4 py-2 text-center text-sm font-medium text-highlighted">
+      <UIcon :name="systemNotice.icon" class="size-4 shrink-0 text-warning" />
+      <span>{{ systemNotice.text }}</span>
+    </div>
     <div class="flex items-stretch" :class="{ 'h-full': isMapPage }">
       <aside
         v-if="!isStandalonePage && !isMapPage"
@@ -149,7 +162,7 @@ const userItems = computed(() => {
                   <UIcon name="i-lucide-moon" class="imapsu-theme-light size-4" />
                   <UIcon name="i-lucide-sun" class="imapsu-theme-dark size-4" />
                 </UButton>
-                <NotificationBell />
+                <NotificationBell v-if="!auth.isAdmin.value" />
                 <template v-if="auth.isAuthenticated.value">
                   <UDropdownMenu :items="userItems" size="lg" :content="{ align: 'end', sideOffset: 8 }" :ui="{ content: 'w-64 rounded-xl', group: 'p-1.5', separator: 'mx-1 my-1.5' }">
                     <template #default>

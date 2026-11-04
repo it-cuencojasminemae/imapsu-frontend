@@ -341,6 +341,7 @@ const remove = async (ticket: MaintenanceTicket) => {
 </script>
 
 <template>
+  <div>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
       <template #eyebrow>Management</template>
@@ -536,4 +537,5 @@ const remove = async (ticket: MaintenanceTicket) => {
       </form>
     </template>
   </UModal>
+  </div>
 </template>

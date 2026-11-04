@@ -211,6 +211,9 @@ const save = async () => {
     let userId: number
     if (form.accountMode === 'new') {
       userId = await createUser()
+      // The account now exists, so a retry after a tenancy error must reuse it.
+      form.accountMode = 'existing'
+      form.user = String(userId)
     } else {
       userId = Number(form.user)
     }
@@ -355,7 +358,7 @@ const filteredTenancies = computed(() => {
 
             <template v-if="form.accountMode === 'existing'">
               <UFormField label="User" required>
-                <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true }" :fallback="userOptions" />
+                <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true, roleTypes: TENANT_ROLE_TYPES.join(',') }" :fallback="userOptions" />
               </UFormField>
             </template>
 
@@ -375,7 +378,7 @@ const filteredTenancies = computed(() => {
           </template>
 
           <UFormField v-else label="User" description="Reassigning the tenancy to another user is allowed.">
-            <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true }" :fallback="userOptions" />
+            <AppRecordLookup v-model="form.user" endpoint="/api/user-directory" :fields="['username','email']" :label="item => item.username + ' (' + item.email + ')'" :value="item => String(item.id)" :query="{ 'filters[confirmed][$eq]': true, roleTypes: TENANT_ROLE_TYPES.join(',') }" :fallback="userOptions" />
           </UFormField>
 
           <UFormField label="Property space" required>

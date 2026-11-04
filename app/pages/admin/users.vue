@@ -42,11 +42,12 @@ const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordSearch = ref('')
-const recordsPage = useRecordPage(["username","email","role.name"], {  }, recordSearch)
+const recordsPage = useRecordPage([], {  }, recordSearch)
+const directoryQuery = computed(() => ({ ...recordsPage.query.value, ...(recordSearch.value.trim() ? { term: recordSearch.value.trim() } : {}) }))
 const { data: responseData, status, error, refresh } = await useFetch<{ data: DirectoryUser[]; meta: any }>('/api/user-directory', {
   baseURL,
   headers,
-  query: recordsPage.query
+  query: directoryQuery
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
@@ -314,6 +315,7 @@ const filteredUsers = computed(() => {
 
             <USelect
               v-if="auth.isAdmin.value"
+              size="sm"
               :aria-label="`Role for ${user.username}`"
               :model-value="user.role?.type"
               :items="ROLE_OPTIONS"

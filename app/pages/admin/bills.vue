@@ -510,8 +510,10 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
       icon: 'i-lucide-check-circle-2'
     })
     await refresh()
+    return true
   } catch (err) {
     toast.add({ title: 'Unable to update bill', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    return false
   } finally {
     workflowBusy.value = null
   }
@@ -630,8 +632,7 @@ const verifyBill = (bill: Bill) => {
 
 const confirmVerify = async () => {
   if (!verifyTarget.value) return
-  await setBillStatus(verifyTarget.value, 'Verified')
-  verifyOpen.value = false
+  if (await setBillStatus(verifyTarget.value, 'Verified')) verifyOpen.value = false
 }
 
 const rejectOpen = ref(false)
@@ -653,10 +654,11 @@ const confirmReject = async () => {
   rejectError.value = ''
   const target = rejectTarget.value
   try {
-    await setBillStatus(target, 'Rejected', {
+    const rejected = await setBillStatus(target, 'Rejected', {
       verificationNote: rejectNote.value?.trim() || null
     })
-    rejectOpen.value = false
+    if (rejected) rejectOpen.value = false
+    else rejectError.value = 'The receipt could not be rejected. Please try again.'
   } catch (err) {
     rejectError.value = getErrorMessage(err)
   } finally {

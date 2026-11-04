@@ -151,15 +151,10 @@ const statusOptions = [
           <h2 class="text-lg font-semibold text-highlighted">General</h2>
           <p class="text-sm text-muted">Identity and status shown across the platform.</p>
         </template>
-        <div class="grid gap-6 sm:grid-cols-2">
-          <UFormField label="System name">
-            <UInput v-model="form.systemName" type="text" autocomplete="off" />
-          </UFormField>
-          <UFormField label="System status">
-            <USelect v-model="form.systemStatus" :items="statusOptions" />
-          </UFormField>
-        </div>
-        <UFormField class="mt-4" label="Maintenance banner (shown to all users while in maintenance mode)">
+        <UFormField label="System status" description="Maintenance and Degraded show a notice at the top of every page.">
+          <USelect v-model="form.systemStatus" :items="statusOptions" class="w-full sm:w-64" />
+        </UFormField>
+        <UFormField class="mt-4" label="Notice message" description="Optional. Leave blank to use the standard message for the status.">
           <UTextarea v-model="form.maintenanceBanner" :rows="2" />
         </UFormField>
       </UCard>

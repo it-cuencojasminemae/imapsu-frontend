@@ -87,6 +87,12 @@ const renewalColor = (status: RenewalIntent['status']) => {
   }
 }
 
+// The tenant's latest renewal decision, so an approval or rejection does not vanish from view.
+const decidedRenewalFor = (tenancy: Tenancy) =>
+  renewals.value
+    .filter(renewal => renewal.tenancy?.documentId === (tenancy.documentId ?? tenancy.id) && renewal.status !== 'Pending')
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())[0]
+
 const pendingRenewalFor = (tenancy: Tenancy) =>
   renewals.value.find(renewal => renewal.tenancy?.documentId === (tenancy.documentId ?? tenancy.id) && renewal.status === 'Pending')
 
@@ -233,10 +239,10 @@ const submitPhotos = async (tenancy: Tenancy) => {
     }
     const ids = [...list.filter(photo => photo.serverId != null).map(photo => photo.serverId as number), ...uploadedIds]
     await savePhotos(tenancy, ids)
+    await refresh()
     delete photoDrafts.value[key]
     delete photoDirty.value[key]
     toast.add({ title: 'Photos saved', description: 'Your space photos were saved and now appear on the campus map.', color: 'success', icon: 'i-lucide-check-circle-2' })
-    await refresh()
   } catch (err) {
     photoErrorFor.value[key] = getErrorMessage(err)
   } finally {
@@ -337,7 +343,13 @@ const discardPhotos = (tenancy: Tenancy) => {
             <UBadge color="secondary" variant="subtle">Renewal pending</UBadge>
           </template>
           <template v-else>
-            <p class="text-sm text-muted">Planning to stay? File your renewal before the contract ends.</p>
+            <div class="min-w-0">
+              <p class="text-sm text-muted">Planning to stay? File your renewal before the contract ends.</p>
+              <p v-if="decidedRenewalFor(tenancy)" class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-toned">
+                Your last renewal request:
+                <UBadge :color="renewalColor(decidedRenewalFor(tenancy)!.status)" variant="subtle">{{ decidedRenewalFor(tenancy)!.status }}</UBadge>
+              </p>
+            </div>
             <UButton label="Renew contract" icon="i-lucide-file-signature" size="sm" @click="openRenew(tenancy)" />
           </template>
         </div>

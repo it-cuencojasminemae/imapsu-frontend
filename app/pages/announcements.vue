@@ -43,7 +43,7 @@ const acksLoaded = ref(false)
 const acking = ref<string | null>(null)
 
 const loadAcks = async () => {
-  if (!auth.isAuthenticated.value) return
+  if (!auth.isAuthenticated.value || auth.isAdmin.value) return
   try {
     const response = await $api<{ data: Acknowledgment[] }>('/api/announcement-acknowledgments', {
       query: { 'populate[announcement]': true, 'pagination[pageSize]': 100, ...Object.fromEntries(announcements.value.map(item => item.documentId).filter(Boolean).map((id,index) => [`filters[announcement][documentId][$in][${index}]`, id])) }

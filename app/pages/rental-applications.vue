@@ -408,7 +408,7 @@ const appearanceDayPassed = (value?: string) => {
               </div>
             </div>
 
-            <p v-if="item.status === 'Declined' && item.appearanceDate && !item.appearanceConfirmed" class="mt-3 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-clock-3" class="size-3.5" />Declined because no office visit was recorded on {{ formatAppearance(item.appearanceDate) }}.</p>
+            <p v-if="item.status === 'Declined' && item.appearanceDate && !item.appearanceConfirmed" class="mt-3 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-clock-3" class="size-3.5" />Declined. No office visit was recorded for {{ formatAppearance(item.appearanceDate) }}.</p>
 
             <p v-if="item.message" class="mt-4 text-sm leading-relaxed text-toned">{{ item.message }}</p>
 

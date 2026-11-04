@@ -103,7 +103,7 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-attention-value { font-size: 1.75rem; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--ui-text-highlighted); }
 .imapsu-record-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8125rem; }
 .imapsu-record-table th { padding: 0.875rem 1rem; background: var(--ui-bg-muted); color: var(--ui-text-muted); font-weight: 550; white-space: nowrap; }
-.imapsu-record-table td { padding: 0.875rem 1rem; vertical-align: top; border-top: 1px solid var(--ui-border); overflow-wrap: anywhere; }
+.imapsu-record-table td { padding: 0.875rem 1rem; vertical-align: top; border-top: 1px solid var(--ui-border); overflow-wrap: break-word; }
 .imapsu-record-table tbody tr:hover { background: var(--ui-bg-muted); }
 .imapsu-record-table td:last-child:not([colspan]) { width: 1%; white-space: nowrap; }
 .imapsu-record-table td .imapsu-record-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }

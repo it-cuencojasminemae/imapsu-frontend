@@ -282,7 +282,11 @@ const saveNoShow = async () => {
 // An approved applicant who attended their office visit can be given the
 // stall in one step: the server creates the active tenancy, switches a new
 // tenant's account to current tenant and closes the other open applications.
+// An application keeps its link to the tenancy it became, even after that tenancy ends.
 const isLeased = (item: Item) => item.kind === 'application' && !!item.tenancy
+const leaseActive = (item: Item) => isLeased(item) && (item as ApplicationItem).tenancy?.status === 'Active'
+const statusLabel = (item: Item) => leaseActive(item) ? 'Lease active' : isLeased(item) ? 'Lease ended' : item.status
+const statusBadgeColor = (item: Item) => isLeased(item) && !leaseActive(item) ? 'neutral' as const : statusColor(item.status)
 const canFinalize = (item: Item) => item.kind === 'application' && item.status === 'Approved' && !!item.appearanceConfirmed && !item.tenancy
 
 const finalizeOpen = ref(false)
@@ -404,7 +408,7 @@ const recordColumns = [
  { key: 'applicant', label: 'Applicant', value: (item: Item) => item.user?.username || '—' },
  { key: 'kind', label: 'Type', value: (item: Item) => item.kind === 'renewal' ? 'Renewal' : 'Application' },
  { key: 'date', label: 'Submitted', value: (item: Item) => formatDate(item.createdAt) },
- { key: 'status', label: 'Status', value: (item: Item) => isLeased(item) ? 'Lease active' : item.status, badge: true, color: (item: Item) => statusColor(item.status) }
+ { key: 'status', label: 'Status', value: (item: Item) => statusLabel(item), badge: true, color: (item: Item) => statusBadgeColor(item) }
 ]
 </script>
 
@@ -458,7 +462,7 @@ const recordColumns = [
                 <span>Submitted {{ formatDate(item.createdAt) }}</span>
               </p>
             </div>
-            <UBadge :color="statusColor(item.status)" variant="subtle">{{ isLeased(item) ? 'Lease active' : item.status }}</UBadge>
+            <UBadge :color="statusBadgeColor(item)" variant="subtle">{{ statusLabel(item) }}</UBadge>
           </div>
 
           <div class="mt-4 border-t border-default pt-4">
@@ -507,7 +511,8 @@ const recordColumns = [
             <p v-if="!item.appearanceConfirmed" class="mt-3 text-sm text-muted">Mark the applicant as attended only once they are at the office. If no visit is recorded by the end of {{ formatAppearance(item.appearanceDate) }}, the application is declined automatically.<template v-if="!visitDayStarted(item.appearanceDate)"> Mark as no-show becomes available on that day.</template></p>
             <p v-if="item.kind === 'application' && item.tenancy" class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-toned">
               <UIcon name="i-lucide-key-round" class="size-4 text-success" />
-              Lease active since {{ formatDate(item.tenancy.startDate) }}<template v-if="item.tenancy.endDate">, until {{ formatDate(item.tenancy.endDate) }}</template>.
+              <template v-if="leaseActive(item)">Lease active since {{ formatDate(item.tenancy.startDate) }}<template v-if="item.tenancy.endDate">, until {{ formatDate(item.tenancy.endDate) }}</template>.</template>
+              <template v-else>This lease has ended.</template>
               <NuxtLink to="/admin/tenancies" class="font-medium text-primary hover:underline">Manage in Tenancies</NuxtLink>
             </p>
             <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">The applicant attended their office visit. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall<template v-if="item.kind === 'application' && item.applicantRole === 'current-tenant'"> alongside the ones they already lease</template><template v-else> and switch their account to current tenant</template>.</p>
@@ -528,6 +533,7 @@ const recordColumns = [
             <span class="text-sm font-medium text-highlighted">Update status:</span>
             <USelect
               :model-value="item.status"
+              size="sm"
               :items="statusOptions(item)"
               class="w-44"
               :disabled="updating === (item.documentId ?? item.id) || isLeased(item)"

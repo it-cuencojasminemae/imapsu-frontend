@@ -80,9 +80,11 @@ const tenancyLabel = (reading: MeterReading) => {
   return 'Tenancy'
 }
 
+const todayInManila = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+
 const form = reactive({
   tenancy: '',
-  readingDate: new Date().toISOString().slice(0, 10),
+  readingDate: todayInManila(),
   electricMeterReading: '',
   waterMeterReading: '',
   notes: ''
@@ -111,7 +113,7 @@ const resetPhotos = () => {
 const clearForm = () => {
   Object.assign(form, {
     tenancy: '',
-    readingDate: new Date().toISOString().slice(0, 10),
+    readingDate: todayInManila(),
     electricMeterReading: '',
     waterMeterReading: '',
     notes: ''
@@ -122,7 +124,7 @@ const openEdit = (reading: MeterReading) => {
   editing.value = reading
   Object.assign(form, {
     tenancy: reading.tenancy?.documentId ?? '',
-    readingDate: reading.readingDate ?? new Date().toISOString().slice(0, 10),
+    readingDate: reading.readingDate ?? todayInManila(),
     electricMeterReading: reading.electricMeterReading != null ? String(reading.electricMeterReading) : '',
     waterMeterReading: reading.waterMeterReading != null ? String(reading.waterMeterReading) : '',
     notes: reading.notes ?? ''
@@ -242,8 +244,8 @@ const recordColumns = [
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
     </AppPageHeader>
 
-    <div class="grid items-start gap-6 lg:grid-cols-5">
-      <UCard class="lg:col-span-3">
+    <div class="grid items-start gap-6">
+      <UCard>
         <template #header>
           <h2 class="text-lg font-semibold text-highlighted">{{ editing ? 'Edit reading' : 'Record reading' }}</h2>
         </template>
@@ -304,7 +306,7 @@ const recordColumns = [
         </form>
       </UCard>
 
-      <div class="lg:col-span-2">
+      <div>
         <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
     <AppLoadingState v-if="isInitialLoading" :count="4" height="h-24" />
 
