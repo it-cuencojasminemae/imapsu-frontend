@@ -136,7 +136,6 @@ const statusOptions = [
         </p></template>
       <template #actions><div class="flex items-center gap-2">
         <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" />
-        <UButton data-prominent="true" label="Save changes" icon="i-lucide-save" :loading="saving" @click="save" />
       </div></template>
     </AppPageHeader>
 
@@ -149,7 +148,7 @@ const statusOptions = [
       <UCard>
         <template #header>
           <h2 class="text-lg font-semibold text-highlighted">General</h2>
-          <p class="text-sm text-muted">Identity and status shown across the platform.</p>
+          <p class="text-sm text-muted">Status shown across the platform.</p>
         </template>
         <UFormField label="System status" description="Maintenance and Degraded show a notice at the top of every page.">
           <USelect v-model="form.systemStatus" :items="statusOptions" class="w-full sm:w-64" />

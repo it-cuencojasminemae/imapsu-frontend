@@ -59,6 +59,8 @@ const { data: responseData, status, error, refresh } = await useFetch<AuditListR
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
+// Entries recorded before sign-ins carried a description. Audit records are never edited, so the wording is supplied here.
+const describeEntry = (entry: AuditEntry) => entry.description || ({ 'login-success': 'Successful sign-in', 'mfa-login': 'Verified the authenticator code at sign-in' } as Record<string, string>)[entry.action] || '—'
 const entries = computed(() => data.value?.data ?? [])
 const total = computed(() => data.value?.meta?.pagination?.total ?? entries.value.length)
 
@@ -90,7 +92,7 @@ const formatDate = (value?: string) => value
   : ''
 const columns = [
   { key: 'action', label: 'Action', value: (entry: AuditEntry) => actionLabel(entry.action), badge: true, color: (entry: AuditEntry) => actionColor(entry.action) },
-  { key: 'description', label: 'Description', value: (entry: AuditEntry) => entry.description || '—' },
+  { key: 'description', label: 'Description', value: describeEntry },
   { key: 'entity', label: 'Entity', value: (entry: AuditEntry) => entry.entityLabel || entry.entityType || '—' },
   { key: 'actor', label: 'Actor', value: (entry: AuditEntry) => entry.actorUsername || 'system' },
   { key: 'role', label: 'Role', value: (entry: AuditEntry) => entry.actorRole || '—' },
@@ -137,7 +139,7 @@ const columns = [
         <template #details="{ item: entry }"><article class="space-y-3 border-b border-default px-5 py-4">
           <UBadge :color="actionColor(entry.action)" variant="subtle" class="capitalize">{{ actionLabel(entry.action) }}</UBadge>
           <div class="min-w-0 flex-1">
-            <p class="text-sm text-highlighted">{{ entry.description || '—' }}</p>
+            <p class="text-sm text-highlighted">{{ describeEntry(entry) }}</p>
             <p class="mt-0.5 text-xs text-muted">
               <span v-if="entry.entityLabel">{{ entry.entityLabel }}</span>
               <span v-if="entry.entityType" class="text-muted/70"> · {{ entry.entityType }}</span>
