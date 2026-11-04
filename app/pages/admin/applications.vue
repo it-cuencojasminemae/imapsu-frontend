@@ -37,7 +37,7 @@ type RenewalIntent = {
   tenancy?: { documentId?: string; propertySpace?: { name?: string; propertyCode?: string; building?: string } | null } | null
 }
 
-type ApplicationItem = { kind: 'application'; status: RentalApplication['status']; propertySpace?: RentalApplication['propertySpace']; letterOfIntent?: RentalApplication['letterOfIntent']; dtiDocuments?: RentalApplication['dtiDocuments']; birDocuments?: RentalApplication['birDocuments']; businessPermits?: RentalApplication['businessPermits']; productsServices?: RentalApplication['productsServices']; appearanceDate?: RentalApplication['appearanceDate']; appearanceConfirmed?: RentalApplication['appearanceConfirmed']; evaluation?: RentalApplication['evaluation']; recommendation?: RentalApplication['recommendation']; tenancy?: RentalApplication['tenancy'] }
+type ApplicationItem = { kind: 'application'; status: RentalApplication['status']; propertySpace?: RentalApplication['propertySpace']; letterOfIntent?: RentalApplication['letterOfIntent']; dtiDocuments?: RentalApplication['dtiDocuments']; birDocuments?: RentalApplication['birDocuments']; businessPermits?: RentalApplication['businessPermits']; productsServices?: RentalApplication['productsServices']; appearanceDate?: RentalApplication['appearanceDate']; appearanceConfirmed?: RentalApplication['appearanceConfirmed']; evaluation?: RentalApplication['evaluation']; recommendation?: RentalApplication['recommendation']; tenancy?: RentalApplication['tenancy']; applicantRole?: string | null }
   & Pick<RentalApplication, 'id' | 'documentId' | 'message' | 'createdAt' | 'user'>
 type RenewalItem = { kind: 'renewal'; status: RenewalIntent['status']; letterOfRenewal?: RenewalIntent['letterOfRenewal']; tenancy?: RenewalIntent['tenancy'] }
   & Pick<RenewalIntent, 'id' | 'documentId' | 'message' | 'createdAt' | 'user'>
@@ -280,8 +280,8 @@ const saveNoShow = async () => {
 }
 
 // An approved applicant who attended their office visit can be given the
-// stall in one step: the server creates the active tenancy, switches the
-// account to current tenant and closes the other open applications.
+// stall in one step: the server creates the active tenancy, switches a new
+// tenant's account to current tenant and closes the other open applications.
 const isLeased = (item: Item) => item.kind === 'application' && !!item.tenancy
 const canFinalize = (item: Item) => item.kind === 'application' && item.status === 'Approved' && !!item.appearanceConfirmed && !item.tenancy
 
@@ -510,7 +510,7 @@ const recordColumns = [
               Lease active since {{ formatDate(item.tenancy.startDate) }}<template v-if="item.tenancy.endDate">, until {{ formatDate(item.tenancy.endDate) }}</template>.
               <NuxtLink to="/admin/tenancies" class="font-medium text-primary hover:underline">Manage in Tenancies</NuxtLink>
             </p>
-            <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">The applicant attended their office visit. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall and switch their account to current tenant.</p>
+            <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">The applicant attended their office visit. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall<template v-if="item.kind === 'application' && item.applicantRole === 'current-tenant'"> alongside the ones they already lease</template><template v-else> and switch their account to current tenant</template>.</p>
           </div>
 
           <div v-if="item.kind === 'application' && (item.evaluation || item.recommendation)" class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -601,7 +601,8 @@ const recordColumns = [
             <template #description>
               <ul class="mt-1 list-disc space-y-0.5 pl-4 text-sm">
                 <li>An active tenancy is created and the stall is marked Occupied on the map.</li>
-                <li>{{ finalizeTarget.user?.username ?? 'The applicant' }}'s account switches to current tenant. They are signed out and get a notification to sign in again.</li>
+                <li v-if="finalizeTarget.applicantRole === 'current-tenant'">{{ finalizeTarget.user?.username ?? 'The applicant' }} is already a current tenant, so this stall is added to their tenancies. They stay signed in and get a notification.</li>
+                <li v-else>{{ finalizeTarget.user?.username ?? 'The applicant' }}'s account switches to current tenant. They are signed out and get a notification to sign in again.</li>
                 <li>Their other open applications, and other applicants' open applications for this stall, are closed and those applicants are notified.</li>
               </ul>
             </template>

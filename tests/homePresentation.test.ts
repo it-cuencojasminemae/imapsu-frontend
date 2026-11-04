@@ -6,7 +6,7 @@ test('homepage actions respect the existing route role boundaries', () => {
   const restricted: Record<string, string[]> = {
     '/admin': ['oas', 'admin'], '/admin/applications': ['oas'], '/admin/bills': ['oas'], '/admin/maintenance': ['oas'],
     '/admin/users': ['admin'], '/admin/system-monitoring': ['admin'], '/admin/audit-logs': ['admin'],
-    '/rental-applications': ['aspiring-tenant'], '/bills': ['current-tenant', 'aspiring-tenant'], '/tenancy': ['current-tenant'], '/maintenance': ['current-tenant'],
+    '/rental-applications': ['aspiring-tenant', 'current-tenant'], '/bills': ['current-tenant', 'aspiring-tenant'], '/tenancy': ['current-tenant'], '/maintenance': ['current-tenant'],
     '/feedback': ['student', 'current-tenant']
   }
   for (const role of [null, 'student', 'aspiring-tenant', 'current-tenant', 'oas', 'admin']) {

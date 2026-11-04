@@ -40,7 +40,7 @@ const load = async () => {
   }
 }
 
-const targetFor = (type: NotificationItem['type']) => {
+const targetFor = ({ type, entityType }: NotificationItem) => {
   if (auth.isStaff.value) {
     switch (type) {
       case 'application':
@@ -58,9 +58,9 @@ const targetFor = (type: NotificationItem['type']) => {
   }
   switch (type) {
     case 'application':
-      // A finalized lease turns the applicant into a current tenant, whose
-      // applications live on as their tenancy.
-      return auth.isCurrentTenant.value ? '/tenancy' : '/rental-applications'
+      // Leases and renewals belong to a current tenant's tenancy page; updates
+      // on an application for another stall stay with their applications.
+      return auth.isCurrentTenant.value && entityType !== 'rental-application' ? '/tenancy' : '/rental-applications'
     case 'ticket':
     case 'follow-up':
       return '/maintenance'
@@ -111,7 +111,7 @@ const openNotification = async (notification: NotificationItem) => {
     await load()
   }
   open.value = false
-  navigateTo(targetFor(notification.type))
+  navigateTo(targetFor(notification))
 }
 
 const markAllRead = async () => {

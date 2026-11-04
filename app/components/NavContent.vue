@@ -57,6 +57,7 @@ const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
       label: 'Campus',
       links: [
         { label: 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' },
+        { label: 'Rental applications', icon: 'i-lucide-clipboard-list', to: '/rental-applications' },
         { label: 'Student feedback', icon: 'i-lucide-message-square-text', to: '/feedback' }
       ]
     })

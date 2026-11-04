@@ -3,7 +3,7 @@ import { uploadInBatches } from '~/utils/uploadFile'
 
 definePageMeta({
   middleware: ['auth', 'role'],
-  roles: ['aspiring-tenant']
+  roles: ['aspiring-tenant', 'current-tenant']
 })
 
 type MediaDoc = { id: number; url?: string; name?: string }
@@ -357,7 +357,7 @@ const appearanceDayPassed = (value?: string) => {
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Aspiring tenant</template>
+      <template #eyebrow>{{ auth.isCurrentTenant.value ? 'Current tenant' : 'Aspiring tenant' }}</template>
       <template #title>Rental Applications</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Submit a rental application for a vacant space and track its review status. Applications follow the university's established approval process.</p></template>
       <template #actions><div class="flex items-center gap-2">
@@ -399,7 +399,8 @@ const appearanceDayPassed = (value?: string) => {
                 <div>
                   <p class="text-sm font-medium text-highlighted">{{ item.appearanceConfirmed ? `Visit recorded on ${formatAppearance(item.appearanceDate)}` : `Report to the OAS office on ${formatAppearance(item.appearanceDate)}` }}</p>
                   <p class="mt-0.5 text-xs text-muted">
-                    <template v-if="item.appearanceConfirmed">The OAS recorded your office visit and is finalizing your lease. You will be notified once it is active.</template>
+                    <template v-if="item.tenancy">The OAS finalized your lease for this stall.<NuxtLink v-if="auth.isCurrentTenant.value" to="/tenancy" class="ml-1 font-medium text-primary hover:underline">View my tenancy</NuxtLink></template>
+                    <template v-else-if="item.appearanceConfirmed">The OAS recorded your office visit and is finalizing your lease. You will be notified once it is active.</template>
                     <template v-else-if="appearanceDayPassed(item.appearanceDate)">The scheduled visit day has passed without a recorded visit. Please contact the OAS office.</template>
                     <template v-else>Bring a valid ID and the original copies of your documents. OAS staff will record your visit when you arrive. If you do not report on this day, your application will be declined automatically.</template>
                   </p>
