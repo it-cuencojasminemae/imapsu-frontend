@@ -219,7 +219,7 @@ const resendVerification = async () => {
     </div>
 
     <div ref="formCard" tabindex="-1" class="imapsu-auth-card imapsu-auth-card--open outline-none lg:block" :class="showMobileForm ? 'block' : 'hidden'">
-      <h2 class="hidden text-4xl font-bold tracking-tight text-white lg:block">Create your account</h2>
+      <h2 class="hidden text-4xl font-bold tracking-tight text-highlighted lg:block">Create your account</h2>
       <p class="text-base text-muted lg:mt-2">Fill in the information below to get started with iMapSU.</p>
 
       <form method="post" class="mt-6 space-y-4" @submit.prevent="handleRegister">

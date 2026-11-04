@@ -79,7 +79,7 @@ const resendVerification = async () => {
     <div class="imapsu-auth-card imapsu-auth-card--login">
       <form method="post" v-if="auth.mfaPending.value" class="space-y-5" @submit.prevent="submitMfa">
         <div>
-          <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold lg:text-white">Verify your sign-in</h2>
+          <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold">Verify your sign-in</h2>
           <p class="mt-1 text-sm text-muted lg:mt-2 lg:text-base">Enter your authenticator code or a single-use recovery code.</p>
         </div>
         <UAlert v-if="loginError" color="error" icon="i-lucide-triangle-alert" title="Unable to sign in" :description="loginError" />
@@ -93,7 +93,7 @@ const resendVerification = async () => {
       </form>
 
       <template v-else>
-        <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold lg:text-white">Sign in to your account</h2>
+        <h2 class="text-xl font-semibold tracking-tight text-highlighted lg:text-4xl lg:font-bold">Sign in to your account</h2>
         <p class="mt-1 text-sm text-muted lg:mt-2 lg:text-base">Access your university stall management account.</p>
 
         <UAlert v-if="needsVerification" color="warning" icon="i-lucide-mail-warning" variant="soft" title="Email not verified yet" class="mt-5">

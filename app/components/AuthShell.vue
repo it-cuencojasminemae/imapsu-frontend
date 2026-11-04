@@ -12,8 +12,7 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <!-- These screens are always dark, whatever theme the signed-in app uses. -->
-  <div class="imapsu-auth-page dark" :class="{ 'imapsu-auth-page--center': variant === 'center' }">
+  <div class="imapsu-auth-page" :class="{ 'imapsu-auth-page--center': variant === 'center' }">
     <template v-if="variant === 'center'">
       <picture>
         <source media="(orientation: landscape)" srcset="/landscape-version.jpg" />

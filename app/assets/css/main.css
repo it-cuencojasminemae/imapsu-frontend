@@ -108,20 +108,25 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-record-table td:last-child:not([colspan]) { width: 1%; white-space: nowrap; }
 .imapsu-record-table td .imapsu-record-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .imapsu-record-table td .imapsu-record-actions--compact { flex-wrap: nowrap; align-items: center; justify-content: flex-end; }
-/* Sign-in, sign-up and verification screens: dark in both themes, stacked below 1024px and split above it. */
-.imapsu-auth-page { --auth-reveal: 600ms; --auth-stagger: 100ms; --ui-bg: #1c1716; --ui-bg-elevated: #2a2321; --ui-border: #ffffff1f; --ui-border-accented: #ffffff38; --ui-text-dimmed: var(--color-stone-400); color-scheme: dark; display: flow-root; position: relative; isolation: isolate; min-height: 100svh; overflow-x: clip; background: radial-gradient(60rem 40rem at 0% 0%, #62221d80, transparent 70%), radial-gradient(50rem 36rem at 100% 100%, #62221d59, transparent 70%), #141011; color: var(--ui-text); }
-.imapsu-page-bg:has(.imapsu-auth-page) { background: #141011; }
+/* Sign-in, sign-up and verification screens: they follow the theme, stacked below 1024px and split above it. The brand panel and the pictures stay wine red in both, so their text stays white. */
+.imapsu-auth-page { --auth-reveal: 600ms; --auth-stagger: 100ms; --auth-tint: #0000000a; --auth-frame: var(--ui-bg); --auth-backdrop: radial-gradient(60rem 40rem at 0% 0%, #62221d14, transparent 70%), radial-gradient(50rem 36rem at 100% 100%, #62221d0f, transparent 70%), var(--app-page-background); display: flow-root; position: relative; isolation: isolate; min-height: 100svh; overflow-x: clip; background: var(--auth-backdrop); color: var(--ui-text); }
+/* The theme's lighter red is too faint for small links on white. */
+:root:not(.dark) .imapsu-auth-page { --ui-primary: var(--color-maroon-700); }
+.dark .imapsu-auth-page { --auth-tint: #ffffff0a; --auth-frame: #191413; --auth-backdrop: radial-gradient(60rem 40rem at 0% 0%, #62221d80, transparent 70%), radial-gradient(50rem 36rem at 100% 100%, #62221d59, transparent 70%), #141011; --ui-bg: #1c1716; --ui-bg-elevated: #2a2321; --ui-border: #ffffff1f; --ui-border-accented: #ffffff38; --ui-text-dimmed: var(--color-stone-400); color-scheme: dark; }
+.dark .imapsu-page-bg:has(.imapsu-auth-page) { background: #141011; }
 .imapsu-auth-page [data-prominent='true'] { background: var(--color-maroon-700); }
 .imapsu-auth-page [data-prominent='true']:hover:not(:disabled) { background: var(--color-maroon-600); }
 .imapsu-auth-rule { margin-block: 1.5rem; border: 0; border-top: 1px solid var(--ui-border); }
 .imapsu-auth-link { font-weight: 500; color: var(--ui-primary); }
 .imapsu-auth-link:hover { text-decoration: underline; }
 .imapsu-auth-brand { display: flex; align-items: center; gap: 0.875rem; }
-.imapsu-auth-brand-name { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; color: white; }
-.imapsu-auth-brand-tagline { font-size: 0.875rem; line-height: 1.35; color: var(--color-maroon-100); }
+.imapsu-auth-brand-name { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; color: var(--ui-text-highlighted); }
+.imapsu-auth-brand-tagline { font-size: 0.875rem; line-height: 1.35; color: var(--ui-text-muted); }
+.dark .imapsu-auth-brand-tagline, .imapsu-auth-panel .imapsu-auth-brand-tagline { color: var(--color-maroon-100); }
+.imapsu-auth-panel .imapsu-auth-brand-name { color: white; }
 /* Below 1024px one backdrop runs behind everything: the panel takes the spare height, so the form sits under it with no gap. */
 .imapsu-auth-split { display: flex; flex-direction: column; min-height: 100svh; background: linear-gradient(135deg, #680f24, #3f0618 70%); }
-.imapsu-auth-panel { position: relative; isolation: isolate; display: flex; flex: 1; flex-direction: column; overflow: hidden; padding: 2rem 1.25rem 1.25rem; }
+.imapsu-auth-panel { --ui-border: #ffffff1f; position: relative; isolation: isolate; display: flex; flex: 1; flex-direction: column; overflow: hidden; padding: 2rem 1.25rem 1.25rem; }
 .imapsu-auth-panel > :not(.imapsu-auth-panel-art) { position: relative; z-index: 1; }
 .imapsu-auth-panel-rule { display: none; }
 .imapsu-auth-panel-heading { margin-top: 1.5rem; max-width: 26rem; font-size: clamp(1.75rem, 2.8vw, 2.25rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; color: white; }
@@ -141,10 +146,10 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-auth-center { display: flex; align-items: center; justify-content: center; min-height: 100svh; padding: 1.5rem 1rem; }
 .imapsu-auth-center-card { width: 100%; max-width: 32rem; border: 1px solid var(--ui-border-accented); border-radius: 1.5rem; background: var(--ui-bg); padding: 1.75rem 1.25rem; box-shadow: 0 30px 80px #380f0c80; animation: imapsu-auth-rise var(--auth-reveal) var(--app-ease) var(--auth-stagger) backwards; }
 .imapsu-auth-center-card.is-wide { max-width: 44rem; }
-.imapsu-auth-center-heading { font-size: clamp(1.625rem, 4vw, 2.25rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; color: white; }
-.imapsu-auth-status { display: flex; align-items: flex-start; gap: 1rem; border: 1px solid var(--ui-border); border-radius: 1rem; background: #ffffff0a; padding: 1rem; }
+.imapsu-auth-center-heading { font-size: clamp(1.625rem, 4vw, 2.25rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; color: var(--ui-text-highlighted); }
+.imapsu-auth-status { display: flex; align-items: flex-start; gap: 1rem; border: 1px solid var(--ui-border); border-radius: 1rem; background: var(--auth-tint); padding: 1rem; }
 .imapsu-auth-status-icon { display: grid; place-items: center; flex-shrink: 0; width: 3rem; height: 3rem; border-radius: 0.75rem; background: var(--color-maroon-800); color: white; }
-.imapsu-auth-status-email { margin-top: 0.125rem; font-size: 1.0625rem; font-weight: 650; line-height: 1.35; color: white; overflow-wrap: anywhere; }
+.imapsu-auth-status-email { margin-top: 0.125rem; font-size: 1.0625rem; font-weight: 650; line-height: 1.35; color: var(--ui-text-highlighted); overflow-wrap: anywhere; }
 .imapsu-auth-status--success { border-color: #4ade8040; }
 .imapsu-auth-status--success .imapsu-auth-status-icon { background: var(--color-green-800); }
 .imapsu-auth-status--warning { border-color: #fbbf2440; }
@@ -170,7 +175,7 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 @media (min-width: 1024px) {
   /* Login and register share one frame size, centred on the page; a long form can still grow it. */
   .imapsu-auth-page:has(> .imapsu-auth-split) { display: flex; padding-block: 1rem; }
-  .imapsu-auth-split { display: grid; grid-template-columns: minmax(0, 36fr) minmax(0, 64fr); width: min(78rem, 100% - 3rem); min-height: 46rem; margin: auto; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 1.5rem; background: #191413; }
+  .imapsu-auth-split { display: grid; grid-template-columns: minmax(0, 36fr) minmax(0, 64fr); width: min(78rem, 100% - 3rem); min-height: 46rem; margin: auto; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 1.5rem; background: var(--auth-frame); box-shadow: 0 30px 80px #380f0c1f; }
   .imapsu-auth-panel { padding: 2.5rem 2.75rem 0; background: linear-gradient(170deg, var(--color-maroon-800), var(--color-maroon-900) 60%, #4c1a16); }
   .imapsu-auth-panel-rule { display: block; margin-block: 1.75rem 0; }
   .imapsu-auth-features, .imapsu-auth-panel.is-compact .imapsu-auth-features { display: grid; gap: 0.5rem; margin-top: 1.25rem; text-shadow: 0 1px 8px #2a0410; }
