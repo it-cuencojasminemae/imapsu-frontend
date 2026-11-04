@@ -23,7 +23,7 @@ type RentalApplication = {
   appearanceConfirmed?: boolean
   user?: { id: number; username?: string; email?: string; avatar?: { url?: string } | null } | null
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; monthlyRent?: number | string | null } | null
-  tenancy?: { documentId?: string; startDate?: string; status?: string } | null
+  tenancy?: { documentId?: string; startDate?: string; endDate?: string; status?: string } | null
 }
 
 type RenewalIntent = {
@@ -294,13 +294,9 @@ const finalizeForm = reactive({
   productsServices: '',
   operatingDetails: '',
   monthlyRent: '' as string | number,
-  startDate: ''
+  startDate: '',
+  endDate: ''
 })
-
-const todayIso = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
 
 const openFinalize = (item: Item) => {
   if (item.kind !== 'application') return
@@ -309,7 +305,10 @@ const openFinalize = (item: Item) => {
   finalizeForm.productsServices = item.productsServices ?? ''
   finalizeForm.operatingDetails = ''
   finalizeForm.monthlyRent = item.propertySpace?.monthlyRent != null ? Number(item.propertySpace.monthlyRent) : ''
-  finalizeForm.startDate = todayIso()
+  // The contract is signed outside the system, so the dates are left for the
+  // OAS to copy from it rather than guessed.
+  finalizeForm.startDate = ''
+  finalizeForm.endDate = ''
   finalizeError.value = ''
   finalizeOpen.value = true
 }
@@ -328,7 +327,8 @@ const saveFinalize = async () => {
           productsServices: finalizeForm.productsServices.trim(),
           operatingDetails: finalizeForm.operatingDetails.trim(),
           monthlyRent: Number(finalizeForm.monthlyRent),
-          startDate: finalizeForm.startDate
+          startDate: finalizeForm.startDate,
+          endDate: finalizeForm.endDate
         }
       }
     })
@@ -507,7 +507,7 @@ const recordColumns = [
             <p v-if="!item.appearanceConfirmed" class="mt-3 text-sm text-muted">Mark the applicant as attended only once they are at the office. If no visit is recorded by the end of {{ formatAppearance(item.appearanceDate) }}, the application is declined automatically.<template v-if="!visitDayStarted(item.appearanceDate)"> Mark as no-show becomes available on that day.</template></p>
             <p v-if="item.kind === 'application' && item.tenancy" class="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-toned">
               <UIcon name="i-lucide-key-round" class="size-4 text-success" />
-              Lease active since {{ formatDate(item.tenancy.startDate) }}.
+              Lease active since {{ formatDate(item.tenancy.startDate) }}<template v-if="item.tenancy.endDate">, until {{ formatDate(item.tenancy.endDate) }}</template>.
               <NuxtLink to="/admin/tenancies" class="font-medium text-primary hover:underline">Manage in Tenancies</NuxtLink>
             </p>
             <p v-else-if="canFinalize(item)" class="mt-3 text-sm text-muted">The applicant attended their office visit. Finalize the lease to give {{ item.user?.username ?? 'the applicant' }} the stall and switch their account to current tenant.</p>
@@ -586,12 +586,15 @@ const recordColumns = [
           <UFormField label="Operating hours">
             <UInput v-model="finalizeForm.operatingDetails" placeholder="e.g. Mon–Sat 7:00 AM–6:00 PM" :ui="{ root: 'w-full' }" />
           </UFormField>
+          <UFormField label="Monthly rent (₱)" description="From the stall's listed rent." required>
+            <UInput v-model="finalizeForm.monthlyRent" type="number" min="1" step="0.01" required :ui="{ root: 'w-full' }" />
+          </UFormField>
           <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Monthly rent (₱)" description="From the stall's listed rent." required>
-              <UInput v-model="finalizeForm.monthlyRent" type="number" min="1" step="0.01" required :ui="{ root: 'w-full' }" />
-            </UFormField>
-            <UFormField label="Start date" required>
+            <UFormField label="Contract start date" description="As written on the signed contract." required>
               <UInput v-model="finalizeForm.startDate" type="date" required :ui="{ root: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Contract end date" description="As written on the signed contract." required>
+              <UInput v-model="finalizeForm.endDate" type="date" required :min="finalizeForm.startDate || undefined" :ui="{ root: 'w-full' }" />
             </UFormField>
           </div>
           <UAlert color="info" variant="subtle" icon="i-lucide-info" title="What happens next">
