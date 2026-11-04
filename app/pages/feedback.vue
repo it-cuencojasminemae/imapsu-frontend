@@ -48,6 +48,18 @@ const { data: propertyData } = await useCompleteFetch<ListResponse<PropertySpace
   }
 })
 
+// One rating per stall for its current tenant, so the form says so before the
+// student fills it in. Fetched in full because the list above is paginated.
+const ratedUrl = computed(() => (auth.isStudent.value ? '/api/feedbacks' : null))
+const { data: allFeedback, refresh: refreshRated } = await useCompleteFetch<ListResponse<Feedback & { forCurrentTenant?: boolean; ratedByMe?: boolean }>>(ratedUrl, {
+  baseURL,
+  headers,
+  query: { 'populate[propertySpace]': true }
+})
+const ratedStalls = computed(() => new Set((allFeedback.value?.data ?? [])
+  .filter(item => item.ratedByMe && item.forCurrentTenant)
+  .map(item => item.propertySpace?.documentId)))
+
 const feedbacks = computed(() => data.value?.data ?? [])
 const properties = computed(() => propertyData.value?.data ?? [])
 // The business name is what students see on the map and the campus spaces page.
@@ -69,6 +81,7 @@ const category = ref<string>()
 const comment = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
+const alreadyRated = computed(() => !!selectedProperty.value && ratedStalls.value.has(selectedProperty.value))
 
 const toggleCategory = (value: string) => {
   category.value = category.value === value ? undefined : value
@@ -101,9 +114,10 @@ const submit = async () => {
     category.value = undefined
     comment.value = ''
     toast.add({ title: 'Feedback submitted', color: 'success', icon: 'i-lucide-check-circle-2' })
-    await refresh()
+    await Promise.all([refresh(), refreshRated()])
   } catch (err) {
     errorMessage.value = getErrorMessage(err)
+    await refreshRated()
   } finally {
     submitting.value = false
   }
@@ -133,6 +147,8 @@ const formatDate = (value?: string) => value
           <UFormField label="Stall" name="propertySpace" required>
             <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" placeholder="Search stalls…" :fields="['name','businessName','propertyCode','building']" :label="item => stallName(item) + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
           </UFormField>
+
+          <UAlert v-if="alreadyRated" color="info" variant="subtle" icon="i-lucide-circle-check" title="You already rated this stall" description="Each student can rate a stall once. Choose another stall to leave more feedback." />
 
           <UFormField label="Rating" name="rating" required>
             <div class="flex items-center gap-1">
@@ -177,7 +193,7 @@ const formatDate = (value?: string) => value
 
           <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
 
-          <UButton data-prominent="true" type="submit" block :loading="submitting">Submit feedback</UButton>
+          <UButton data-prominent="true" type="submit" block :loading="submitting" :disabled="alreadyRated">Submit feedback</UButton>
         </form>
       </UCard>
 

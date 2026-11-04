@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { internalRedirect, landingPath, requiresAccountSetup, SECURITY_PATH } from '~/utils/accountNavigation'
+import { internalRedirect, landingPath, requiresAccountSetup, RESTRICTED_SIGN_IN, SECURITY_PATH } from '~/utils/accountNavigation'
 definePageMeta({ middleware: 'guest' })
 useHead({ title: 'Sign In | iMapSU' })
 
@@ -20,6 +20,7 @@ const destination = () => {
 }
 
 const sessionEnded = computed(() => route.query.reason === 'session-ended')
+const restricted = computed(() => route.query.reason === RESTRICTED_SIGN_IN && !!auth.user.value)
 const identifier = ref('')
 const password = ref('')
 const showPassword = ref(false)
@@ -109,6 +110,13 @@ const resendVerification = async () => {
         </UAlert>
 
         <UAlert v-if="sessionEnded && !loginError" color="info" icon="i-lucide-log-in" variant="soft" title="Please sign in again" description="Your session ended because your account changed, for example when your lease became active. Sign in to continue." class="mt-5" />
+
+        <UAlert v-if="restricted && !loginError" color="warning" icon="i-lucide-shield-alert" variant="soft" title="This page needs a different account" class="mt-5">
+          <template #description>
+            You are signed in as {{ auth.user.value?.username }}, which can't open this page. Sign in with an account that can, or
+            <NuxtLink :to="landingPath(auth.user.value)" class="font-medium underline">go back to your dashboard</NuxtLink>.
+          </template>
+        </UAlert>
 
         <form method="post" class="mt-5 space-y-5" @submit.prevent="handleLogin">
           <UAlert v-if="loginError" color="error" icon="i-lucide-triangle-alert" title="Unable to sign in" :description="loginError" />

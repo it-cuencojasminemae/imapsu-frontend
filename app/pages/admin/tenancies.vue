@@ -105,6 +105,24 @@ const form = reactive({
   operatingDetails: ''
 })
 
+// Same-format dates compare correctly as text.
+const dateError = computed(() => form.startDate && form.endDate && form.endDate <= form.startDate
+  ? 'The end date must be after the start date.'
+  : undefined)
+const startDateError = computed(() => form.startDate && form.startDate < EARLIEST_TENANCY_START
+  ? EARLIEST_TENANCY_START_MESSAGE
+  : undefined)
+
+// The stall this tenancy already holds isn't occupied by anyone else. Only an
+// active tenancy needs a free stall; a past one may be recorded on any stall.
+type StallChoice = { documentId?: string; space_status?: string }
+const holdsStall = (stall: StallChoice) => editing.value?.status === 'Active' && stall.documentId === editing.value.propertySpace?.documentId
+const stallBadge = (stall: StallChoice) => {
+  if (holdsStall(stall)) return { label: 'This tenancy', color: 'neutral' as const }
+  return stall.space_status === 'Vacant' ? { label: 'Available', color: 'success' as const } : { label: 'Occupied', color: 'error' as const }
+}
+const stallUnavailable = (stall: StallChoice) => form.status === 'Active' && stall.space_status !== 'Vacant' && !holdsStall(stall)
+
 const openCreate = () => {
   editing.value = null
   Object.assign(form, {
@@ -182,6 +200,10 @@ const save = async () => {
   }
   if (!form.propertySpace || !form.startDate) {
     formError.value = 'Please choose a property space and a start date.'
+    return
+  }
+  if (startDateError.value || dateError.value) {
+    formError.value = startDateError.value || dateError.value
     return
   }
   saving.value = true
@@ -357,16 +379,16 @@ const filteredTenancies = computed(() => {
           </UFormField>
 
           <UFormField label="Property space" required>
-            <AppRecordLookup v-model="form.propertySpace" endpoint="/api/properties" :fields="['name','propertyCode']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
+            <AppRecordLookup v-model="form.propertySpace" endpoint="/api/properties" :fields="['name','propertyCode']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" :badge="stallBadge" :is-disabled="stallUnavailable" />
             <UButton class="mt-2" label="Pick on map" icon="i-lucide-map-pin" color="neutral" variant="outline" size="sm" @click="openStallMap" />
           </UFormField>
 
           <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Start date" required>
-              <UInput required v-model="form.startDate" type="date" />
+            <UFormField label="Start date" required :error="startDateError">
+              <UInput required v-model="form.startDate" type="date" :min="EARLIEST_TENANCY_START" />
             </UFormField>
-            <UFormField label="End date">
-              <UInput v-model="form.endDate" type="date" />
+            <UFormField label="End date" :error="dateError">
+              <UInput v-model="form.endDate" type="date" :min="form.startDate || undefined" />
             </UFormField>
           </div>
 

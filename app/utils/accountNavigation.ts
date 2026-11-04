@@ -4,6 +4,8 @@ type Account = {
 } | null
 
 export const SECURITY_PATH = '/account?section=security'
+// Sign-in reason for a signed-in account that tried to open an admin page.
+export const RESTRICTED_SIGN_IN = 'restricted'
 
 export function requiresAccountSetup(user: Account, now = Date.now()): boolean {
   const security = user?.security

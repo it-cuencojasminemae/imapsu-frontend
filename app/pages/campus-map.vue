@@ -452,6 +452,7 @@ onBeforeUnmount(() => {
             icon="i-lucide-search"
             placeholder="Search buildings or businesses..."
             :disabled="!modelReady"
+            :maxlength="100"
             aria-label="Search campus buildings or businesses"
             class="w-full"
             autocomplete="off"
@@ -479,7 +480,7 @@ onBeforeUnmount(() => {
               <span v-if="!availableBuildingOrders.has(result.order)" class="block text-xs text-muted">Not linked to a building in this model</span>
             </button>
           </div>
-          <p v-else-if="searchOpen && searchQuery.trim().length >= 2" class="mt-1 text-xs text-muted">
+          <p v-else-if="searchOpen && searchQuery.trim().length >= 2" class="mt-1 line-clamp-2 text-xs text-muted [overflow-wrap:anywhere]">
             No buildings or businesses match “{{ searchQuery }}”.
           </p>
         </div>

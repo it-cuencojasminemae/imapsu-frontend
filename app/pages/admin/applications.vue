@@ -591,7 +591,7 @@ const recordColumns = [
           </UFormField>
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="Contract start date" description="As written on the signed contract." required>
-              <UInput v-model="finalizeForm.startDate" type="date" required :ui="{ root: 'w-full' }" />
+              <UInput v-model="finalizeForm.startDate" type="date" required :min="EARLIEST_TENANCY_START" :ui="{ root: 'w-full' }" />
             </UFormField>
             <UFormField label="Contract end date" description="As written on the signed contract." required>
               <UInput v-model="finalizeForm.endDate" type="date" required :min="finalizeForm.startDate || undefined" :ui="{ root: 'w-full' }" />

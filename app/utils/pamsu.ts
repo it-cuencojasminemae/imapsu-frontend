@@ -57,8 +57,12 @@ const MATCH_THRESHOLD = 0.45
  * Finds the pamsu building that a property-space building name most likely
  * refers to. Compares token overlap against both the full name and the short
  * name of every entry, so legacy spellings still line up with the map model.
+ * An exact name wins first: token scoring can't tell "CEA ANNEX A" from "CEA ANNEX B".
  */
 export function pamsuBuildingFor(buildingName: string): PamsuBuilding | null {
+  const exactName = (buildingName ?? '').trim().toLowerCase()
+  const exact = PAMSU_BUILDINGS.find((entry) => entry.name.toLowerCase() === exactName)
+  if (exact) return exact
   const propertyTokens = buildingTokens(buildingName)
   if (propertyTokens.length === 0) return null
   let best: PamsuBuilding | null = null

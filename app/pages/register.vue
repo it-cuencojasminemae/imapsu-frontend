@@ -65,16 +65,6 @@ const backToRegistration = () => {
 
 const panelFeatures = ['Explore campus stalls', 'Apply for rental spaces', 'Get announcements & updates']
 
-// Phones open on a short introduction; from 1024px up the form is always beside the panel.
-const showMobileForm = ref(false)
-const formCard = useTemplateRef<HTMLElement>('formCard')
-const openMobileForm = async () => {
-  showMobileForm.value = true
-  await nextTick()
-  window.scrollTo({ top: 0 })
-  formCard.value?.focus({ preventScroll: true })
-}
-
 const roleOptions = [
   { label: 'Student', value: 'student', description: 'View the map and submit feedback about tenants.' },
   { label: 'Aspiring Tenant', value: 'aspiring-tenant', description: 'Browse vacant spaces and apply to rent one.' }
@@ -208,17 +198,9 @@ const resendVerification = async () => {
     heading="Create your account"
     description="Join iMapSU to explore the campus map, find rentable spaces, and manage stall applications."
     :features="panelFeatures"
-    :compact="showMobileForm"
+    compact
   >
-    <div v-if="!showMobileForm" class="imapsu-auth-card lg:hidden">
-      <UButton data-prominent="true" block size="xl" @click="openMobileForm">Create account</UButton>
-      <p class="mt-4 text-center text-sm text-muted">
-        Already have an account?
-        <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
-      </p>
-    </div>
-
-    <div ref="formCard" tabindex="-1" class="imapsu-auth-card imapsu-auth-card--open outline-none lg:block" :class="showMobileForm ? 'block' : 'hidden'">
+    <div class="imapsu-auth-card imapsu-auth-card--open">
       <h2 class="hidden text-4xl font-bold tracking-tight text-highlighted lg:block">Create your account</h2>
       <p class="text-base text-muted lg:mt-2">Fill in the information below to get started with iMapSU.</p>
 
@@ -316,6 +298,12 @@ const resendVerification = async () => {
       <p class="mt-5 text-center text-sm text-muted">
         Already have an account?
         <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
+      </p>
+      <p class="mt-3 text-center text-sm">
+        <NuxtLink to="/campus-map" class="imapsu-auth-link inline-flex items-center gap-1.5">
+          <UIcon name="i-lucide-arrow-left" class="size-3.5" />
+          Back to campus map
+        </NuxtLink>
       </p>
     </div>
 

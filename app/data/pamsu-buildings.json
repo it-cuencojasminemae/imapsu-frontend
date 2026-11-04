@@ -151,18 +151,18 @@
  },
  {
   "order": 32,
-  "name": "CEA ANNEX A",
-  "shortname": "CEA ANNEX A"
- },
- {
-  "order": 33,
   "name": "CEA ANNEX B",
   "shortname": "CEA ANNEX B"
  },
  {
-  "order": 35,
-  "name": "ENGINEERING LABORATORY BUILDING 2",
-  "shortname": "CEA"
+  "order": 33,
+  "name": "CEA ANNEX A",
+  "shortname": "CEA ANNEX A"
+ },
+ {
+  "order": 34,
+  "name": "CEA LAB 1",
+  "shortname": "CEA LAB 1"
  },
  {
   "order": 36,

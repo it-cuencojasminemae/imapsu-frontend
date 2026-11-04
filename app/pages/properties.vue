@@ -27,7 +27,9 @@ type Feedback = {
   id: number | string
   documentId?: string
   forCurrentTenant?: boolean
+  ratedByMe?: boolean
   rating: number
+  category?: string
   comment?: string
   createdAt?: string
   propertySpace?: { documentId?: string } | null
@@ -112,7 +114,8 @@ const feedbacksForCurrentTenant = computed(() => {
 
 type Card = PropertySpace & {
   hasTenant: boolean
-  feedback: { count: number; avg: number; latest: Feedback } | null
+  ratedByMe: boolean
+  feedback: { count: number; avg: number; reviews: Feedback[] } | null
 }
 
 const toCard = (property: PropertySpace): Card => {
@@ -122,10 +125,10 @@ const toCard = (property: PropertySpace): Card => {
     ? {
         count: list.length,
         avg: list.reduce((sum, item) => sum + item.rating, 0) / list.length,
-        latest: list[0]
+        reviews: list
       }
     : null
-  return { ...property, hasTenant, feedback }
+  return { ...property, hasTenant, ratedByMe: !!list?.some(item => item.ratedByMe), feedback }
 }
 
 const focusedCard = computed<Card | null>(() => {
@@ -167,10 +170,27 @@ const detailsPhotoIndex = ref(0)
 const detailsCard = computed(() => cards.value.find(card => (card.documentId ?? card.id) === detailsId.value) ?? null)
 const detailsPhotos = computed(() => detailsCard.value ? photosForCard(detailsCard.value) : [])
 const detailsPhoto = computed(() => detailsPhotos.value[detailsPhotoIndex.value] ?? detailsPhotos.value[0] ?? null)
-const openDetails = (card: Card) => {
+// Reviews have a tab of their own so a popular stall's card and details stay
+// short; students see them in batches rather than one long list.
+const REVIEWS_PER_BATCH = 5
+const detailsTab = ref<'details' | 'reviews'>('details')
+const visibleReviewCount = ref(REVIEWS_PER_BATCH)
+const showReviewsTab = computed(() => auth.isStudent.value && !!detailsCard.value?.hasTenant)
+const detailsTabs = computed(() => [
+  { label: 'Details', value: 'details', icon: 'i-lucide-info' },
+  { label: `Reviews (${detailsCard.value?.feedback?.count ?? 0})`, value: 'reviews', icon: 'i-lucide-message-square-text' }
+])
+const detailsReviews = computed(() => detailsCard.value?.feedback?.reviews ?? [])
+const visibleReviews = computed(() => detailsReviews.value.slice(0, visibleReviewCount.value))
+const openDetails = (card: Card, tab: 'details' | 'reviews' = 'details') => {
   detailsPhotoIndex.value = 0
+  detailsTab.value = tab
+  visibleReviewCount.value = REVIEWS_PER_BATCH
   detailsId.value = card.documentId ?? card.id
 }
+const formatReviewDate = (value?: string) => value
+  ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  : ''
 
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshFeedback(), refreshSummary(), refreshTenants()])
@@ -236,9 +256,9 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
         v-for="card in cards"
         :id="`property-${card.documentId ?? card.id}`"
         :key="card.documentId ?? card.id"
-        class="scroll-mt-24"
+        class="flex scroll-mt-24 flex-col"
         :class="isFocused(card) && 'ring-2 ring-primary'"
-        :ui="{ header: 'p-5', body: 'p-5 pt-0' }"
+        :ui="{ header: 'p-5', body: 'flex flex-1 flex-col p-5 pt-0' }"
       >
         <template #header>
           <div class="flex items-start justify-between gap-3">
@@ -273,10 +293,11 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
           <div v-if="card.description"><dt class="mb-1 text-xs text-muted">Description</dt><dd class="line-clamp-2 text-toned">{{ card.description }}</dd></div>
         </dl>
 
-        <div v-if="auth.isStudent.value && card.hasTenant" class="mt-4 border-t pt-4">
-          <p class="mb-2 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-message-square-text" /> Student feedback</p>
-          <template v-if="card.feedback">
-            <div class="flex items-center gap-2">
+        <!-- Pinned to the bottom so ratings and buttons line up across a row of cards. -->
+        <div class="mt-auto space-y-4 pt-4">
+          <div v-if="auth.isStudent.value && card.hasTenant" class="border-t border-default pt-4">
+            <p class="mb-2 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-message-square-text" /> Student reviews</p>
+            <button v-if="card.feedback" type="button" class="flex items-center gap-2 rounded-md text-left hover:underline" :aria-label="`Read ${card.feedback.count} review${card.feedback.count === 1 ? '' : 's'}, rated ${card.feedback.avg.toFixed(1)} out of 5`" @click="openDetails(card, 'reviews')">
               <span class="flex items-center gap-0.5">
                 <UIcon
                   v-for="star in 5"
@@ -287,17 +308,17 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
                 />
               </span>
               <span class="text-sm font-semibold text-highlighted">{{ card.feedback.avg.toFixed(1) }}</span>
-              <span class="text-xs text-muted">({{ card.feedback.count }})</span>
-            </div>
-            <p v-if="card.feedback.latest.comment" class="mt-1.5 line-clamp-2 text-sm text-toned">{{ card.feedback.latest.comment }}</p>
-          </template>
-          <p v-else class="text-sm text-toned">No feedback yet for this stall.</p>
-          <UButton v-if="card.documentId" class="mt-3" size="sm" color="neutral" variant="outline" block :to="`/feedback?property=${card.documentId}`" label="Rate this stall" icon="i-lucide-star" />
-        </div>
+              <span class="text-xs text-muted">{{ card.feedback.count }} review{{ card.feedback.count === 1 ? '' : 's' }}</span>
+            </button>
+            <p v-else class="text-sm text-toned">No reviews yet for this stall.</p>
+          </div>
 
-        <div class="mt-4 flex flex-wrap gap-2">
-          <UButton class="min-w-32 flex-1" color="neutral" variant="outline" block label="View details" icon="i-lucide-eye" @click="openDetails(card)" />
-          <UButton v-if="auth.isAspiringTenant.value && card.space_status === 'Vacant' && card.documentId" class="min-w-32 flex-1" data-prominent="true" block :to="`/rental-applications?property=${card.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+          <div class="flex flex-wrap gap-2">
+            <UButton v-if="auth.isStudent.value && card.hasTenant && card.ratedByMe" class="min-w-32 flex-1 justify-center" color="neutral" variant="outline" disabled label="You rated this" icon="i-lucide-circle-check" />
+            <UButton v-else-if="auth.isStudent.value && card.hasTenant && card.documentId" class="min-w-32 flex-1 justify-center" color="neutral" variant="outline" :to="`/feedback?property=${card.documentId}`" label="Rate this stall" icon="i-lucide-star" />
+            <UButton class="min-w-32 flex-1 justify-center" color="neutral" variant="outline" label="View details" icon="i-lucide-eye" @click="openDetails(card)" />
+            <UButton v-if="(auth.isAspiringTenant.value || auth.isCurrentTenant.value) && card.space_status === 'Vacant' && card.documentId" class="min-w-32 flex-1 justify-center" data-prominent="true" :to="`/rental-applications?property=${card.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+          </div>
         </div>
       </UCard>
     </div>
@@ -313,6 +334,9 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
     >
       <template #body>
         <div v-if="detailsCard" class="space-y-5">
+          <UTabs v-if="showReviewsTab" v-model="detailsTab" :items="detailsTabs" :content="false" class="w-full" />
+
+          <template v-if="!showReviewsTab || detailsTab === 'details'">
           <div v-if="detailsPhoto">
             <img :src="detailsPhoto.url" :alt="detailsPhoto.name || cardTitle(detailsCard)" class="aspect-video w-full rounded-lg bg-elevated object-cover" />
             <div v-if="detailsPhotos.length > 1" class="mt-2 flex gap-2 overflow-x-auto pb-1">
@@ -352,11 +376,43 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.productsServices" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Products / services</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.productsServices }}</dd></div>
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.operatingDetails" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Operating details</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.operatingDetails }}</dd></div>
           </dl>
+          </template>
+
+          <template v-else>
+            <template v-if="detailsCard.feedback">
+              <div class="flex items-center gap-3 rounded-lg bg-elevated p-4">
+                <span class="text-3xl font-semibold text-highlighted">{{ detailsCard.feedback.avg.toFixed(1) }}</span>
+                <div>
+                  <span class="flex items-center gap-0.5">
+                    <UIcon v-for="star in 5" :key="star" name="i-lucide-star" class="size-4" :class="star <= Math.round(detailsCard.feedback.avg) ? 'text-secondary fill-current' : 'text-toned'" />
+                  </span>
+                  <p class="mt-1 text-xs text-muted">Based on {{ detailsCard.feedback.count }} student review{{ detailsCard.feedback.count === 1 ? '' : 's' }}</p>
+                </div>
+              </div>
+              <ul class="divide-y divide-default">
+                <li v-for="review in visibleReviews" :key="review.documentId ?? review.id" class="py-4 first:pt-0 last:pb-0">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="flex items-center gap-0.5" role="img" :aria-label="`${review.rating} out of 5 stars`">
+                      <UIcon v-for="star in 5" :key="star" name="i-lucide-star" class="size-3.5" :class="star <= review.rating ? 'text-secondary fill-current' : 'text-toned'" />
+                    </span>
+                    <span class="flex items-center gap-2">
+                      <UBadge v-if="review.category && review.category !== 'Other'" color="neutral" variant="subtle" size="sm">{{ review.category }}</UBadge>
+                      <span class="whitespace-nowrap text-xs text-muted">{{ formatReviewDate(review.createdAt) }}</span>
+                    </span>
+                  </div>
+                  <p class="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-toned">{{ review.comment || 'No comment left.' }}</p>
+                </li>
+              </ul>
+              <UButton v-if="visibleReviews.length < detailsReviews.length" color="neutral" variant="outline" block :label="`Show more (${detailsReviews.length - visibleReviews.length} left)`" icon="i-lucide-chevron-down" @click="visibleReviewCount += REVIEWS_PER_BATCH" />
+            </template>
+            <UEmpty v-else icon="i-lucide-message-square-text" title="No reviews yet" description="Be the first student to rate this stall." />
+          </template>
 
           <div class="flex flex-wrap justify-end gap-2">
             <UButton color="neutral" variant="ghost" label="Close" @click="detailsId = null" />
-            <UButton v-if="auth.isStudent.value && detailsCard.hasTenant && detailsCard.documentId" color="neutral" variant="outline" :to="`/feedback?property=${detailsCard.documentId}`" label="Rate this stall" icon="i-lucide-star" />
-            <UButton v-if="auth.isAspiringTenant.value && detailsCard.space_status === 'Vacant' && detailsCard.documentId" data-prominent="true" :to="`/rental-applications?property=${detailsCard.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+            <UButton v-if="auth.isStudent.value && detailsCard.hasTenant && detailsCard.ratedByMe" color="neutral" variant="outline" disabled label="You rated this" icon="i-lucide-circle-check" />
+            <UButton v-else-if="auth.isStudent.value && detailsCard.hasTenant && detailsCard.documentId" color="neutral" variant="outline" :to="`/feedback?property=${detailsCard.documentId}`" label="Rate this stall" icon="i-lucide-star" />
+            <UButton v-if="(auth.isAspiringTenant.value || auth.isCurrentTenant.value) && detailsCard.space_status === 'Vacant' && detailsCard.documentId" data-prominent="true" :to="`/rental-applications?property=${detailsCard.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
           </div>
         </div>
       </template>
