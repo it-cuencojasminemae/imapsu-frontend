@@ -276,7 +276,7 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
             </span>
             <div class="min-w-0">
               <p class="text-sm font-medium text-highlighted">{{ entry.entityLabel || entry.actorUsername || '—' }}</p>
-              <p class="mt-1 text-sm text-muted">{{ entry.description }}</p>
+              <p class="mt-1 text-sm text-muted">{{ entry.description || staffRoleLabel(entry.actorRole) }}</p>
             </div>
           </div>
           <time :datetime="entry.createdAt" class="text-xs text-muted">{{ formatDate(entry.createdAt) }}</time>

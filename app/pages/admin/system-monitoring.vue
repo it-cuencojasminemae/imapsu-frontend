@@ -234,7 +234,7 @@ watch(health, () => { checkedAt.value = new Date().toISOString() })
           <ul v-if="health?.logins?.recentFailed?.length" class="divide-y divide-default">
             <li v-for="entry in health?.logins?.recentFailed ?? []" :key="entry.id" class="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div class="min-w-0">
-                <p class="break-words text-sm font-medium text-highlighted">{{ entry.entityLabel || entry.actorUsername || '—' }}</p>
+                <p class="break-words text-sm font-medium text-highlighted">{{ entry.entityLabel || 'Account not recorded' }}</p>
                 <p class="break-words text-xs leading-relaxed text-muted">{{ entry.description }}</p>
               </div>
               <span class="shrink-0 text-xs text-muted">{{ formatDate(entry.createdAt) }}</span>
@@ -267,7 +267,7 @@ watch(health, () => { checkedAt.value = new Date().toISOString() })
             <li v-for="entry in health?.logins?.recentLogins ?? []" :key="entry.id" class="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div class="min-w-0">
                 <p class="break-words text-sm font-medium text-highlighted">{{ entry.entityLabel || entry.actorUsername || '—' }}</p>
-                <p class="break-words text-xs leading-relaxed text-muted">{{ entry.description }}</p>
+                <p class="break-words text-xs leading-relaxed text-muted">{{ entry.description || staffRoleLabel(entry.actorRole) }}</p>
               </div>
               <span class="shrink-0 text-xs text-muted">{{ formatDate(entry.createdAt) }}</span>
             </li>
