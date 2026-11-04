@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { MapProperty } from '~/types/map'
+
 definePageMeta({
   middleware: ['auth', 'role'],
   roles: ['oas']
@@ -44,7 +46,7 @@ const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useR
 const { data: userDataResponse, refresh: refreshUsers, status: userDataStatus, error: userDataError } = await useCompleteFetch<ListResponse<DirectoryUser>>('/api/user-directory', { baseURL, headers })
 const { data: userData } = useRequestPresentation(userDataResponse, userDataStatus)
 
-const { data: propertyData } = await useCompleteFetch<ListResponse<{ documentId: string; name: string; propertyCode: string; building: string }>>('/api/properties', {
+const { data: propertyData, refresh: refreshProperties } = await useCompleteFetch<ListResponse<MapProperty & { documentId: string }>>('/api/properties', {
   baseURL,
   headers,
   query: { 'pagination[pageSize]': 100 }
@@ -78,6 +80,13 @@ const formatCurrency = (amount?: number | string) => amount == null || amount ==
 
 const formOpen = ref(false)
 const editing = ref<Tenancy | null>(null)
+
+// Refetched on open so a stall leased since this page loaded shows as occupied.
+const stallMapOpen = ref(false)
+const openStallMap = () => {
+  stallMapOpen.value = true
+  refreshProperties()
+}
 const saving = ref(false)
 const formError = ref('')
 const form = reactive({
@@ -348,6 +357,7 @@ const filteredTenancies = computed(() => {
 
           <UFormField label="Property space" required>
             <AppRecordLookup v-model="form.propertySpace" endpoint="/api/properties" :fields="['name','propertyCode']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{}" :fallback="propertyOptions" />
+            <UButton class="mt-2" label="Pick on map" icon="i-lucide-map-pin" color="neutral" variant="outline" size="sm" @click="openStallMap" />
           </UFormField>
 
           <div class="grid gap-4 sm:grid-cols-2">
@@ -391,6 +401,14 @@ const filteredTenancies = computed(() => {
         </form>
       </template>
     </UModal>
+    <ClientOnly>
+      <StallSelectMap
+        v-model:open="stallMapOpen"
+        v-model="form.propertySpace"
+        :stalls="propertyData?.data ?? []"
+        :current-id="editing?.propertySpace?.documentId"
+      />
+    </ClientOnly>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
   </main>
 </template>
