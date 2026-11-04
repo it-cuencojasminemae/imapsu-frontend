@@ -17,7 +17,7 @@ export function homePresentation(role: string | null) {
   if (role === 'current-tenant') return {
     heading: 'Your Campus Tenancy', description: 'Review your tenancy details and bills, submit maintenance requests, and keep your account information up to date.',
     primary: { label: 'View My Bills', to: '/bills', icon: 'i-lucide-receipt' }, secondary: { label: 'My Account', to: '/account', icon: 'i-lucide-circle-user-round' },
-    services: [service('My Tenancy', 'View your rental space, contract details, and renewal information.', '/tenancy', 'key-round', 'View Tenancy'), service('Advance Billing and Receipts', 'Review advance billing notices and submit official receipts after paying through the University Cashier.', '/bills', 'receipt', 'View Bills'), service('Maintenance Requests', 'Report a maintenance concern and track its recorded status.', '/maintenance', 'wrench', 'View Requests'), announcements]
+    services: [service('My Tenancy', 'View your rental spaces, contract details, and renewal information.', '/tenancy', 'key-round', 'View Tenancy'), service('Advance Billing and Receipts', 'Review advance billing notices and submit official receipts after paying through the University Cashier.', '/bills', 'receipt', 'View Bills'), service('Maintenance Requests', 'Report a maintenance concern and track its recorded status.', '/maintenance', 'wrench', 'View Requests'), announcements]
   }
   if (role === 'aspiring-tenant') return {
     heading: 'Campus Stall Rentals', description: 'View listed campus stalls and property spaces, review rental requirements, and track your applications.',

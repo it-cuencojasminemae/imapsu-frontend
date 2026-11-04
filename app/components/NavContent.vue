@@ -46,7 +46,7 @@ const roleLinks = computed<{ label: string; links: NavLink[] }[]>(() => {
 
   if (auth.isCurrentTenant.value) {
     sections.push({
-      label: 'My stall',
+      label: 'My stalls',
       links: [
         { label: 'My tenancy', icon: 'i-lucide-key-round', to: '/tenancy' },
         { label: 'Bills', icon: 'i-lucide-receipt', to: '/bills' },

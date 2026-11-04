@@ -60,15 +60,17 @@ const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/ap
   headers,
   query: {
     'populate[propertySpace]': true,
-    sort: 'createdAt:desc',
-    'pagination[pageSize]': 10
+    'filters[status][$eq]': 'Active',
+    sort: 'createdAt:desc'
   }
 })
 
-const tenancies = computed(() => tenancyData.value?.data ?? [])
-const activeTenancy = computed(() => tenancies.value.find(tenancy => tenancy.status === 'Active') ?? tenancies.value[0])
-const rentedProperty = computed(() => activeTenancy.value?.propertySpace ?? null)
-const selectedProperty = computed(() => rentedProperty.value?.documentId)
+const rentedProperties = computed(() => (tenancyData.value?.data ?? []).flatMap(tenancy => tenancy.propertySpace?.documentId ? [tenancy.propertySpace] : []))
+const propertyOptions = computed(() => rentedProperties.value.map(property => ({ label: `${property.name} (${property.propertyCode})`, value: property.documentId as string })))
+// A tenant with several stalls has to choose one, so a ticket is never filed
+// against the wrong stall by default. With a single stall there is no choice.
+const pickedProperty = ref<string>()
+const selectedProperty = computed(() => rentedProperties.value.length === 1 ? rentedProperties.value[0]?.documentId : pickedProperty.value)
 
 const category = ref<string>('Plumbing')
 const priority = ref<'Low' | 'Normal' | 'High' | 'Critical'>('Normal')
@@ -85,7 +87,9 @@ const onImagesSelected = (event: Event) => {
 const submit = async () => {
   errorMessage.value = ''
   if (!selectedProperty.value) {
-    errorMessage.value = 'No active tenancy found for your account. Please contact the office.'
+    errorMessage.value = rentedProperties.value.length
+      ? 'Please choose the stall with the issue.'
+      : 'No active tenancy found for your account. Please contact the office.'
     return
   }
   if (!description.value.trim()) {
@@ -118,6 +122,7 @@ const submit = async () => {
         images: imageIds.length ? imageIds : undefined
       }
     })
+    pickedProperty.value = undefined
     category.value = 'Plumbing'
     priority.value = 'Normal'
     description.value = ''
@@ -227,7 +232,7 @@ const submitFollowUp = async () => {
     <AppPageHeader>
       <template #eyebrow>Current tenant</template>
       <template #title>Maintenance</template>
-      <template #description><p class="mt-2 max-w-xl text-muted">Report a maintenance concern with your rental space and track its recorded status.</p></template>
+      <template #description><p class="mt-2 max-w-xl text-muted">Report a maintenance concern with your rental spaces and track its recorded status.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
     </AppPageHeader>
 
@@ -239,10 +244,11 @@ const submitFollowUp = async () => {
 
         <form class="space-y-5" @submit.prevent="submit">
           <UFormField label="Property" name="propertySpace" required>
-            <div v-if="rentedProperty" class="flex items-center gap-2 rounded-md border border-default bg-elevated px-3 py-2.5">
+            <USelect v-if="rentedProperties.length > 1" v-model="pickedProperty" :items="propertyOptions" placeholder="Choose a stall" class="w-full" :disabled="submitting" />
+            <div v-else-if="rentedProperties[0]" class="flex items-center gap-2 rounded-md border border-default bg-elevated px-3 py-2.5">
               <UIcon name="i-lucide-building-2" class="size-4 shrink-0 text-primary" />
-              <span class="truncate text-sm font-medium text-highlighted">{{ rentedProperty.name }}</span>
-              <span class="font-mono text-xs text-muted">({{ rentedProperty.propertyCode }})</span>
+              <span class="truncate text-sm font-medium text-highlighted">{{ rentedProperties[0].name }}</span>
+              <span class="font-mono text-xs text-muted">({{ rentedProperties[0].propertyCode }})</span>
             </div>
             <p v-else class="text-sm text-muted">No active tenancy found for your account.</p>
           </UFormField>

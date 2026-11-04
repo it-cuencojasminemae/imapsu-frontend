@@ -70,14 +70,16 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
       </template>
     </DashboardSection>
 
-    <DashboardSection v-if="auth.isCurrentTenant.value" title="Active tenancies" endpoint="/api/tenancies" resource="tenancies" to="/tenancy" :query="{ 'filters[status][$eq]': 'Active', 'pagination[pageSize]': 1, 'populate[propertySpace]': true, sort: 'createdAt:desc' }">
+    <DashboardSection v-if="auth.isCurrentTenant.value" title="Active tenancies" endpoint="/api/tenancies" resource="tenancies" to="/tenancy" :query="{ 'filters[status][$eq]': 'Active', 'pagination[pageSize]': 5, 'populate[propertySpace]': true, sort: 'createdAt:desc' }">
       <template #default="{ data }">
         <p class="text-2xl font-semibold text-highlighted tabular-nums">{{ data.meta?.pagination?.total ?? '—' }}</p>
         <p class="mt-1 text-sm text-muted">Active tenancy contracts</p>
-        <div v-if="data.data?.length" class="mt-4 rounded-lg bg-muted/40 p-3">
-          <p class="font-medium text-highlighted">{{ data.data[0].propertySpace?.name || 'Current tenancy' }}</p>
-          <p v-if="data.data[0].endDate" class="mt-1 text-sm text-muted">Ends {{ date(data.data[0].endDate + 'T00:00:00+08:00') }}</p>
-        </div>
+        <ul v-if="data.data?.length" class="mt-4 space-y-2">
+          <li v-for="item in data.data" :key="item.documentId ?? item.id" class="rounded-lg bg-muted/40 p-3">
+            <p class="font-medium text-highlighted">{{ item.propertySpace?.name || 'Current tenancy' }}</p>
+            <p v-if="item.endDate" class="mt-1 text-sm text-muted">Ends {{ date(item.endDate + 'T00:00:00+08:00') }}</p>
+          </li>
+        </ul>
         <p v-else class="mt-4 text-sm text-muted">No active tenancy is recorded for your account.</p>
       </template>
     </DashboardSection>

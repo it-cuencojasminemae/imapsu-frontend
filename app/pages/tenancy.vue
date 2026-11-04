@@ -14,6 +14,7 @@ type Tenancy = {
   startDate: string
   endDate?: string
   status: 'Active' | 'Ended' | 'Terminated'
+  monthlyRent?: number | string | null
   createdAt?: string
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; floor?: string; monthlyRent?: number | string; tenantPhotos?: UploadedFile[] | null } | null
 }
@@ -97,9 +98,13 @@ const formatDate = (value?: string) => value
   ? new Date(value + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
   : ''
 
-const formatCurrency = (amount?: number | string) => amount == null || amount === ''
+const formatCurrency = (amount?: number | string | null) => amount == null || amount === ''
   ? '—'
-  : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(Number(amount))
+  : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 }).format(Number(amount))
+
+// The rent agreed in the contract. A contract with no rent set falls back to
+// the stall's listed rent.
+const contractRent = (tenancy: Tenancy) => tenancy.monthlyRent ?? tenancy.propertySpace?.monthlyRent
 
 const renewOpen = ref(false)
 const renewTenancy = ref<Tenancy | null>(null)
@@ -252,7 +257,7 @@ const discardPhotos = (tenancy: Tenancy) => {
     <AppPageHeader>
       <template #eyebrow>Current tenant</template>
       <template #title>My Tenancy</template>
-      <template #description><p class="mt-2 max-w-xl text-muted">Review your assigned rental space, contract terms, and tenancy renewal information.</p></template>
+      <template #description><p class="mt-2 max-w-xl text-muted">Review your assigned rental spaces, contract terms, and tenancy renewal information.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refreshAll" /></template>
     </AppPageHeader>
 
@@ -279,7 +284,7 @@ const discardPhotos = (tenancy: Tenancy) => {
         <dl class="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
           <div><dt class="text-xs text-muted">Start date</dt><dd class="font-medium text-highlighted">{{ formatDate(tenancy.startDate) }}</dd></div>
           <div><dt class="text-xs text-muted">End date</dt><dd class="font-medium text-highlighted">{{ formatDate(tenancy.endDate) || '—' }}</dd></div>
-          <div class="col-span-2"><dt class="text-xs text-muted">Monthly rent</dt><dd class="font-semibold text-primary">{{ formatCurrency(tenancy.propertySpace?.monthlyRent) }}</dd></div>
+          <div class="col-span-2"><dt class="text-xs text-muted">Monthly rent</dt><dd class="font-semibold text-primary">{{ formatCurrency(contractRent(tenancy)) }}</dd></div>
         </dl>
 
         <div class="mt-5 border-t border-default pt-4">
