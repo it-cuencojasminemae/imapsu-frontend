@@ -61,7 +61,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
   headers,
   query: computed(() => ({
     'populate[tenancy][populate][propertySpace]': true,
-    'populate[tenancy][populate][user]': true,
+    'populate[tenancy][populate][user][populate][avatar]': true,
     'populate[receipt]': true,
     sort: 'period:desc', ...recordsPage.query.value }))
 })
@@ -669,8 +669,13 @@ const recordColumns = [
       <template v-else>
         <AppRecordTable :items="filteredBills" :columns="recordColumns" :item-key="bill => bill.documentId ?? bill.id" caption="Bills" compact-actions>
         <template #cell-tenant="{ item }">
-          <p class="text-toned">{{ item.tenancy?.user?.username || item.tenancy?.propertySpace?.name || '—' }}</p>
-          <p v-if="billContext(item)" class="mt-0.5 text-xs text-muted">{{ billContext(item) }}</p>
+          <div class="flex items-center gap-2">
+            <AppUserAvatar v-if="item.tenancy?.user" :user="item.tenancy.user" size="xs" />
+            <div class="min-w-0">
+              <p class="text-toned">{{ item.tenancy?.user?.username || item.tenancy?.propertySpace?.name || '—' }}</p>
+              <p v-if="billContext(item)" class="mt-0.5 text-xs text-muted">{{ billContext(item) }}</p>
+            </div>
+          </div>
         </template>
         <template #cell-status="{ item }">
           <div class="flex flex-wrap items-center gap-1">
@@ -694,7 +699,7 @@ const recordColumns = [
             <p class="font-medium text-highlighted">{{ bill.period || 'Billing period' }}</p>
             <p v-if="bill.tenancy" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
               <span v-if="bill.tenancy.propertySpace">{{ bill.tenancy.propertySpace.name }} <span class="font-mono">({{ bill.tenancy.propertySpace.propertyCode }})</span></span>
-              <span v-if="bill.tenancy.user" class="flex items-center gap-1"><UIcon name="i-lucide-circle-user-round" class="size-3.5" />{{ bill.tenancy.user.username }}</span>
+              <span v-if="bill.tenancy.user" class="flex items-center gap-1.5"><AppUserAvatar :user="bill.tenancy.user" />{{ bill.tenancy.user.username }}</span>
             </p>
           </div>
           <div class="flex items-center gap-2">

@@ -21,7 +21,7 @@ type RentalApplication = {
   productsServices?: string
   appearanceDate?: string
   appearanceConfirmed?: boolean
-  user?: { id: number; username?: string; email?: string } | null
+  user?: { id: number; username?: string; email?: string; avatar?: { url?: string } | null } | null
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; monthlyRent?: number | string | null } | null
   tenancy?: { documentId?: string; startDate?: string; status?: string } | null
 }
@@ -33,7 +33,7 @@ type RenewalIntent = {
   message?: string
   createdAt?: string
   letterOfRenewal?: { id: number; url?: string; name?: string } | null
-  user?: { id: number; username?: string; email?: string } | null
+  user?: { id: number; username?: string; email?: string; avatar?: { url?: string } | null } | null
   tenancy?: { documentId?: string; propertySpace?: { name?: string; propertyCode?: string; building?: string } | null } | null
 }
 
@@ -443,6 +443,7 @@ const recordColumns = [
       <UEmpty v-if="filteredItems.length === 0" icon="i-lucide-list-filter" title="No matching applications" description="No applications match the current filters." />
       <template v-else>
         <AppRecordTable :items="filteredItems" :columns="recordColumns" :item-key="item => item.kind + '-' + (item.documentId ?? item.id)" caption="Applications and renewals">
+        <template #cell-applicant="{ item }"><span class="flex items-center gap-2"><AppUserAvatar v-if="item.user" :user="item.user" size="xs" /><span class="text-toned">{{ item.user?.username || '—' }}</span></span></template>
         <template #actions="{ item }"><UButton v-if="item.kind === 'application'" label="Review" icon="i-lucide-clipboard-list" color="primary" variant="subtle" size="sm" @click="openReview(item)" /></template>
         <template #details="{ item: item }"><UCard  :ui="{ body: 'p-5' }">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -453,7 +454,7 @@ const recordColumns = [
               </p>
               <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                 <span v-if="propertyCode(item)" class="font-mono">{{ propertyCode(item) }}</span>
-                <span v-if="item.user" class="flex items-center gap-1"><UIcon name="i-lucide-circle-user-round" class="size-3.5" />{{ item.user.username }} · {{ item.user.email }}</span>
+                <span v-if="item.user" class="flex items-center gap-1.5"><AppUserAvatar :user="item.user" />{{ item.user.username }} · {{ item.user.email }}</span>
                 <span>Submitted {{ formatDate(item.createdAt) }}</span>
               </p>
             </div>

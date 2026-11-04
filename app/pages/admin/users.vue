@@ -14,6 +14,7 @@ type DirectoryUser = {
   security?: { lockedUntil?: number | null; mfaEnabled?: boolean }
   createdAt?: string
   role?: { documentId?: string; name?: string; type?: string } | null
+  avatar?: { url?: string } | null
 }
 
 useHead({ title: 'Manage Users | iMapSU' })
@@ -289,6 +290,7 @@ const filteredUsers = computed(() => {
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search users"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Name, email, or role…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredUsers.length }} of {{ users.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>
       <UEmpty v-if="!filteredUsers.length" icon="i-lucide-search" title="No matching users" description="Try another search or clear your search." />
       <AppRecordTable v-else :items="filteredUsers" :columns="recordColumns" :item-key="user => user.id" caption="User directory">
+        <template #cell-user="{ item }"><span class="flex items-center gap-2"><AppUserAvatar :user="item" size="xs" /><span class="text-toned">{{ item.username }}</span></span></template>
         <template #actions="{ item }"><UButton v-if="auth.isAdmin.value && !isSelf(item)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
         <template #details="{ item: user }"><UCard  :ui="{ body: 'p-4' }">
           <UAlert v-if="user.security?.lockedUntil && user.security.lockedUntil > Date.now()" class="mb-3" color="warning" :title="'Sign-in limited until ' + new Date(user.security.lockedUntil).toLocaleString()" />
@@ -296,7 +298,7 @@ const filteredUsers = computed(() => {
           <UButton v-if="auth.user.value?.security?.mfaRequired && !isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
-            <span class="imapsu-brand-tile grid size-10 shrink-0 place-items-center rounded-lg text-sm font-semibold">{{ user.username.charAt(0).toUpperCase() }}</span>
+            <AppUserAvatar :user="user" size="lg" />
             <div class="min-w-0">
               <p class="truncate font-medium text-highlighted">
                 {{ user.username }}

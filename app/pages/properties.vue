@@ -10,9 +10,13 @@ type PropertySpace = {
   name: string
   businessName?: string
   building: string
+  campus?: string
   floor?: string
   description?: string
   area?: number | string
+  rentalClassification?: string
+  productsServices?: string
+  operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
   monthlyRent?: number | string
   photos?: { id: number; url?: string; name?: string }[] | null
@@ -157,6 +161,17 @@ watch(focusedCard, (card, previous) => { if (card && card.documentId !== previou
 const photosForCard = (card: Card) =>
   card.space_status === 'Occupied' ? (card.tenantPhotos ?? []) : (card.photos ?? [])
 
+// The cards only have room for a summary, so the full record opens in a dialog.
+const detailsId = ref<string | number | null>(null)
+const detailsPhotoIndex = ref(0)
+const detailsCard = computed(() => cards.value.find(card => (card.documentId ?? card.id) === detailsId.value) ?? null)
+const detailsPhotos = computed(() => detailsCard.value ? photosForCard(detailsCard.value) : [])
+const detailsPhoto = computed(() => detailsPhotos.value[detailsPhotoIndex.value] ?? detailsPhotos.value[0] ?? null)
+const openDetails = (card: Card) => {
+  detailsPhotoIndex.value = 0
+  detailsId.value = card.documentId ?? card.id
+}
+
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshFeedback(), refreshSummary(), refreshTenants()])
 }
@@ -280,12 +295,71 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
           <UButton v-if="card.documentId" class="mt-3" size="sm" color="neutral" variant="outline" block :to="`/feedback?property=${card.documentId}`" label="Rate this stall" icon="i-lucide-star" />
         </div>
 
-        <div v-if="auth.isAspiringTenant.value && card.space_status === 'Vacant' && card.documentId" class="mt-4">
-          <UButton data-prominent="true" block :to="`/rental-applications?property=${card.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+        <div class="mt-4 flex flex-wrap gap-2">
+          <UButton class="min-w-32 flex-1" color="neutral" variant="outline" block label="View details" icon="i-lucide-eye" @click="openDetails(card)" />
+          <UButton v-if="auth.isAspiringTenant.value && card.space_status === 'Vacant' && card.documentId" class="min-w-32 flex-1" data-prominent="true" block :to="`/rental-applications?property=${card.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
         </div>
       </UCard>
     </div>
     </template>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
+
+    <UModal
+      :open="!!detailsCard"
+      class="max-w-2xl"
+      :title="detailsCard ? cardTitle(detailsCard) : 'Space details'"
+      :description="detailsCard ? detailsCard.propertyCode : undefined"
+      @update:open="value => { if (!value) detailsId = null }"
+    >
+      <template #body>
+        <div v-if="detailsCard" class="space-y-5">
+          <div v-if="detailsPhoto">
+            <img :src="detailsPhoto.url" :alt="detailsPhoto.name || cardTitle(detailsCard)" class="aspect-video w-full rounded-lg bg-elevated object-cover" />
+            <div v-if="detailsPhotos.length > 1" class="mt-2 flex gap-2 overflow-x-auto pb-1">
+              <button
+                v-for="(photo, index) in detailsPhotos"
+                :key="photo.id"
+                type="button"
+                class="shrink-0 overflow-hidden rounded-md ring-2 ring-offset-1 ring-offset-default"
+                :class="index === detailsPhotoIndex ? 'ring-primary' : 'ring-transparent'"
+                :aria-label="`Show photo ${index + 1} of ${detailsPhotos.length}`"
+                :aria-pressed="index === detailsPhotoIndex"
+                @click="detailsPhotoIndex = index"
+              >
+                <img :src="photo.url" alt="" class="size-16 object-cover" />
+              </button>
+            </div>
+          </div>
+          <div v-else class="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg bg-elevated text-muted">
+            <UIcon name="i-lucide-image-off" class="size-6" />
+            <p class="text-sm">No photos yet</p>
+          </div>
+
+          <UBadge v-if="!auth.isStudent.value" :color="detailsCard.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ detailsCard.space_status }}</UBadge>
+
+          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+            <div class="sm:col-span-2">
+              <dt class="mb-1 flex items-center gap-1.5 text-xs text-muted"><UIcon name="i-lucide-map-pin" /> Location</dt>
+              <dd class="font-medium text-highlighted">{{ detailsCard.building }}<span v-if="detailsCard.floor"> · {{ detailsCard.floor }}</span><span v-if="detailsCard.campus"> · {{ detailsCard.campus }}</span></dd>
+            </div>
+            <template v-if="!auth.isStudent.value">
+              <div><dt class="mb-1 text-xs text-muted">Area</dt><dd class="font-medium text-highlighted">{{ formatArea(detailsCard.area) }}</dd></div>
+              <div><dt class="mb-1 text-xs text-muted">Monthly rent</dt><dd class="font-semibold text-primary">{{ formatCurrency(detailsCard.monthlyRent) }}</dd></div>
+            </template>
+            <div v-if="detailsCard.rentalClassification"><dt class="mb-1 text-xs text-muted">Classification</dt><dd class="font-medium text-highlighted">{{ detailsCard.rentalClassification }}</dd></div>
+            <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.businessName"><dt class="mb-1 text-xs text-muted">Business</dt><dd class="font-medium text-highlighted">{{ detailsCard.businessName }}</dd></div>
+            <div v-if="detailsCard.description" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Description</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.description }}</dd></div>
+            <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.productsServices" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Products / services</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.productsServices }}</dd></div>
+            <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.operatingDetails" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Operating details</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.operatingDetails }}</dd></div>
+          </dl>
+
+          <div class="flex flex-wrap justify-end gap-2">
+            <UButton color="neutral" variant="ghost" label="Close" @click="detailsId = null" />
+            <UButton v-if="auth.isStudent.value && detailsCard.hasTenant && detailsCard.documentId" color="neutral" variant="outline" :to="`/feedback?property=${detailsCard.documentId}`" label="Rate this stall" icon="i-lucide-star" />
+            <UButton v-if="auth.isAspiringTenant.value && detailsCard.space_status === 'Vacant' && detailsCard.documentId" data-prominent="true" :to="`/rental-applications?property=${detailsCard.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+          </div>
+        </div>
+      </template>
+    </UModal>
   </main>
 </template>

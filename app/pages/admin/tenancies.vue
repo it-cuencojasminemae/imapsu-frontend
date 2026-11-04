@@ -37,7 +37,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
   headers,
   query: computed(() => ({
     'populate[propertySpace]': true,
-    'populate[user]': true,
+    'populate[user][populate][avatar]': true,
     sort: 'createdAt:desc', ...recordsPage.query.value }))
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
@@ -282,6 +282,7 @@ const filteredTenancies = computed(() => {
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search tenancies"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Tenant, property, code, or status…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredTenancies.length }} of {{ tenancies.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>
       <UEmpty v-if="!filteredTenancies.length" icon="i-lucide-search" title="No matching tenancies" description="Try another search or clear your search." />
       <AppRecordTable v-else :items="filteredTenancies" :columns="recordColumns" :item-key="tenancy => tenancy.documentId ?? tenancy.id" caption="Tenancies">
+        <template #cell-tenant="{ item }"><span class="flex items-center gap-2"><AppUserAvatar v-if="item.user" :user="item.user" size="xs" /><span class="text-toned">{{ item.user?.username || '—' }}</span></span></template>
         <template #actions="{ item }"><UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
         <template #details="{ item: tenancy }"><UCard  :ui="{ body: 'p-5' }">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -290,7 +291,7 @@ const filteredTenancies = computed(() => {
             <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
               <span v-if="tenancy.propertySpace" class="font-mono">{{ tenancy.propertySpace.propertyCode }}</span>
               <span v-if="tenancy.propertySpace?.building" class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3.5" />{{ tenancy.propertySpace.building }}</span>
-              <span v-if="tenancy.user" class="flex items-center gap-1"><UIcon name="i-lucide-circle-user-round" class="size-3.5" />{{ tenancy.user.username }}</span>
+              <span v-if="tenancy.user" class="flex items-center gap-1.5"><AppUserAvatar :user="tenancy.user" />{{ tenancy.user.username }}</span>
             </p>
           </div>
           <UBadge :color="statusColor(tenancy.status)" variant="subtle">{{ tenancy.status }}</UBadge>

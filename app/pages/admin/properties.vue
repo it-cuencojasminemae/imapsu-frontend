@@ -28,7 +28,7 @@ type PropertySpace = {
   space_status: 'Vacant' | 'Occupied'
   monthlyRent?: number | string
   mapPosition?: MapPosition | null
-  tenancies?: { documentId?: string; status?: string; user?: { username?: string; email?: string } | null }[] | null
+  tenancies?: { documentId?: string; status?: string; user?: { username?: string; email?: string; avatar?: { url?: string } | null } | null }[] | null
 }
 
 type ListResponse<T> = { data: T[] }
@@ -54,7 +54,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 
     'populate[photos]': true,
     'populate[tenancies][filters][status][$eq]': 'Active',
-    'populate[tenancies][populate][user]': true
+    'populate[tenancies][populate][user][populate][avatar]': true
    , ...recordsPage.query.value }))
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
@@ -122,9 +122,10 @@ const totalPages = computed(() => (responseData.value as any)?.meta?.pagination?
 
 const pagedProperties = computed(() => filteredProperties.value)
 
+const activeTenant = (property: PropertySpace) => property.tenancies?.find(tenancy => tenancy.status === 'Active')?.user ?? null
 const tenantOf = (property: PropertySpace) => {
-  const active = property.tenancies?.find(tenancy => tenancy.status === 'Active')
-  return active?.user?.username || active?.user?.email || null
+  const tenant = activeTenant(property)
+  return tenant?.username || tenant?.email || null
 }
 
 const formatCurrency = (amount?: number | string) => amount == null || amount === ''
@@ -369,7 +370,7 @@ const remove = async (property: PropertySpace) => {
                 <dt class="text-xs text-muted">Tenant</dt>
                 <dd class="truncate font-medium text-highlighted">
                   <span v-if="tenantOf(property)" class="flex items-center gap-1.5">
-                    <UIcon name="i-lucide-circle-user-round" class="size-3.5 text-primary" />
+                    <AppUserAvatar :user="activeTenant(property)" />
                     {{ tenantOf(property) }}
                   </span>
                   <span v-else class="text-muted">Vacant</span>

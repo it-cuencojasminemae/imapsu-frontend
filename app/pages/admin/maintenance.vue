@@ -47,7 +47,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
   headers,
   query: computed(() => ({
     'populate[propertySpace]': true,
-    'populate[reporter]': true,
+    'populate[reporter][populate][avatar]': true,
     'populate[images]': true,
     sort: 'createdAt:desc', ...recordsPage.query.value }))
 })
@@ -416,7 +416,7 @@ const remove = async (ticket: MaintenanceTicket) => {
           </div>
 
           <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-            <span class="flex items-center gap-1"><UIcon name="i-lucide-circle-user-round" class="size-3.5" />{{ item.reporter?.username ?? item.reporter?.email ?? 'Unknown' }}</span>
+            <span class="flex items-center gap-1.5"><AppUserAvatar :user="item.reporter" />{{ item.reporter?.username ?? item.reporter?.email ?? 'Unknown' }}</span>
             <span v-if="item.propertySpace" class="flex items-center gap-1">
               <UIcon name="i-lucide-building-2" class="size-3.5" />
               {{ item.propertySpace.name }}
