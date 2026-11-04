@@ -234,7 +234,7 @@ const statusOptions = [
           <label class="flex items-center justify-between gap-4 rounded-lg border border-default px-4 py-3">
             <div>
               <p class="text-sm font-medium text-highlighted">Receipt uploads</p>
-              <p class="text-xs text-muted">Notify the OAS when a payment receipt is uploaded.</p>
+              <p class="text-xs text-muted">Notify the OAS when a payment receipt is uploaded, and the tenant when it is verified.</p>
             </div>
             <UCheckbox v-model="form.notifyOnReceipt" />
           </label>

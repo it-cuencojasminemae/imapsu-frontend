@@ -519,8 +519,13 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
 
 const isBusy = (bill: Bill) => workflowBusy.value === String(bill.documentId ?? bill.id)
 
+// Unpaid, overdue and rejected bills are the ones still waiting on a receipt.
+const awaitsReceipt = (bill: Bill) => !isVerified(bill) && !isForVerification(bill)
+const recordLabel = (bill: Bill) => bill.receipt ? 'Update receipt' : 'Record receipt'
+
 const billMenuItems = (bill: Bill) => [
   [
+    ...(awaitsReceipt(bill) ? [] : [{ label: recordLabel(bill), icon: 'i-lucide-receipt-text', onSelect: () => openRecord(bill) }]),
     { label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(bill) },
     { label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(bill) }
   ],
@@ -536,9 +541,83 @@ const billContext = (bill: Bill) => [
 
 // Why a bill under review cannot be verified yet, if anything.
 const verifyBlocked = (bill: Bill) => {
-  if (!bill.receipt) return 'The tenant has not uploaded a receipt picture yet.'
-  if (!bill.orNumber) return 'The tenant has not submitted the official receipt number yet.'
+  if (!bill.receipt) return 'No receipt picture yet. Use Record receipt if it was handed in at the office.'
+  if (!bill.orNumber) return 'No official receipt number yet. Use Update receipt if it was handed in at the office.'
   return undefined
+}
+
+// A receipt handed in at the office: the OAS holds the paper, so recording it also verifies it.
+const recordOpen = ref(false)
+const recordTarget = ref<Bill | null>(null)
+const recordNumber = ref('')
+const recordPicture = ref<File | null>(null)
+const recordPreview = ref('')
+const recording = ref(false)
+const recordError = ref('')
+
+const setRecordPicture = (file: File | null) => {
+  if (recordPreview.value) URL.revokeObjectURL(recordPreview.value)
+  recordPicture.value = file
+  recordPreview.value = file ? URL.createObjectURL(file) : ''
+}
+
+const openRecord = (bill: Bill) => {
+  recordTarget.value = bill
+  recordNumber.value = bill.orNumber ?? ''
+  setRecordPicture(null)
+  recordError.value = ''
+  recordOpen.value = true
+}
+
+watch(recordOpen, (open) => {
+  if (!open) setRecordPicture(null)
+})
+
+const onRecordPictureSelected = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) {
+    setRecordPicture(file)
+    recordError.value = ''
+  }
+  input.value = ''
+}
+
+const confirmRecord = async () => {
+  const bill = recordTarget.value
+  if (!bill) return
+  const orNumber = recordNumber.value.trim()
+  recordError.value = !recordPicture.value && !bill.receipt
+    ? 'Choose a picture of the official receipt.'
+    : orNumber ? '' : 'Enter the official receipt number.'
+  if (recordError.value) return
+  recording.value = true
+  try {
+    const data: Record<string, unknown> = { orNumber, status: 'Verified', verificationNote: null }
+    if (recordPicture.value) {
+      const upload = new FormData()
+      upload.append('purpose', 'receipt')
+      upload.append('files', await prepareUpload(recordPicture.value))
+      const uploaded = await $api<{ id: number }[]>('/api/upload', { method: 'POST', body: upload })
+      const fileId = uploaded?.[0]?.id
+      if (!fileId) throw new Error('Unable to upload the receipt. Please try again.')
+      data.receipt = fileId
+    }
+    const updated = await $api<{ data: Bill }>(`/api/bills/${bill.documentId ?? bill.id}`, { method: 'PUT', body: { data } })
+    const flags = updated?.data?.reviewFlags ?? []
+    toast.add({
+      title: isVerified(bill) ? 'Receipt updated' : 'Receipt recorded and verified',
+      description: flags.length ? flags.join('; ') : undefined,
+      color: flags.length ? 'warning' : 'success',
+      icon: flags.length ? 'i-lucide-triangle-alert' : 'i-lucide-check-circle-2'
+    })
+    recordOpen.value = false
+    await refresh()
+  } catch (err) {
+    recordError.value = getErrorMessage(err)
+  } finally {
+    recording.value = false
+  }
 }
 
 const verifyOpen = ref(false)
@@ -688,6 +767,7 @@ const recordColumns = [
             <UButton label="Verify" icon="i-lucide-file-check-2" color="success" variant="subtle" size="sm" :loading="isBusy(item)" :disabled="!!verifyBlocked(item)" :title="verifyBlocked(item)" @click="verifyBill(item)" />
             <UButton label="Reject" icon="i-lucide-x-circle" color="error" variant="subtle" size="sm" :disabled="isBusy(item)" @click="openReject(item)" />
           </template>
+          <UButton v-else-if="awaitsReceipt(item)" :label="recordLabel(item)" icon="i-lucide-receipt-text" color="neutral" variant="subtle" size="sm" @click="openRecord(item)" />
           <UDropdownMenu :items="billMenuItems(item)" :content="{ align: 'end' }">
             <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="More actions" title="More actions" :disabled="isBusy(item)" />
           </UDropdownMenu>
@@ -742,6 +822,7 @@ const recordColumns = [
             <UButton label="Verify receipt" icon="i-lucide-file-check-2" color="success" size="sm" :loading="workflowBusy === String(bill.documentId ?? bill.id)" :disabled="!!verifyBlocked(bill)" :title="verifyBlocked(bill)" @click="verifyBill(bill)" />
             <UButton label="Reject" icon="i-lucide-x-circle" color="error" variant="subtle" size="sm" :disabled="workflowBusy === String(bill.documentId ?? bill.id)" @click="openReject(bill)" />
           </template>
+          <UButton :label="recordLabel(bill)" icon="i-lucide-receipt-text" color="neutral" variant="subtle" size="sm" @click="openRecord(bill)" />
           <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(bill)" />
           <UButton label="History" icon="i-lucide-history" color="neutral" variant="subtle" size="sm" @click="openHistory(bill)" />
           <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(bill)" />
@@ -771,6 +852,43 @@ const recordColumns = [
           <div class="flex justify-end gap-2">
             <UButton label="Cancel" color="neutral" variant="ghost" :disabled="isBusy(verifyTarget)" @click="verifyOpen = false" />
             <UButton data-prominent="true" type="submit" color="success" icon="i-lucide-file-check-2" :loading="isBusy(verifyTarget)">Verify receipt</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="recordOpen" class="max-w-xl" :dismissible="!recording" :close="!recording" :title="recordTarget ? recordLabel(recordTarget) : 'Record receipt'" description="Enter the official receipt the tenant handed in at the office.">
+      <template #body>
+        <form v-if="recordTarget" class="space-y-4" @submit.prevent="confirmRecord">
+          <UAlert v-if="recordTarget.reviewFlags?.length" color="warning" icon="i-lucide-triangle-alert" title="Billing review flags" :description="recordTarget.reviewFlags.join('; ')" />
+          <dl class="grid grid-cols-2 content-start gap-4 text-sm">
+            <div><dt class="text-xs text-muted">Tenant</dt><dd class="font-medium text-highlighted">{{ recordTarget.tenancy?.user?.username || '—' }}</dd></div>
+            <div><dt class="text-xs text-muted">Stall</dt><dd class="font-medium text-highlighted">{{ recordTarget.tenancy?.propertySpace?.name || '—' }}</dd></div>
+            <div><dt class="text-xs text-muted">Period</dt><dd class="font-medium text-highlighted">{{ recordTarget.period || '—' }}</dd></div>
+            <div><dt class="text-xs text-muted">Total</dt><dd class="font-semibold text-highlighted">{{ formatCurrency(recordTarget.amount) }}</dd></div>
+          </dl>
+          <UFormField label="Receipt picture" description="A clear picture (JPG, PNG or WebP) of the official receipt." required>
+            <div class="flex flex-wrap items-center gap-3">
+              <img v-if="recordPreview" :src="recordPreview" :alt="recordPicture?.name || 'Selected receipt'" class="h-14 w-11 rounded-md border border-default object-cover" />
+              <a v-else-if="recordTarget.receipt" :href="`${baseURL}${recordTarget.receipt.url}`" target="_blank" rel="noopener">
+                <img :src="`${baseURL}${recordTarget.receipt.url}`" :alt="recordTarget.receipt.name || 'Current receipt'" class="h-14 w-11 rounded-md border border-default object-cover" />
+              </a>
+              <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': recording }">
+                <UIcon name="i-lucide-file-up" class="size-4" />
+                {{ recordPreview || recordTarget.receipt ? 'Replace picture' : 'Choose receipt picture' }}
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="recording" @change="onRecordPictureSelected" />
+              </label>
+              <span v-if="recordPicture" class="max-w-64 truncate text-sm text-muted">{{ recordPicture.name }}</span>
+            </div>
+          </UFormField>
+          <UFormField label="Official Receipt Number" required>
+            <UInput v-model="recordNumber" placeholder="e.g. 8823109" :disabled="recording" />
+          </UFormField>
+          <p v-if="!isVerified(recordTarget)" class="text-sm text-muted">Saving marks this bill as Verified. The tenant sees the receipt on their Bills page and can no longer change it.</p>
+          <UAlert v-if="recordError" color="error" icon="i-lucide-triangle-alert" :description="recordError" />
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" color="neutral" variant="ghost" :disabled="recording" @click="recordOpen = false" />
+            <UButton data-prominent="true" type="submit" color="success" icon="i-lucide-file-check-2" :loading="recording">{{ isVerified(recordTarget) ? 'Save receipt' : 'Record and verify' }}</UButton>
           </div>
         </form>
       </template>
@@ -879,7 +997,7 @@ const recordColumns = [
             <UFormField label="Due date" description="Bills are always due on the 10th of the month after the billing period, and become Overdue automatically the day after.">
               <UInput :model-value="dueDatePreview" disabled />
             </UFormField>
-            <UFormField label="Status" description="For Verification and Verified need the tenant's receipt picture and number on the bill.">
+            <UFormField label="Status" description="For Verification and Verified need a receipt picture and number on the bill. Use Record receipt to add them.">
               <USelect v-model="form.status" :items="formStatusOptions" />
             </UFormField>
           </div>
