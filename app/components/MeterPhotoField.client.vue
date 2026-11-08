@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="rounded-lg border border-default bg-muted/20 p-3">
     <div class="mb-2 flex items-center justify-between gap-2">
-      <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+      <p class="flex items-center gap-1.5 text-xs font-medium text-muted">
         <UIcon :name="props.icon" class="size-3.5" />
         {{ props.title }}
       </p>

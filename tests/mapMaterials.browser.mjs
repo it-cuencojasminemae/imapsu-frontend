@@ -105,12 +105,6 @@ try {
   await page.getByRole('button', { name: /^Exit fullscreen$/i }).click()
   checks.push('search, selection highlight, zoom/reset, labels, and fullscreen')
 
-  // Emulate the student role in browser memory to verify the existing filter.
-  await page.evaluate(() => { window.mapTestPage().auth.user.value = { id: -1, role: { type: 'student' } } })
-  await page.waitForTimeout(300)
-  assert.equal(await page.evaluate(() => window.mapTestViewer().props.statusByOrder['44']), undefined)
-  assert.ok((await materials('44')).filter(m => /greeny/i.test(m.name)).every(m => m.color === '808080'))
-  checks.push('student filtering removes vacancy fills and restores neutral roofs')
   assert.deepEqual(errors, [])
   await writeFile(`${evidence}/verification.json`, JSON.stringify({ checks, errors }, null, 2))
   console.log({ checks, errors })

@@ -1,19 +1,16 @@
 <script setup lang="ts">
 const auth = useAuth()
 const { hasPastBills } = usePastBills()
-const roleTitle = computed(() => auth.isStudent.value ? 'Student dashboard' : auth.isAspiringTenant.value ? 'Aspiring tenant dashboard' : 'Tenant dashboard')
+const roleTitle = computed(() => auth.isAspiringTenant.value ? 'Aspiring tenant dashboard' : 'Tenant dashboard')
 const actions = computed(() => [
-  { label: 'Campus map', to: '/campus-map', icon: 'i-lucide-map-pinned', description: 'Explore campus buildings and listed spaces.' },
   ...(auth.isCurrentTenant.value ? [
     { label: 'My tenancy', to: '/tenancy', icon: 'i-lucide-key-round', description: 'Review your contracts and renewal information.' },
     { label: 'Bills', to: '/bills', icon: 'i-lucide-receipt', description: 'Review billing notices and submit official receipts.' },
     { label: 'Maintenance', to: '/maintenance', icon: 'i-lucide-wrench', description: 'Report an issue and track your requests.' },
     { label: 'Rental applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list', description: 'Apply for another stall and track your applications.' }
   ] : [
-    { label: auth.isStudent.value ? 'Campus spaces' : 'Rentable spaces', to: '/properties', icon: 'i-lucide-store', description: auth.isStudent.value ? 'See the stalls and other spaces in use on campus.' : 'Browse spaces and rental information.' },
-    auth.isAspiringTenant.value
-      ? { label: 'Rental applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list', description: 'Apply for a space and track your applications.' }
-      : { label: 'Student feedback', to: '/feedback', icon: 'i-lucide-message-square-text', description: 'Share feedback about campus stall services.' }
+    { label: 'Rentable spaces', to: '/properties', icon: 'i-lucide-store', description: 'Browse spaces and rental information.' },
+    { label: 'Rental applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list', description: 'Apply for a space and track your applications.' }
   ]),
   ...(hasPastBills.value ? [{ label: 'Past bills', to: '/bills', icon: 'i-lucide-receipt', description: 'Review the bills from your past tenancy.' }] : [])
 ])
@@ -23,27 +20,27 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
 </script>
 
 <template>
-  <AppPageHeader :title="roleTitle" eyebrow="Your overview" :description="`Welcome, ${auth.displayName.value}. Your campus services and recent updates in one place.`">
+  <AppPageHeader :title="roleTitle" :description="auth.isCurrentTenant.value ? 'Bills, contracts and maintenance requests for the stalls you rent.' : 'Find a vacant space, apply for it, and follow your application here.'">
     <template #actions><UButton to="/campus-map" label="Open campus map" icon="i-lucide-map-pinned" data-prominent="true" /></template>
   </AppPageHeader>
 
-  <section aria-label="Quick actions" class="mb-6 grid gap-3 sm:grid-cols-2" :class="actions.length > 4 ? 'xl:grid-cols-5' : actions.length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'">
-    <NuxtLink v-for="action in actions" :key="action.to" :to="action.to" class="rounded-xl border border-default bg-default p-5 transition-colors hover:border-primary/50 hover:bg-elevated focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-primary">
-      <UIcon :name="action.icon" class="mb-3 size-5 text-primary" aria-hidden="true" />
+  <section aria-label="Quick actions" class="mb-10 grid gap-3 sm:grid-cols-2" :class="actions.length > 3 ? 'xl:grid-cols-4' : actions.length > 2 ? 'xl:grid-cols-3' : ''">
+    <NuxtLink v-for="action in actions" :key="action.to" :to="action.to" class="rounded-xl border border-default bg-default p-5 transition-colors hover:border-accented hover:bg-elevated focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-primary">
+      <UIcon :name="action.icon" class="mb-3 size-5 text-toned" aria-hidden="true" />
       <h2 class="font-semibold text-highlighted">{{ action.label }}</h2>
       <p class="mt-1 text-sm text-muted">{{ action.description }}</p>
     </NuxtLink>
   </section>
 
   <div class="grid items-start gap-6 xl:grid-cols-2">
-    <DashboardSection v-if="!auth.isCurrentTenant.value" :title="auth.isStudent.value ? 'Campus spaces overview' : 'Property overview'" endpoint="/api/dashboard/property-summary" resource="properties" to="/properties">
+    <DashboardSection v-if="!auth.isCurrentTenant.value" title="Property overview" endpoint="/api/dashboard/property-summary" resource="properties" to="/properties">
       <template #default="{ data }">
-        <dl class="grid gap-4" :class="!auth.isStudent.value && 'grid-cols-2 sm:grid-cols-3'">
-          <div v-if="!auth.isStudent.value"><dt class="text-sm text-muted">Listed spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.total }}</dd></div>
-          <div><dt class="text-sm text-muted">{{ auth.isStudent.value ? 'Occupied campus spaces' : 'Occupied spaces' }}</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.occupied }}</dd></div>
-          <div v-if="!auth.isStudent.value"><dt class="text-sm text-muted">Available spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.vacant }}</dd></div>
+        <dl class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div><dt class="text-sm text-muted">Listed spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.total }}</dd></div>
+          <div><dt class="text-sm text-muted">Occupied spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.occupied }}</dd></div>
+          <div><dt class="text-sm text-muted">Available spaces</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.vacant }}</dd></div>
         </dl>
-        <p class="mt-4 text-xs text-muted">{{ auth.isStudent.value ? 'Spaces currently in use across campus. Buildings are not counted.' : 'Property spaces permitted for your account. These totals describe spaces, not buildings.' }}</p>
+        
       </template>
     </DashboardSection>
 
@@ -62,10 +59,10 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
 
     <DashboardSection v-if="auth.isCurrentTenant.value" title="Billing overview" endpoint="/api/dashboard/billing-summary" resource="billing" to="/bills">
       <template #default="{ data }">
-        <dl class="grid gap-4 sm:grid-cols-2">
-          <div><dt class="text-sm text-muted">Outstanding balance</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ money(data.outstanding) }}</dd></div>
-          <div><dt class="text-sm text-muted">Overdue bills</dt><dd class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">{{ data.overdueBills }}</dd></div>
-          <div><dt class="text-sm text-muted">Awaiting verification</dt><dd class="mt-1 text-lg font-semibold text-highlighted tabular-nums">{{ data.forVerification }}</dd></div>
+        <dl class="grid grid-cols-3 gap-4">
+          <div class="col-span-3"><dt class="text-sm text-muted">Outstanding balance</dt><dd class="mt-1 text-3xl font-semibold tracking-tight text-highlighted tabular-nums sm:text-4xl">{{ money(data.outstanding) }}</dd></div>
+          <div><dt class="text-sm text-muted">Overdue</dt><dd class="mt-1 text-lg font-semibold tabular-nums" :class="data.overdueBills ? 'text-error' : 'text-highlighted'">{{ data.overdueBills }}</dd></div>
+          <div><dt class="text-sm text-muted">Being verified</dt><dd class="mt-1 text-lg font-semibold text-highlighted tabular-nums">{{ data.forVerification }}</dd></div>
           <div><dt class="text-sm text-muted">Total bills</dt><dd class="mt-1 text-lg font-semibold text-highlighted tabular-nums">{{ data.total }}</dd></div>
         </dl>
       </template>
@@ -76,7 +73,7 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
         <p class="text-2xl font-semibold text-highlighted tabular-nums">{{ data.meta?.pagination?.total ?? '—' }}</p>
         <p class="mt-1 text-sm text-muted">Active tenancy contracts</p>
         <ul v-if="data.data?.length" class="mt-4 space-y-2">
-          <li v-for="item in data.data" :key="item.documentId ?? item.id" class="rounded-lg bg-muted/40 p-3">
+          <li v-for="item in data.data" :key="item.documentId ?? item.id" class="border-t border-default pt-2 first:border-t-0 first:pt-0">
             <p class="font-medium text-highlighted">{{ item.propertySpace?.name || 'Current tenancy' }}</p>
             <p v-if="item.endDate" class="mt-1 text-sm text-muted">Ends {{ date(item.endDate + 'T00:00:00+08:00') }}</p>
           </li>

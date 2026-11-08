@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createReusableTemplate, useMediaQuery, useMounted } from '@vueuse/core'
 import { prepareUpload } from '~/utils/uploadFile'
 
 definePageMeta({
@@ -12,6 +13,15 @@ type Bill = {
   documentId?: string
   period?: string
   amount: number | string
+  electricMeterPrevious?: number | string | null
+  electricMeterCurrent?: number | string | null
+  electricRate?: number | string | null
+  electricCharge?: number | string | null
+  waterMeterPrevious?: number | string | null
+  waterMeterCurrent?: number | string | null
+  waterRate?: number | string | null
+  waterCharge?: number | string | null
+  additionalCharges?: number | string | null
   dueDate?: string
   overdueFlag?: boolean
   reviewFlags?: string[]
@@ -32,12 +42,12 @@ type ListResponse<T> = { data: T[] }
 useHead({ title: 'Bills | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Bill>>('/api/bills', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Bill>>('/api/bills', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -48,9 +58,10 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: billingSummaryResponse, status: billingSummaryStatus, error: billingSummaryError, refresh: refreshBillingSummary } = await useFetch<any>('/api/dashboard/billing-summary', { baseURL, headers })
+const { data: billingSummaryResponse, status: billingSummaryStatus, error: billingSummaryError, refresh: refreshBillingSummary } = await useFetch<any>('/api/dashboard/billing-summary', { lazy: true, baseURL, headers })
 const { data: billingSummary } = useRequestPresentation(billingSummaryResponse, billingSummaryStatus)
-watch(responseData, () => { refreshBillingSummary() })
+// The first lazy response arrives alongside the summary request, so only later list changes refresh it.
+watch(responseData, (_next, previous) => { if (previous) refreshBillingSummary() })
 const bills = computed(() => data.value?.data ?? [])
 const totalOutstanding = computed(() => billingSummary.value?.outstanding ?? null)
 
@@ -91,6 +102,7 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
   uploadErrors[key] = ''
   submitErrors[key] = ''
   selectedFiles[key] = file
+  const reading = notify.loading('Reading official receipt number…', 'This can take a few seconds.')
   try {
     const form = new FormData()
     form.append('purpose', 'receipt')
@@ -108,18 +120,17 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
     })
     const detected = updated?.data?.orNumber
     orNumberDraft[key] = detected ?? ''
-    toast.add({
-      title: 'Receipt attached',
+    notify.dismiss(reading)
+    notify.success('Receipt attached', {
       description: detected
         ? `Receipt uploaded. Please review the official receipt number (${detected}) before submitting.`
-        : 'Receipt uploaded. No official receipt number is available. Enter it below before submitting.',
-      color: 'success',
-      icon: 'i-lucide-file-check-2'
+        : 'Receipt uploaded. No official receipt number is available. Enter it below before submitting.'
     })
     await refresh()
   } catch (err) {
     uploadErrors[key] = getErrorMessage(err)
   } finally {
+    notify.dismiss(reading)
     uploadingKeys[key] = false
     delete selectedFiles[key]
     if (input) input.value = ''
@@ -137,12 +148,7 @@ const submitPayment = async (bill: Bill) => {
       method: 'PUT',
       body: { data: { orNumber: value } }
     })
-    toast.add({
-      title: 'Receipt submitted for verification.',
-      description: 'The Office of Auxiliary Services will review your submitted receipt.',
-      color: 'success',
-      icon: 'i-lucide-check-circle-2'
-    })
+    notify.success('Receipt submitted for verification.', { description: 'The Office of Auxiliary Services will review your submitted receipt.' })
     await refresh()
   } catch (err) {
     submitErrors[key] = getErrorMessage(err)
@@ -161,12 +167,7 @@ const removeReceipt = async (bill: Bill) => {
       body: { data: { receipt: null } }
     })
     delete orNumberDraft[key]
-    toast.add({
-      title: 'Receipt removed',
-      description: 'The uploaded receipt has been removed from this bill.',
-      color: 'neutral',
-      icon: 'i-lucide-trash-2'
-    })
+    notify.info('Receipt removed', { description: 'The uploaded receipt has been removed from this bill.' })
     await refresh()
   } catch (err) {
     submitErrors[key] = getErrorMessage(err)
@@ -216,12 +217,48 @@ const statusLabel = (bill: Bill) => {
 
 const readOnly = computed(() => !auth.isCurrentTenant.value)
 const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Verified'
+// A submitted payment stays locked until the OAS verifies or rejects it.
+const isSubmitted = (bill: Bill) => bill.status === 'For Verification'
+
+// Bill breakdown: a dialog on desktop and a bottom sheet on phones. False until
+// mounted so the server render and hydration match the desktop.
+const mounted = useMounted()
+const narrowScreen = useMediaQuery('(max-width: 639px)')
+const isMobile = computed(() => mounted.value && narrowScreen.value)
+const [DefineDetailsBody, DetailsBody] = createReusableTemplate()
+const detailsOpen = ref(false)
+const detailsKey = ref<string | null>(null)
+// Follows the list so the dialog shows fresh data after a refresh.
+const detailsBill = computed(() => bills.value.find(bill => billKey(bill) === detailsKey.value) ?? null)
+const openDetails = (bill: Bill) => {
+  detailsKey.value = billKey(bill)
+  detailsOpen.value = true
+}
+
+const hasValue = (value?: number | string | null) => value != null && value !== ''
+const num = (value?: number | string | null) => hasValue(value) ? Number(value) : 0
+const formatReading = (value?: number | string | null) => hasValue(value)
+  ? new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 }).format(Number(value))
+  : '—'
+const formatRate = (value?: number | string | null) => hasValue(value)
+  ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 4 }).format(Number(value))
+  : '—'
+const consumption = (previous?: number | string | null, current?: number | string | null) => {
+  if (!hasValue(previous) || !hasValue(current)) return null
+  const used = Number(current) - Number(previous)
+  return used < 0 ? null : used
+}
+const utilities = (bill: Bill) => [
+  { label: 'Electricity', icon: 'i-lucide-zap', unit: 'kWh', previous: bill.electricMeterPrevious, current: bill.electricMeterCurrent, rate: bill.electricRate, charge: bill.electricCharge },
+  { label: 'Water', icon: 'i-lucide-droplet', unit: 'm³', previous: bill.waterMeterPrevious, current: bill.waterMeterCurrent, rate: bill.waterRate, charge: bill.waterCharge }
+]
+// Rent is whatever the total holds besides the utilities and additional charges.
+const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - num(bill.waterCharge) - num(bill.additionalCharges)
 </script>
 
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>{{ readOnly ? 'Past tenancy' : 'Current tenant' }}</template>
       <template #title>{{ readOnly ? 'Past bills' : 'Bills' }}</template>
       <template #description><p class="mt-2 max-w-xl text-muted">{{ readOnly ? 'Review the rent and utility bills from your past tenancy. These records are read-only.' : 'Review advance billing information for rent and utilities. Make payments through the University Cashier, then submit the official receipt for verification.' }}</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
@@ -240,7 +277,7 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
 
     <UAlert v-if="billingSummaryError" class="mb-4" color="warning" title="Billing totals unavailable" description="Displayed records remain available; retry to confirm totals." />
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-24" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="4" label="Loading your bills…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load bills" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -254,12 +291,13 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
             <p v-if="bill.tenancy?.propertySpace" class="mt-1 flex items-center gap-1 text-xs text-muted">
               <UIcon name="i-lucide-building-2" class="size-3.5" />
               {{ bill.tenancy.propertySpace.name }}
-              <span class="font-mono">({{ bill.tenancy.propertySpace.propertyCode }})</span>
+              <span>({{ bill.tenancy.propertySpace.propertyCode }})</span>
             </p>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <UBadge v-if="isOverdue(bill) && bill.status !== 'Overdue'" color="error" variant="solid">Overdue</UBadge>
             <UBadge :color="statusColor(bill)" variant="subtle">{{ statusLabel(bill) }}</UBadge>
+            <UButton label="View details" icon="i-lucide-file-text" color="neutral" variant="outline" size="sm" @click="openDetails(bill)" />
           </div>
         </div>
 
@@ -271,7 +309,7 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
             <dd class="font-medium text-highlighted">{{ formatDateTime(bill.paidAt) || '—' }}</dd>
           </div>
           <div v-if="bill.receipt">
-            <dt class="text-xs text-muted">Official Receipt Number</dt>
+            <dt class="text-xs text-muted">Official receipt number</dt>
             <dd class="font-semibold font-mono text-highlighted">{{ bill.orNumber || '—' }}</dd>
           </div>
           <div v-if="bill.receipt">
@@ -287,20 +325,22 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
 
         <UAlert v-if="readOnly && bill.status !== 'Verified'" class="mt-5" color="info" icon="i-lucide-info" title="Settle this bill with the Office of Auxiliary Services" description="Your tenancy has ended, so receipts can no longer be submitted here." />
 
-        <div v-if="canSubmitPayment(bill)" class="mt-5 border-t border-default pt-4">
-          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit Payment Receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>
+        <div v-if="canSubmitPayment(bill) && isSubmitted(bill)" class="mt-5 border-t border-default pt-4">
+          <!-- The OR number and receipt above stay read-only until the OAS verifies or rejects them. -->
+          <UAlert color="info" icon="i-lucide-lock" title="Submitted — awaiting OAS verification" :description="`Your receipt${bill.orNumber ? ` (OR ${bill.orNumber})` : ''} is locked while the Office of Auxiliary Services reviews it. If it is rejected, you can correct it and submit again.`" />
+        </div>
 
-          <UAlert v-if="bill.status === 'For Verification' && !bill.receipt" color="warning" icon="i-lucide-image-up" title="Receipt picture needed" description="The Office of Auxiliary Services cannot verify this payment until you upload a picture of your official receipt." class="mb-4" />
-          <UAlert v-else-if="bill.status === 'For Verification' && !bill.orNumber" color="warning" icon="i-lucide-send" title="Receipt not submitted yet" description="Enter the official receipt number below and click Submit receipt so the Office of Auxiliary Services can review it." class="mb-4" />
-          <UAlert v-else-if="bill.status === 'For Verification'" color="info" icon="i-lucide-clock-3" title="For Verification" description="Your receipt has been submitted and is being reviewed by the Office of Auxiliary Services." class="mb-4" />
-          <UAlert v-else-if="bill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected" :description="bill.verificationNote || 'Your submitted receipt was not accepted. Please review it and try again.'" class="mb-4" />
+        <div v-else-if="canSubmitPayment(bill)" class="mt-5 border-t border-default pt-4">
+          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit payment receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>
+
+          <UAlert v-if="bill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected" :description="bill.verificationNote || 'Your submitted receipt was not accepted. Please review it and try again.'" class="mb-4" />
           <UAlert v-else-if="bill.status === 'Overdue'" color="warning" icon="i-lucide-alarm-clock" title="Overdue" description="This bill is past its due date. Please settle it as soon as possible." class="mb-4" />
 
           <template v-if="!bill.receipt">
             <div class="flex flex-wrap items-center gap-3">
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
                 <UIcon :name="isUploading(bill) ? 'i-lucide-loader-2' : 'i-lucide-file-up'" class="size-4" :class="{ 'animate-spin': isUploading(bill) }" />
-                {{ isUploading(bill) ? 'Uploading…' : 'Choose receipt picture' }}
+                {{ isUploading(bill) ? 'Uploading…' : 'Upload receipt' }}
                 <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
               </label>
               <span v-if="selectedFiles[billKey(bill)]" class="max-w-64 truncate text-sm text-muted">{{ selectedFiles[billKey(bill)].name }}</span>
@@ -331,7 +371,7 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
               />
             </div>
             <div class="mt-3 flex flex-wrap items-end gap-3">
-              <UFormField label="Official Receipt Number" description="Enter or correct the number if needed, then click Submit receipt to send it for review." class="min-w-56">
+              <UFormField label="Official receipt number" description="Enter or correct the number if needed, then click Submit receipt to send it for review." class="min-w-56">
                 <UInput v-model="orNumberDraft[billKey(bill)]" placeholder="e.g. 8823109" :disabled="isSubmitting(bill)" @keyup.enter="submitPayment(bill)" />
               </UFormField>
               <UButton :loading="isSubmitting(bill)" :disabled="!orValue(bill)" icon="i-lucide-send" @click="submitPayment(bill)">Submit receipt</UButton>
@@ -343,5 +383,72 @@ const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Ver
       </UCard>
     </div>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
+
+    <DefineDetailsBody>
+      <div v-if="detailsBill" class="space-y-5 text-sm">
+        <div class="flex flex-wrap items-center gap-2">
+          <UBadge :color="statusColor(detailsBill)" variant="subtle">{{ statusLabel(detailsBill) }}</UBadge>
+          <UBadge v-if="isOverdue(detailsBill) && detailsBill.status !== 'Overdue'" color="error" variant="solid">Overdue</UBadge>
+          <span class="text-muted">Due {{ formatDate(detailsBill.dueDate) || '—' }}</span>
+        </div>
+
+        <UAlert v-if="detailsBill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected by the OAS" :description="detailsBill.verificationNote || 'No reason was given.'" />
+
+        <section v-for="utility in utilities(detailsBill)" :key="utility.label" class="rounded-lg border border-default p-4">
+          <h3 class="mb-3 flex items-center gap-1.5 font-semibold text-highlighted"><UIcon :name="utility.icon" class="size-4 text-primary" />{{ utility.label }}</h3>
+          <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div><dt class="text-xs text-muted">Reading</dt><dd class="font-medium text-highlighted">{{ formatReading(utility.previous) }} → {{ formatReading(utility.current) }}</dd></div>
+            <div><dt class="text-xs text-muted">Consumption</dt><dd class="font-medium text-highlighted">{{ consumption(utility.previous, utility.current) == null ? '—' : `${formatReading(consumption(utility.previous, utility.current))} ${utility.unit}` }}</dd></div>
+            <div><dt class="text-xs text-muted">Rate</dt><dd class="font-medium text-highlighted">{{ formatRate(utility.rate) }}<span v-if="hasValue(utility.rate)" class="text-xs text-muted"> / {{ utility.unit }}</span></dd></div>
+            <div><dt class="text-xs text-muted">Charge</dt><dd class="font-semibold text-highlighted">{{ formatCurrency(num(utility.charge)) }}</dd></div>
+          </dl>
+        </section>
+
+        <dl class="divide-y divide-default rounded-lg border border-default">
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5"><dt class="text-muted">Rent / base</dt><dd class="font-medium text-highlighted">{{ formatCurrency(baseRent(detailsBill)) }}</dd></div>
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5"><dt class="text-muted">Electricity</dt><dd class="font-medium text-highlighted">{{ formatCurrency(num(detailsBill.electricCharge)) }}</dd></div>
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5"><dt class="text-muted">Water</dt><dd class="font-medium text-highlighted">{{ formatCurrency(num(detailsBill.waterCharge)) }}</dd></div>
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5"><dt class="text-muted">Additional charges</dt><dd class="font-medium text-highlighted">{{ formatCurrency(num(detailsBill.additionalCharges)) }}</dd></div>
+          <div class="flex items-center justify-between gap-3 bg-elevated/50 px-4 py-3"><dt class="font-semibold text-highlighted">Total</dt><dd class="text-base font-semibold text-primary">{{ formatCurrency(detailsBill.amount) }}</dd></div>
+        </dl>
+
+        <dl class="grid grid-cols-2 gap-4">
+          <div><dt class="text-xs text-muted">Official receipt number</dt><dd class="font-mono font-semibold text-highlighted">{{ detailsBill.orNumber || '—' }}</dd></div>
+          <div>
+            <dt class="text-xs text-muted">Paid / verified on</dt>
+            <dd class="font-medium text-highlighted">{{ formatDateTime(detailsBill.paidAt) || 'Not yet verified' }}</dd>
+          </div>
+          <div class="col-span-2">
+            <dt class="text-xs text-muted">Receipt</dt>
+            <dd class="mt-1">
+              <a v-if="detailsBill.receipt" :href="`${baseURL}${detailsBill.receipt.url}`" target="_blank" rel="noopener" class="group block font-medium text-primary">
+                <img :src="`${baseURL}${detailsBill.receipt.url}`" :alt="detailsBill.receipt.name || 'Payment receipt'" class="max-h-64 w-full rounded-md border border-default object-contain" />
+                <span class="mt-1 inline-flex items-center gap-1 group-hover:underline"><UIcon name="i-lucide-external-link" class="size-3.5" />View full size</span>
+              </a>
+              <span v-else class="text-muted">No receipt uploaded yet</span>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </DefineDetailsBody>
+
+    <UModal
+      v-if="!isMobile"
+      v-model:open="detailsOpen"
+      class="max-w-2xl"
+      :title="`Bill for ${detailsBill?.period || 'this period'}`"
+      :description="detailsBill?.tenancy?.propertySpace ? `${detailsBill.tenancy.propertySpace.name} (${detailsBill.tenancy.propertySpace.propertyCode})` : 'Monthly bill breakdown'"
+    >
+      <template #body><DetailsBody /></template>
+    </UModal>
+    <UDrawer
+      v-else
+      v-model:open="detailsOpen"
+      :title="`Bill for ${detailsBill?.period || 'this period'}`"
+      :description="detailsBill?.tenancy?.propertySpace ? `${detailsBill.tenancy.propertySpace.name} (${detailsBill.tenancy.propertySpace.propertyCode})` : 'Monthly bill breakdown'"
+      :ui="{ content: 'max-h-[90dvh]', body: 'overflow-y-auto', container: 'pb-[max(1rem,env(safe-area-inset-bottom))]' }"
+    >
+      <template #body><DetailsBody /></template>
+    </UDrawer>
   </main>
 </template>

@@ -4,7 +4,7 @@ definePageMeta({ middleware: 'guest', pageTransition: false })
 useHead({ title: 'Create Account | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 
 const username = ref('')
 const email = ref('')
@@ -15,7 +15,8 @@ const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
-const role = ref('student')
+// Registering always creates an aspiring tenant: rating a stall needs no account.
+const role = 'aspiring-tenant'
 const privacyConsent = ref(false)
 const privacyOpen = ref(false)
 const loading = ref(false)
@@ -65,11 +66,6 @@ const backToRegistration = () => {
 
 const panelFeatures = ['Explore campus stalls', 'Apply for rental spaces', 'Get announcements & updates']
 
-const roleOptions = [
-  { label: 'Student', value: 'student', description: 'View the map and submit feedback about tenants.' },
-  { label: 'Aspiring Tenant', value: 'aspiring-tenant', description: 'Browse vacant spaces and apply to rent one.' }
-]
-
 const passwordCheck = computed(() => checkPasswordStrength(password.value))
 const passwordsMatch = computed(() => password.value === confirmPassword.value)
 // Flag a mismatch live once the user starts typing the confirmation, not only after submitting.
@@ -81,22 +77,17 @@ const handleRegister = async () => {
   attempted.value = true
   registrationError.value = ''
   if (!isStrongPassword(password.value)) {
-    toast.add({
-      title: 'Password is too weak',
-      description: `Password must contain ${PASSWORD_REQUIREMENTS.filter(requirement => passwordCheck.value.missing.includes(requirement.key)).map(requirement => requirement.label).join(', ')}.`,
-      color: 'error',
-      icon: 'i-lucide-triangle-alert'
-    })
+    notify.error('Password is too weak', { description: `Password must contain ${PASSWORD_REQUIREMENTS.filter(requirement => passwordCheck.value.missing.includes(requirement.key)).map(requirement => requirement.label).join(', ')}.` })
     return
   }
 
   if (!passwordsMatch.value) {
-    toast.add({ title: 'Passwords do not match', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Passwords do not match')
     return
   }
 
   if (!privacyConsent.value) {
-    toast.add({ title: 'Consent required', description: 'Please read and agree to the Data Privacy Notice to create an account.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Consent required', { description: 'Please read and agree to the Data Privacy Notice to create an account.' })
     return
   }
 
@@ -106,11 +97,11 @@ const handleRegister = async () => {
       username: username.value,
       email: email.value,
       password: password.value,
-      role: role.value,
+      role,
       fullName: fullName.value,
       contactNumber: contactNumber.value,
       privacyConsent: true,
-      ...(role.value === 'student' ? {} : { businessName: businessName.value })
+      businessName: businessName.value
     })
     deliveryFailed.value = result.verificationEmailSent === false
     pendingEmail.value = ''
@@ -120,7 +111,7 @@ const handleRegister = async () => {
   } catch (error: unknown) {
     const message = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
     registrationError.value = message ?? 'Unable to complete the request. Please try again.'
-    toast.add({ title: 'Registration failed', description: message ?? 'Unable to complete the request. Please try again.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Registration failed', { description: message ?? 'Unable to complete the request. Please try again.' })
   } finally {
     loading.value = false
   }
@@ -131,10 +122,10 @@ const resendVerification = async () => {
   resending.value = true
   try {
     await auth.resendConfirmation(registeredEmail.value)
-    toast.add({ title: 'Verification requested', description: 'If the account needs verification, a new code has been requested.', color: 'success', icon: 'i-lucide-mail-check' })
+    notify.success('Verification requested', { description: 'If the account needs verification, a new code has been requested.' })
     startResendCooldown()
   } catch {
-    toast.add({ title: 'Unable to resend', description: 'Please try again in a moment.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to resend', { description: 'Please try again in a moment.' })
   } finally {
     resending.value = false
   }
@@ -213,11 +204,7 @@ const resendVerification = async () => {
           </template>
         </UAlert>
 
-        <UFormField label="I want to use iMapSU as" name="role" required>
-          <USelect v-model="role" :items="roleOptions" size="lg" :disabled="loading" :portal="false" :ui="{ content: 'z-50' }" class="w-full" />
-        </UFormField>
-
-        <UFormField label="Full Name" name="fullName" required>
+        <UFormField label="Full name" name="fullName" required>
           <UInput required v-model="fullName" type="text" placeholder="Juan Dela Cruz" autocomplete="name" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
         </UFormField>
 
@@ -226,17 +213,17 @@ const resendVerification = async () => {
             <UInput required v-model="username" type="text" placeholder="e.g. jdoe" autocomplete="username" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
 
-          <UFormField label="Email Address" name="email" required>
+          <UFormField label="Email address" name="email" required>
             <UInput required v-model="email" type="email" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <UFormField label="Contact Number" name="contactNumber" required :class="{ 'sm:col-span-2': role === 'student' }">
+          <UFormField label="Contact number" name="contactNumber" required>
             <UInput required v-model="contactNumber" type="tel" placeholder="0917 000 0000" autocomplete="tel" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
 
-          <UFormField v-if="role !== 'student'" label="Business Name" name="businessName" hint="Optional">
+          <UFormField label="Business name" name="businessName" hint="Optional">
             <UInput v-model="businessName" type="text" placeholder="Store or trade name" autocomplete="organization" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
         </div>
@@ -263,7 +250,7 @@ const resendVerification = async () => {
             </ul>
           </UFormField>
 
-          <UFormField label="Confirm Password" name="confirmPassword" required :error="confirmPasswordError">
+          <UFormField label="Confirm password" name="confirmPassword" required :error="confirmPasswordError">
             <UInput required v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
               <template #trailing>
                 <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">
@@ -300,14 +287,14 @@ const resendVerification = async () => {
         <NuxtLink to="/login" class="imapsu-auth-link">Sign in</NuxtLink>
       </p>
       <p class="mt-3 text-center text-sm">
-        <NuxtLink to="/campus-map" class="imapsu-auth-link inline-flex items-center gap-1.5">
+        <NuxtLink to="/" class="imapsu-auth-link inline-flex items-center gap-1.5">
           <UIcon name="i-lucide-arrow-left" class="size-3.5" />
-          Back to campus map
+          Back to home
         </NuxtLink>
       </p>
     </div>
 
-    <UModal v-model:open="privacyOpen" :portal="false" title="Data Privacy Notice" description="How iMapSU collects, uses and protects your personal data." :ui="{ content: 'max-w-2xl' }">
+    <UModal v-model:open="privacyOpen" :portal="false" title="Data privacy notice" description="How iMapSU collects, uses and protects your personal data." :ui="{ content: 'max-w-2xl' }">
       <template #body>
         <PrivacyNotice />
       </template>

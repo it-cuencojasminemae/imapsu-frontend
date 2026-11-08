@@ -4,7 +4,7 @@ type Announcement = {
   documentId?: string
   title: string
   body: string
-  audience: 'Everyone' | 'Students' | 'Tenants'
+  audience: 'Everyone' | 'Tenants'
   pinned?: boolean
   publishedAt?: string
   publishAt?: string
@@ -24,10 +24,10 @@ type AnnouncementResponse = { data: Announcement[] }
 useHead({ title: 'Announcements | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, authHeaders, $api, getErrorMessage } = useStrapi()
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<AnnouncementResponse>('/api/announcements', {
+const { data: responseData, status, error, refresh } = await useFetch<AnnouncementResponse>('/api/announcements', { lazy: true,
   baseURL,
   headers: authHeaders,
   query: computed(() => ({
@@ -77,9 +77,9 @@ const acknowledge = async (announcement: Announcement) => {
       body: { data: { announcement: key } }
     })
     acknowledgedDocIds.value.add(key)
-    toast.add({ title: 'Announcement acknowledged', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Announcement acknowledged')
   } catch (err) {
-    toast.add({ title: 'Unable to acknowledge', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to acknowledge', { description: getErrorMessage(err) })
   } finally {
     acking.value = null
   }
@@ -88,30 +88,18 @@ const acknowledge = async (announcement: Announcement) => {
 const formatDate = (value?: string) => value
   ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
   : ''
-
-const audienceColor = (audience: Announcement['audience']) => {
-  switch (audience) {
-    case 'Students':
-      return 'secondary'
-    case 'Tenants':
-      return 'primary'
-    default:
-      return 'neutral'
-  }
-}
 </script>
 
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Stay informed</template>
       <template #title>Announcements</template>
       <template #description><p class="mt-2 max-w-xl text-muted">View official notices and advisories from the Office of Auxiliary Services. Acknowledge notices where requested.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-32" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="4" label="Loading announcements…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load announcements" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -127,7 +115,6 @@ const audienceColor = (audience: Announcement['audience']) => {
           <div class="flex shrink-0 items-center gap-2">
             <UBadge v-if="announcement.pinned" color="primary" variant="subtle" icon="i-lucide-pin">Pinned</UBadge>
             <UBadge v-if="auth.isAuthenticated && isAcknowledged(announcement)" color="success" variant="subtle" icon="i-lucide-check-circle-2">Acknowledged</UBadge>
-            <UBadge :color="audienceColor(announcement.audience)" variant="subtle">{{ announcement.audience }}</UBadge>
           </div>
         </div>
         <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-toned">{{ announcement.body }}</p>

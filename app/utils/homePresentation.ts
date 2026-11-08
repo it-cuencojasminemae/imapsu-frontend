@@ -24,21 +24,17 @@ export function homePresentation(role: string | null) {
     primary: { label: 'View My Applications', to: '/rental-applications', icon: 'i-lucide-clipboard-list' }, secondary: { label: 'Browse Vacant Spaces', to: '/properties', icon: 'i-lucide-store' },
     services: [service('Rental Applications', 'Track your applications and review requirements for your scheduled office visit.', '/rental-applications', 'clipboard-list', 'View Applications'), rentals, announcements]
   }
-  if (role === 'student') return {
-    heading: 'Campus Stall Information', description: 'Locate campus stalls, view information about occupied property spaces, and read official campus announcements.',
-    primary: { label: 'Explore Campus Map', to: '/campus-map', icon: 'i-lucide-map-pinned' }, secondary: { label: 'View Properties', to: '/properties', icon: 'i-lucide-store' },
-    services: [map, announcements, service('Student Feedback', 'Submit feedback about the products and services offered by campus stall tenants.', '/feedback', 'message-square-text', 'View Feedback')]
-  }
   return {
     heading: 'Campus Stalls and Services', description: 'Explore rentable spaces, locate campus stalls, and view listed business information through the interactive campus map.',
     primary: { label: 'Explore Campus Map', to: '/campus-map', icon: 'i-lucide-map-pinned' }, secondary: { label: 'Sign In', to: '/login', icon: 'i-lucide-log-in' },
     // The existing property directory requires authentication.
-    services: [map, { ...rentals, to: '/register', action: 'Register to Get Started' }, announcements, service('Student Feedback', 'Students can submit feedback about the products and services offered by campus stall tenants. Sign in with an authorized account.', '/login?redirect=/feedback', 'message-square-text', 'Sign In for Feedback')]
+    services: [map, { ...rentals, to: '/register', action: 'Register to Get Started' }, announcements, service('Rate a Stall', 'Anyone can rate a campus stall from the map, no account needed. Ratings follow the community guidelines.', '/campus-map', 'star', 'Rate on the Map')]
   }
 }
-export function propertySummary(records: { space_status?: string | null }[], student: boolean) {
-  const visible = student ? records.filter(record => record.space_status === 'Occupied') : records
-  const summary = [{ label: 'Listed property spaces', value: visible.length }, { label: 'Occupied property spaces', value: visible.filter(record => record.space_status === 'Occupied').length }]
-  if (!student) summary.push({ label: 'Available property spaces', value: visible.filter(record => record.space_status === 'Vacant').length })
-  return summary
+export function propertySummary(records: { space_status?: string | null }[]) {
+  return [
+    { label: 'Listed property spaces', value: records.length },
+    { label: 'Occupied property spaces', value: records.filter(record => record.space_status === 'Occupied').length },
+    { label: 'Available property spaces', value: records.filter(record => record.space_status === 'Vacant').length }
+  ]
 }

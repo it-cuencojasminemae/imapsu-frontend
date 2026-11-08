@@ -6,7 +6,6 @@ export const useAuth = () => {
   const loading = useState('auth-loading', () => false)
   const mfaPending = useState('auth-mfa-pending', () => false)
   const role = computed(() => user.value?.role?.type ?? null)
-  const isStudent = computed(() => role.value === 'student')
   const isAspiringTenant = computed(() => role.value === 'aspiring-tenant')
   const isCurrentTenant = computed(() => role.value === 'current-tenant')
   const isOas = computed(() => role.value === 'oas')
@@ -27,7 +26,7 @@ export const useAuth = () => {
     finally { loading.value = false }
   }
   return {
-    user, loading, mfaPending, role, isStudent, isAspiringTenant, isCurrentTenant, isOas, isAdmin,
+    user, loading, mfaPending, role, isAspiringTenant, isCurrentTenant, isOas, isAdmin,
     isStaff: computed(() => isOas.value || isAdmin.value),
     isAuthenticated: computed(() => !!user.value),
     displayName: computed(() => user.value?.fullName || user.value?.username || 'Account'),

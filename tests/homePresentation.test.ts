@@ -7,9 +7,9 @@ test('homepage actions respect the existing route role boundaries', () => {
     '/admin': ['oas', 'admin'], '/admin/applications': ['oas'], '/admin/bills': ['oas'], '/admin/maintenance': ['oas'],
     '/admin/users': ['admin'], '/admin/system-monitoring': ['admin'], '/admin/audit-logs': ['admin'],
     '/rental-applications': ['aspiring-tenant', 'current-tenant'], '/bills': ['current-tenant', 'aspiring-tenant'], '/tenancy': ['current-tenant'], '/maintenance': ['current-tenant'],
-    '/feedback': ['student', 'current-tenant']
+    '/feedback': ['current-tenant']
   }
-  for (const role of [null, 'student', 'aspiring-tenant', 'current-tenant', 'oas', 'admin']) {
+  for (const role of [null, 'aspiring-tenant', 'current-tenant', 'oas', 'admin']) {
     const home = homePresentation(role)
     for (const action of [home.primary, home.secondary, ...home.services]) {
       if (restricted[action.to]) assert.ok(restricted[action.to].includes(role!), `${role} cannot navigate to ${action.to}`)
@@ -19,10 +19,9 @@ test('homepage actions respect the existing route role boundaries', () => {
   assert.equal(homePresentation(null).services.find(item => item.title === 'Rental Applications')?.to, '/register')
 })
 
-test('property summaries distinguish unknown status and do not expose student vacancy counts', () => {
+test('property summaries distinguish unknown status', () => {
   const records = [{ space_status: 'Occupied' }, { space_status: 'Vacant' }, { space_status: 'Unknown' }, { space_status: null }]
-  assert.deepEqual(propertySummary(records, false).map(item => item.value), [4, 1, 1])
-  assert.deepEqual(propertySummary(records, true).map(item => item.value), [1, 1])
-  assert.deepEqual(propertySummary([], false).map(item => item.value), [0, 0, 0])
+  assert.deepEqual(propertySummary(records).map(item => item.value), [4, 1, 1])
+  assert.deepEqual(propertySummary([]).map(item => item.value), [0, 0, 0])
   assert.equal(records.length, 4)
 })

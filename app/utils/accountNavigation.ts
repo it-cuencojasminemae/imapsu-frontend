@@ -13,7 +13,7 @@ export function requiresAccountSetup(user: Account, now = Date.now()): boolean {
 }
 
 export function landingPath(user: Account, now = Date.now()): string {
-  if (!user) return '/campus-map'
+  if (!user) return '/'
   if (requiresAccountSetup(user, now)) return SECURITY_PATH
   return ['oas', 'admin'].includes(user.role?.type ?? '') ? '/admin' : '/dashboard'
 }

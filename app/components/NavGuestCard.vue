@@ -12,7 +12,7 @@ defineProps<{ onNavigate?: () => void }>()
       <p class="font-semibold text-white">Welcome to iMapSU</p>
       <p class="mt-1 text-xs leading-relaxed text-maroon-200">Sign in to apply for a stall, view your bills, and send feedback.</p>
       <UButton to="/login" block icon="i-lucide-log-in" label="Sign in" class="mt-3 bg-maroon-700 hover:bg-maroon-600" @click="onNavigate?.()" />
-      <NuxtLink to="/register" class="mt-2.5 block text-center text-xs font-medium text-maroon-100 hover:text-white hover:underline" @click="onNavigate?.()">Create an account</NuxtLink>
+      <NuxtLink to="/register?role=aspiring-tenant" class="mt-2.5 block text-center text-xs font-medium text-maroon-100 hover:text-white hover:underline" @click="onNavigate?.()">Apply Now</NuxtLink>
     </div>
   </div>
 </template>

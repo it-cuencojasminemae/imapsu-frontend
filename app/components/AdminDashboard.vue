@@ -45,20 +45,20 @@ const auth = useAuth()
 const { baseURL } = useStrapi()
 const headers = {}
 
-const { data: userDataResponse, refresh: refreshUsers, status: usersStatus, error: userDataError } = await useFetch<any>('/api/dashboard/admin-summary', { baseURL, headers })
+const { data: userDataResponse, refresh: refreshUsers, status: usersStatus, error: userDataError } = await useFetch<any>('/api/dashboard/admin-summary', { lazy: true, baseURL, headers })
 const { data: userData } = useRequestPresentation(userDataResponse, usersStatus)
 
-const { data: roleDataResponse, refresh: refreshRoles, status: roleDataStatus, error: roleDataError } = await useFetch<RoleInfo[]>('/api/roles', { baseURL, headers })
+const { data: roleDataResponse, refresh: refreshRoles, status: roleDataStatus, error: roleDataError } = await useFetch<RoleInfo[]>('/api/roles', { lazy: true, baseURL, headers })
 const { data: roleData } = useRequestPresentation(roleDataResponse, roleDataStatus)
 
-const { data: auditDataResponse, refresh: refreshAudits, status: auditDataStatus, error: auditDataError } = await useFetch<AuditListResponse>('/api/audit-logs', {
+const { data: auditDataResponse, refresh: refreshAudits, status: auditDataStatus, error: auditDataError } = await useFetch<AuditListResponse>('/api/audit-logs', { lazy: true,
   baseURL,
   headers,
   query: { sort: 'createdAt:desc', 'pagination[pageSize]': 8 }
 })
 const { data: auditData } = useRequestPresentation(auditDataResponse, auditDataStatus)
 
-const { data: healthDataResponse, refresh: refreshHealth, status: healthDataStatus, error: healthDataError } = await useFetch<HealthResponse>('/api/system/health', { baseURL, headers })
+const { data: healthDataResponse, refresh: refreshHealth, status: healthDataStatus, error: healthDataError } = await useFetch<HealthResponse>('/api/system/health', { lazy: true, baseURL, headers })
 const { data: healthData } = useRequestPresentation(healthDataResponse, healthDataStatus)
 
 
@@ -84,7 +84,6 @@ const serverErrors = computed(() => health.value?.errors?.total ?? 0)
 
 const usersByRole = computed(() => {
   const buckets: { type: string; label: string; count: number }[] = [
-    { type: 'student', label: 'Students', count: 0 },
     { type: 'aspiring-tenant', label: 'Aspiring tenants', count: 0 },
     { type: 'current-tenant', label: 'Current tenants', count: 0 },
     { type: 'oas', label: 'OAS', count: 0 },
@@ -137,23 +136,23 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
 
 <template>
   <div class="admin-dashboard">
-    <AppPageHeader eyebrow="Administration">
-      <template #title>System Administration</template>
-      <template #description>Manage system access, monitor platform activity, and maintain operational reliability.</template>
+    <AppPageHeader>
+      <template #title>System administration</template>
+      <template #description>Accounts, sign-ins and server health for iMapSU.</template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="refreshing" @click="refreshAll" /></template>
     </AppPageHeader>
     <AppRefreshState :refreshing="dashboard.loaded.value && dashboardRefreshing" :failed="dashboard.loaded.value && dashboardRefreshFailed" @retry="refreshAll" />
-    <AppLoadingState v-if="dashboard.loading.value" :count="4" height="h-36" />
+    <AppLoadingState v-if="dashboard.loading.value" variant="dashboard" label="Loading dashboard…" />
     <UAlert v-else-if="dashboard.failed.value" color="error" icon="i-lucide-triangle-alert" title="Unable to load the dashboard" description="Some records are unavailable. Retry to load the overview."><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refreshAll" /></template></UAlert>
     <template v-else>
       <UAlert v-if="userData?.security?.staffEnrollmentPending || userData?.security?.lockedAccounts" class="mb-6" color="warning" title="Account security needs attention" :description="`${userData?.security?.staffEnrollmentPending ?? 0} staff accounts awaiting authenticator enrollment; ${userData?.security?.lockedAccounts ?? 0} accounts temporarily locked.`"><template #actions><UButton to="/admin/users" label="Review accounts" color="neutral" variant="outline" /></template></UAlert>
 
     <section aria-labelledby="admin-status-title">
-      <h2 id="admin-status-title" class="mb-3 text-base font-semibold text-highlighted">System Health and Access</h2>
+      <h2 id="admin-status-title" class="sr-only">System health and access</h2>
       <div class="grid gap-3 lg:grid-cols-2">
         <UCard :ui="{ body: 'p-5' }">
           <div class="flex items-start gap-3">
-            <span class="grid size-9 shrink-0 place-items-center rounded-lg" :class="health?.database?.ok ? 'bg-success/10 text-success' : 'bg-error/10 text-error'"><UIcon :name="health?.database?.ok ? 'i-lucide-check-circle-2' : 'i-lucide-triangle-alert'" class="size-5" aria-hidden="true" /></span>
+            <UIcon :name="health?.database?.ok ? 'i-lucide-check-circle-2' : 'i-lucide-triangle-alert'" class="mt-0.5 size-5 shrink-0" :class="health?.database?.ok ? 'text-success' : 'text-error'" aria-hidden="true" />
             <div class="min-w-0 flex-1">
               <h3 class="text-sm font-medium text-muted">Platform availability</h3>
               <p class="mt-1 text-lg font-semibold text-highlighted">{{ health?.database?.ok ? 'Database connected' : 'Database unavailable' }}</p>
@@ -165,24 +164,24 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
         <DashboardMetricCard v-if="failedLogins24h > 0" label="Failed logins in 24 hours" :value="failedLogins24h" icon="i-lucide-shield-alert" to="/admin/system-monitoring" sub="Recent sign-in attempts need review." action="Review sign-in activity" tone="warning" />
         <UCard v-else :ui="{ body: 'p-5' }">
           <div class="flex items-start gap-3">
-            <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-success/10 text-success"><UIcon name="i-lucide-shield-check" class="size-5" aria-hidden="true" /></span>
-            <div><h3 class="text-sm font-medium text-muted">Sign-in activity</h3><p class="mt-1 text-lg font-semibold text-highlighted">No failed logins in 24 hours</p><p class="mt-1 text-sm text-muted">0 failed attempts in the latest reporting window.</p><NuxtLink to="/admin/system-monitoring" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View sign-in activity<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink></div>
+            <UIcon name="i-lucide-shield-check" class="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
+            <div><h3 class="text-sm font-medium text-muted">Sign-in activity</h3><p class="mt-1 text-lg font-semibold text-highlighted">No failed logins in 24 hours</p><NuxtLink to="/admin/system-monitoring" class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View sign-in activity<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink></div>
           </div>
         </UCard>
       </div>
     </section>
-    <section class="mt-8" aria-labelledby="admin-overview-title"><h2 id="admin-overview-title" class="mb-3 text-base font-semibold text-highlighted">Platform overview</h2><div class="grid gap-3 sm:grid-cols-3">
+    <section class="mt-10" aria-labelledby="admin-overview-title"><h2 id="admin-overview-title" class="sr-only">Platform overview</h2><div class="grid gap-3 sm:grid-cols-3">
       <AppMotionReveal v-for="(card, index) in summaryCards" :key="card.to + card.label" :index="index" >
         <DashboardMetricCard v-bind="card" :action="summaryActions[card.label] ?? 'Open workspace'" />
       </AppMotionReveal>
     </div></section>
-    <section class="mt-8" aria-labelledby="admin-reports-title">
-    <h2 id="admin-reports-title" class="mb-3 text-base font-semibold text-highlighted">Reports and recent activity</h2>
+    <section class="mt-10" aria-labelledby="admin-reports-title">
+    <h2 id="admin-reports-title" class="sr-only">Reports and recent activity</h2>
 
     <div class="grid gap-4 lg:grid-cols-2">
       <UCard :ui="{ body: 'p-5' }">
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">Users by role</h3>
             <NuxtLink to="/admin/users" aria-label="Manage users" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">Manage<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
@@ -192,18 +191,18 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
             <dt class="flex items-center gap-2 text-muted">
               {{ bucket.label }}
             </dt>
-            <dd class="font-semibold text-highlighted">{{ bucket.count }}</dd>
+            <dd class="font-semibold tabular-nums text-highlighted">{{ bucket.count }}</dd>
           </div>
           <div class="flex items-center justify-between border-t border-default pt-3 text-sm">
-            <dt class="flex items-center gap-2 text-muted"><UIcon name="i-lucide-user-x" class="size-4" aria-hidden="true" />Blocked accounts</dt>
-            <dd class="font-semibold text-highlighted">{{ blockedCount }}</dd>
+            <dt class="text-muted">Blocked accounts</dt>
+            <dd class="font-semibold tabular-nums text-highlighted">{{ blockedCount }}</dd>
           </div>
         </dl>
       </UCard>
 
       <UCard :ui="{ body: 'p-5' }">
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">System monitoring</h3>
             <NuxtLink to="/admin/system-monitoring" aria-label="Open system monitoring" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">Monitor<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
@@ -242,7 +241,7 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
 
       <UCard class="lg:col-span-2" :ui="{ body: 'p-0' }">
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">Recent activity</h3>
             <NuxtLink to="/admin/audit-logs" aria-label="View all audit entries" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
@@ -263,7 +262,7 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
 
     <UCard v-if="recentLogins.length" class="mt-4">
       <template #header>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-3">
           <h3 class="text-base font-semibold text-highlighted">Latest staff sign-ins</h3>
           <NuxtLink to="/admin/audit-logs" aria-label="View sign-in audit log" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">Audit log<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
         </div>
@@ -271,9 +270,6 @@ const dashboardRefreshFailed = computed(() => !!userDataError.value || !!roleDat
       <ul class="divide-y divide-default">
         <li v-for="entry in recentLogins" :key="entry.id" class="flex flex-wrap items-start justify-between gap-3 py-4">
           <div class="flex min-w-0 items-center gap-3">
-            <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted">
-              <UIcon name="i-lucide-user-round-check" class="size-4" />
-            </span>
             <div class="min-w-0">
               <p class="text-sm font-medium text-highlighted">{{ entry.entityLabel || entry.actorUsername || '—' }}</p>
               <p class="mt-1 text-sm text-muted">{{ entry.description || staffRoleLabel(entry.actorRole) }}</p>

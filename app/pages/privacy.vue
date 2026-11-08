@@ -14,9 +14,9 @@ const auth = useAuth()
 
     <template #footer>
       <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
-        <NuxtLink to="/campus-map" class="imapsu-auth-link inline-flex items-center gap-2">
+        <NuxtLink to="/" class="imapsu-auth-link inline-flex items-center gap-2">
           <UIcon name="i-lucide-arrow-left" class="size-4" />
-          Back to campus map
+          Back to home
         </NuxtLink>
         <template v-if="!auth.user.value">
           <span class="text-dimmed" aria-hidden="true">|</span>

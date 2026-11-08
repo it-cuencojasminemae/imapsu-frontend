@@ -6,7 +6,7 @@ definePageMeta({
     const auth = useAuth()
     if (auth.isStaff.value) return navigateTo(landingPath(auth.user.value), { replace: true })
   }],
-  roles: ['student', 'aspiring-tenant', 'current-tenant']
+  roles: ['aspiring-tenant', 'current-tenant']
 })
 useHead({ title: 'Dashboard | iMapSU' })
 const auth = useAuth()

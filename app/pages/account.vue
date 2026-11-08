@@ -12,7 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const colorMode = useColorMode()
 const { $api, getErrorMessage } = useStrapi()
-const toast = useToast()
+const notify = useNotify()
 const section = computed(() => accountSection(route.query.section))
 const sections = [
   { value: 'profile', label: 'Profile', icon: 'i-lucide-circle-user-round' },
@@ -36,7 +36,7 @@ const hasUnsavedChanges = computed(() => dirty.value || !!password.value?.dirty)
 watchEffect(() => { sharedDirty.value = hasUnsavedChanges.value })
 const identity = computed(() => `${auth.user.value?.id}:${auth.role.value}`)
 
-const roleLabels: Record<string, string> = { student: 'Student', 'aspiring-tenant': 'Aspiring Tenant', 'current-tenant': 'Current Tenant', oas: 'OAS', admin: 'MIS' }
+const roleLabels: Record<string, string> = { 'aspiring-tenant': 'Aspiring Tenant', 'current-tenant': 'Current Tenant', oas: 'OAS', admin: 'MIS' }
 const roleLabel = computed(() => roleLabels[auth.role.value ?? ''] ?? 'Member')
 const pendingMfa = computed(() => auth.isStaff.value && auth.user.value?.security?.mfaRequired && !auth.user.value.security.mfaEnabled)
 const enrollmentDeadline = computed(() => {
@@ -63,7 +63,7 @@ const saveProfile = async () => {
     if (identity.value !== owner) return
     auth.user.value = { ...auth.user.value!, ...updated, security: updated.security ?? auth.user.value?.security }
     for (const key of Object.keys(body) as ProfileField[]) form[key] = updated[key] ?? ''
-    toast.add({ title: 'Profile updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Profile updated')
   } catch (err: any) {
     profileError.value = getErrorMessage(err)
     for (const detail of err?.data?.error?.details?.errors ?? []) {
@@ -118,7 +118,7 @@ const saveAvatar = async (blob: Blob | null) => {
     const updated = await $api<User>('/api/auth/account', { method: 'PUT', body: { avatar } })
     if (identity.value !== owner) return
     auth.user.value = { ...auth.user.value!, ...updated, security: updated.security ?? auth.user.value?.security }
-    toast.add({ title: blob ? 'Profile photo updated' : 'Profile photo removed', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success(blob ? 'Profile photo updated' : 'Profile photo removed')
   } catch (err) { if (identity.value === owner) avatarError.value = getErrorMessage(err) }
   finally { uploadingAvatar.value = false }
 }
@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="imapsu-page account-page">
-    <AppPageHeader title="My Account" description="Manage your profile, security, and account preferences." eyebrow="Your account" />
+    <AppPageHeader title="My account" description="Manage your profile, security, and account preferences." />
 
     <div v-if="auth.user.value?.security?.passwordChangeRequired || pendingMfa" class="mb-5 space-y-3">
       <UAlert v-if="auth.user.value?.security?.passwordChangeRequired" color="warning" variant="soft" icon="i-lucide-key-round" title="Password change required" description="Your configured password age has been reached. Update your password to restore access.">
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
             <UAlert v-if="profileError" color="error" icon="i-lucide-triangle-alert" title="Unable to save profile" :description="profileError" />
             <div class="flex flex-wrap items-center justify-end gap-3">
               <span v-if="dirty" class="text-sm text-muted" role="status">Unsaved changes</span>
-              <UButton type="submit" label="Save Changes" icon="i-lucide-check" data-prominent="true" :disabled="!dirty || uploadingAvatar" :loading="saving" />
+              <UButton type="submit" label="Save changes" icon="i-lucide-check" data-prominent="true" :disabled="!dirty || uploadingAvatar" :loading="saving" />
             </div>
           </form>
         </section>

@@ -49,7 +49,7 @@ const auth = useAuth()
 const { baseURL } = useStrapi()
 const headers = {}
 
-const { data: summaryResponse, status: summaryStatus, error: summaryError, refresh: refreshSummary } = await useFetch<any>('/api/dashboard/oas-summary', { baseURL, headers })
+const { data: summaryResponse, status: summaryStatus, error: summaryError, refresh: refreshSummary } = await useFetch<any>('/api/dashboard/oas-summary', { lazy: true, baseURL, headers })
 const { data: summary } = useRequestPresentation(summaryResponse, summaryStatus)
 const propertyDataStatus = summaryStatus, propertyDataError = summaryError, refreshPropertyData = refreshSummary
 const tenancyDataStatus = summaryStatus, tenancyDataError = summaryError, refreshTenancyData = refreshSummary
@@ -57,9 +57,9 @@ const applicationDataStatus = summaryStatus, applicationDataError = summaryError
 const ticketDataStatus = summaryStatus, ticketDataError = summaryError, refreshTicketData = refreshSummary
 const feedbackDataStatus = summaryStatus, feedbackDataError = summaryError, refreshFeedbackData = refreshSummary
 const readingDataStatus = summaryStatus, readingDataError = summaryError, refreshReadingData = refreshSummary
-const { data: billDataResponse, status: billDataStatus, error: billDataError, refresh: refreshBillData } = await useFetch<ListResponse<Bill>>('/api/bills', { baseURL, headers, query: { sort: 'createdAt:desc', 'pagination[pageSize]': 4, 'populate[tenancy][populate][user]': true, 'populate[tenancy][populate][propertySpace]': true } })
+const { data: billDataResponse, status: billDataStatus, error: billDataError, refresh: refreshBillData } = await useFetch<ListResponse<Bill>>('/api/bills', { lazy: true, baseURL, headers, query: { sort: 'createdAt:desc', 'pagination[pageSize]': 4, 'populate[tenancy][populate][user]': true, 'populate[tenancy][populate][propertySpace]': true } })
 const { data: billData } = useRequestPresentation(billDataResponse, billDataStatus)
-const { data: announcementDataResponse, status: announcementDataStatus, refresh: refreshAnnouncementData, error: announcementDataError } = await useFetch<ListResponse<Announcement>>('/api/announcements', {
+const { data: announcementDataResponse, status: announcementDataStatus, refresh: refreshAnnouncementData, error: announcementDataError } = await useFetch<ListResponse<Announcement>>('/api/announcements', { lazy: true,
   baseURL,
   headers,
   query: { sort: 'pinned:desc,publishedAt:desc', 'pagination[pageSize]': 5 }
@@ -121,7 +121,7 @@ const cards = computed(() => [
   { label: 'Overdue accounts', value: overdueAccounts.value, icon: 'i-lucide-triangle-alert', to: '/admin/bills?overdue=true', accent: 'bg-maroon-50 text-maroon-700', sub: `${formatCurrency(overdueTotal.value)} due` },
   { label: 'Active maintenance tickets', value: activeTickets.value, icon: 'i-lucide-wrench', to: '/admin/maintenance', accent: 'bg-maroon-50 text-maroon-800', sub: `${summary.value?.maintenance?.total ?? 0} total` },
   { label: 'Unreviewed feedback', value: unreviewedFeedback.value, icon: 'i-lucide-message-square-text', to: '/admin/feedback?unreviewed=true', accent: 'bg-gold-100 text-gold-700', sub: 'needs action' },
-  { label: 'Utility Readings', value: utilitySubmissions.value, icon: 'i-lucide-gauge', to: '/admin/bills', accent: 'bg-maroon-100 text-maroon-800', sub: 'recorded readings' },
+  { label: 'Utility readings', value: utilitySubmissions.value, icon: 'i-lucide-gauge', to: '/admin/bills', accent: 'bg-maroon-100 text-maroon-800', sub: 'recorded readings' },
   { label: 'Tenancies', value: tenancyCount.value, icon: 'i-lucide-key-round', to: '/admin/tenancies', accent: 'bg-gold-50 text-gold-700', sub: `${activeTenancies.value} active` },
   { label: 'Announcements', value: announcementCount.value, icon: 'i-lucide-megaphone', to: '/admin/announcements', accent: 'bg-maroon-50 text-maroon-800', sub: 'recorded' }
 ])
@@ -138,7 +138,7 @@ const attentionCards = computed(() => activeDashboardQueues([
   { ...cards.value[5]!, priority: 5, tone: 'neutral' as const, action: 'Review feedback' }
 ]))
 const summaryCards = computed(() => cards.value.filter((_, index) => [0, 6, 7, 8].includes(index)))
-const summaryActions: Record<string, string> = { 'Occupied spaces': 'View property spaces', 'Utility Readings': 'View bills', Tenancies: 'View tenancies', Announcements: 'View announcements' }
+const summaryActions: Record<string, string> = { 'Occupied spaces': 'View property spaces', 'Utility readings': 'View bills', Tenancies: 'View tenancies', Announcements: 'View announcements' }
 
 const formatCurrency = (amount?: number | string) => amount == null || amount === ''
   ? '—'
@@ -160,7 +160,6 @@ const statusColor = (status?: string) => {
 
 const audienceColor = (audience?: string) => {
   switch (audience) {
-    case 'Students': return 'secondary'
     case 'Tenants': return 'primary'
     default: return 'neutral'
   }
@@ -173,21 +172,21 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
 
 <template>
   <div class="oas-dashboard">
-    <AppPageHeader eyebrow="Management">
+    <AppPageHeader>
       <template #title>Office of Auxiliary Services</template>
-      <template #description>Monitor campus stalls, rental applications, tenant accounts, and operational requests.</template>
+      <template #description>What needs a decision today, then occupancy, collections and contracts.</template>
 
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="dashboardRefreshing" @click="refreshAll" /></template>
     </AppPageHeader>
     <AppRefreshState :refreshing="dashboard.loaded.value && dashboardRefreshing" :failed="dashboard.loaded.value && dashboardRefreshFailed" @retry="refreshAll" />
-    <AppLoadingState v-if="dashboard.loading.value" :count="4" height="h-36" />
+    <AppLoadingState v-if="dashboard.loading.value" variant="dashboard" label="Loading dashboard…" />
     <UAlert v-else-if="dashboard.failed.value" color="error" icon="i-lucide-triangle-alert" title="Unable to load the dashboard" description="Some records are unavailable. Retry to load the overview."><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refreshAll" /></template></UAlert>
     <template v-else>
 
     <section aria-labelledby="oas-attention-title">
-      <h2 id="oas-attention-title" class="mb-3 text-base font-semibold text-highlighted">Requires Attention</h2>
+      <h2 id="oas-attention-title" class="mb-3 text-base font-semibold text-highlighted">Needs attention</h2>
       <div v-if="canPresentAllClear(attentionCards.length, dashboardRefreshing, dashboardRefreshFailed)" class="flex items-start gap-3 rounded-xl border border-default bg-default px-5 py-4">
-        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-success/10 text-success"><UIcon name="i-lucide-check-circle-2" class="size-5" aria-hidden="true" /></span>
+        <UIcon name="i-lucide-check-circle-2" class="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
         <div><h3 class="text-sm font-semibold text-highlighted">All clear</h3><p class="mt-1 text-sm text-muted">No pending items require attention.</p></div>
       </div>
       <UAlert v-else-if="!attentionCards.length" color="neutral" icon="i-lucide-info" :title="dashboardRefreshing ? 'Checking pending items…' : 'Pending items could not be confirmed'" description="The last available records remain below. All-clear status requires every data source to load successfully." />
@@ -195,38 +194,38 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
         <DashboardMetricCard v-for="(card, index) in attentionCards" :key="card.label" v-bind="card" :class="attentionCards.length === 5 && index === 0 ? 'sm:col-span-2' : ''" />
       </div>
     </section>
-    <section class="mt-8" aria-labelledby="oas-overview-title"><h2 id="oas-overview-title" class="mb-3 text-base font-semibold text-highlighted">Campus Operations Overview</h2><div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section class="mt-10" aria-labelledby="oas-overview-title"><h2 id="oas-overview-title" class="sr-only">Campus operations overview</h2><div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <AppMotionReveal v-for="(card, index) in summaryCards" :key="card.to + card.label" :index="index" >
         <DashboardMetricCard v-bind="card" :action="summaryActions[card.label] ?? 'Open workspace'" />
       </AppMotionReveal>
     </div></section>
-    <section class="mt-8" aria-labelledby="oas-reports-title">
-    <h2 id="oas-reports-title" class="mb-3 text-base font-semibold text-highlighted">Reports and recent activity</h2>
+    <section class="mt-10" aria-labelledby="oas-reports-title">
+    <h2 id="oas-reports-title" class="sr-only">Reports and recent activity</h2>
 
     <div class="grid gap-4 lg:grid-cols-3">
       <UCard :ui="{ body: 'p-5' }">
         <template #header>
-          <h3 class="text-base font-semibold text-highlighted">Operational Summary</h3>
+          <h3 class="text-base font-semibold text-highlighted">Collections and occupancy</h3>
         </template>
         <dl class="space-y-5">
           <div>
             <div class="flex items-center justify-between text-sm">
-              <dt class="flex items-center gap-1.5 text-muted"><UIcon name="i-lucide-clock-3" class="size-4" :class="outstandingTotal > 0 ? 'text-warning' : 'text-muted'" aria-hidden="true" />Outstanding</dt>
-              <dd class="font-semibold" :class="outstandingTotal > 0 ? 'text-warning' : 'text-highlighted'">{{ formatCurrency(outstandingTotal) }}</dd>
+              <dt class="text-muted">Outstanding</dt>
+              <dd class="text-lg font-semibold tabular-nums" :class="outstandingTotal > 0 ? 'text-warning' : 'text-highlighted'">{{ formatCurrency(outstandingTotal) }}</dd>
             </div>
             <p class="mt-0.5 text-xs text-muted">{{ unverifiedBills }} unverified bill{{ unverifiedBills === 1 ? '' : 's' }}</p>
           </div>
           <div>
             <div class="flex items-center justify-between text-sm">
-              <dt class="flex items-center gap-1.5 text-muted"><UIcon name="i-lucide-badge-check" class="size-4 text-success" aria-hidden="true" />Collected</dt>
-              <dd class="font-semibold text-success">{{ formatCurrency(collectedTotal) }}</dd>
+              <dt class="text-muted">Collected</dt>
+              <dd class="text-lg font-semibold tabular-nums text-success">{{ formatCurrency(collectedTotal) }}</dd>
             </div>
             <p class="mt-0.5 text-xs text-muted">{{ verifiedBills }} verified bill{{ verifiedBills === 1 ? '' : 's' }}</p>
           </div>
           <div>
             <div class="flex items-center justify-between text-sm">
-              <dt class="flex items-center gap-1.5 text-muted"><UIcon name="i-lucide-store" class="size-4 text-primary" />Occupancy</dt>
-              <dd class="font-semibold text-highlighted">{{ occupancy }}%</dd>
+              <dt class="text-muted">Occupancy</dt>
+              <dd class="text-lg font-semibold tabular-nums text-highlighted">{{ occupancy }}%</dd>
             </div>
             <UProgress :model-value="occupancy" aria-label="Occupied property spaces" class="mt-2" />
             <p class="mt-1 text-xs text-muted">{{ occupiedSpaces }} of {{ totalSpaces }} spaces occupied</p>
@@ -236,7 +235,7 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
 
       <UCard :ui="{ body: 'p-0' }">
         <template #header>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">Recent bills</h3>
             <NuxtLink to="/admin/bills" aria-label="View all bills" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
@@ -262,8 +261,8 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
 
       <UCard :ui="{ body: 'p-0' }">
         <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-semibold text-highlighted">Contract Expirations</h3>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold text-highlighted">Contracts ending within 30 days</h3>
             <NuxtLink to="/admin/tenancies" aria-label="View all tenancies" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
         </template>
@@ -274,25 +273,22 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
                 <p class="text-sm font-medium text-highlighted">{{ tenancy.user?.username ?? 'Tenant' }}</p>
                 <p class="mt-1 text-sm text-muted">{{ tenancy.propertySpace?.name ?? 'Space' }}</p>
               </div>
-              <span class="shrink-0 text-xs font-medium text-warning">{{ formatDate(tenancy.endDate) }}</span>
+              <time :datetime="tenancy.endDate" class="shrink-0 text-sm font-medium text-warning">{{ formatDate(tenancy.endDate) }}</time>
             </NuxtLink>
           </li>
         </ul>
-        <p v-else class="px-5 py-6 text-sm text-muted">No contracts expiring within 30 days.</p>
+        <p v-else class="px-5 py-6 text-sm text-muted">None this month.</p>
       </UCard>
     </div>
 
-    <UCard class="mt-4">
-      <template #header>
-          <h3 class="text-base font-semibold text-highlighted">Quick actions</h3>
-      </template>
-      <div class="flex flex-wrap gap-3">
-        <UButton to="/admin/properties" icon="i-lucide-plus" label="Add property space" />
+    <div class="mt-6" role="group" aria-label="Quick actions">
+      <div class="flex flex-wrap gap-2">
+        <UButton to="/admin/properties" icon="i-lucide-plus" label="Add property space" data-prominent="true" />
         <UButton to="/admin/tenancies" icon="i-lucide-key-round" label="Create tenancy" color="neutral" variant="subtle" />
         <UButton to="/admin/bills" icon="i-lucide-receipt" label="Issue bill" color="neutral" variant="subtle" />
         <UButton to="/admin/announcements" icon="i-lucide-megaphone" label="New announcement" color="neutral" variant="subtle" />
       </div>
-    </UCard>
+    </div>
     </section>
     </template>
   </div>

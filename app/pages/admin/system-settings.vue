@@ -1,10 +1,8 @@
 <script setup lang="ts">
 definePageMeta({
   middleware: ['auth', 'role'],
-  roles: ['admin']
+  roles: ['admin', 'oas']
 })
-
-useHead({ title: 'System Settings | iMapSU' })
 
 type SystemSettings = {
   id?: number
@@ -32,15 +30,62 @@ type SystemSettings = {
 }
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
-const { data: responseData, status, error, refresh } = await useFetch<{ data: SystemSettings }>('/api/system-settings', {
+// MIS administrators manage every setting. OAS staff only maintain the stall
+// rules and regulations applicants accept, so they never load the rest.
+const isAdmin = computed(() => auth.isAdmin.value)
+useHead({ title: () => isAdmin.value ? 'System Settings | iMapSU' : 'Stall Rules | iMapSU' })
+
+const { data: responseData, status, error, refresh: refreshSettings } = await useFetch<{ data: SystemSettings }>('/api/system-settings', { lazy: true,
+  baseURL,
+  headers,
+  immediate: auth.isAdmin.value
+})
+const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
+
+const { data: rulesResponse, status: rulesStatus, refresh: refreshRules } = await useFetch<{ data: { stallRules: string } }>('/api/system-settings/stall-rules', { lazy: true,
   baseURL,
   headers
 })
-const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
+const stallRules = ref('')
+const savedRules = ref('')
+const rulesLoaded = ref(false)
+watch(
+  () => rulesResponse.value?.data?.stallRules,
+  (rules) => {
+    if (typeof rules !== 'string') return
+    stallRules.value = rules
+    savedRules.value = rules
+    rulesLoaded.value = true
+  },
+  { immediate: true }
+)
+const RULES_MAX_LENGTH = 50000
+const rulesToolbar = [
+  [
+    { kind: 'heading', level: 2, icon: 'i-lucide-heading-2', 'aria-label': 'Heading' },
+    { kind: 'heading', level: 3, icon: 'i-lucide-heading-3', 'aria-label': 'Subheading' }
+  ],
+  [
+    { kind: 'mark', mark: 'bold', icon: 'i-lucide-bold', 'aria-label': 'Bold' },
+    { kind: 'mark', mark: 'italic', icon: 'i-lucide-italic', 'aria-label': 'Italic' }
+  ],
+  [
+    { kind: 'bulletList', icon: 'i-lucide-list', 'aria-label': 'Bulleted list' },
+    { kind: 'orderedList', icon: 'i-lucide-list-ordered', 'aria-label': 'Numbered list' }
+  ],
+  [
+    { kind: 'undo', icon: 'i-lucide-undo', 'aria-label': 'Undo' },
+    { kind: 'redo', icon: 'i-lucide-redo', 'aria-label': 'Redo' }
+  ]
+] as any
+
+const refresh = async () => {
+  await Promise.all([isAdmin.value ? refreshSettings() : Promise.resolve(), refreshRules()])
+}
 
 
 const form = reactive<SystemSettings>({
@@ -99,21 +144,36 @@ watch(
 const saving = ref(false)
 
 const save = async () => {
+  const rules = stallRules.value.trim()
+  if (rulesLoaded.value && !rules) {
+    notify.error('Unable to save settings', { description: 'Enter the stall rules and regulations.' })
+    return
+  }
+  if (rules.length > RULES_MAX_LENGTH) {
+    notify.error('Unable to save settings', { description: 'The stall rules are too long (50,000 characters at most).' })
+    return
+  }
   saving.value = true
   try {
-    await $api('/api/system-settings', {
-      method: 'PUT',
-      body: {
-        data: {
-          ...form,
-          passwordMaxAgeDays: form.passwordMaxAgeDays ?? null
+    if (isAdmin.value) {
+      await $api('/api/system-settings', {
+        method: 'PUT',
+        body: {
+          data: {
+            ...form,
+            passwordMaxAgeDays: form.passwordMaxAgeDays ?? null
+          }
         }
-      }
-    })
-    toast.add({ title: 'Settings saved', description: 'System configuration has been updated.', color: 'success', icon: 'i-lucide-check-circle-2' })
+      })
+    }
+    if (rulesLoaded.value && rules !== savedRules.value.trim()) {
+      await $api('/api/system-settings/stall-rules', { method: 'PUT', body: { data: { stallRules: rules } } })
+    }
+    if (isAdmin.value) notify.success('Settings saved', { description: 'System configuration has been updated.' })
+    else notify.success('Stall rules saved', { description: 'Applicants will see the updated rules and regulations.' })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to save settings', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to save settings', { description: getErrorMessage(err) })
   } finally {
     saving.value = false
   }
@@ -129,22 +189,24 @@ const statusOptions = [
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
-      <template #title>System Settings</template>
+      <template #title>{{ isAdmin ? 'System settings' : 'Stall rules' }}</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
-          Configure system-wide behaviour: account policy, notification preferences, upload restrictions and the database backup schedule.
+          {{ isAdmin
+            ? 'Configure system-wide behaviour: account policy, notification preferences, upload restrictions, the stall rules and the database backup schedule.'
+            : 'Maintain the rules and regulations that applicants must read and accept before they apply for a stall.' }}
         </p></template>
       <template #actions><div class="flex items-center gap-2">
-        <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" />
+        <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending' || rulesStatus === 'pending'" @click="refresh" />
       </div></template>
     </AppPageHeader>
 
-    <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-32" />
+    <AppRefreshState v-if="isAdmin" :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
+    <AppLoadingState v-if="isAdmin && isInitialLoading" variant="form" :count="3" label="Loading system settings…" />
 
-    <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load system settings" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
+    <UAlert v-else-if="isAdmin && isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load system settings" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
     <form v-else class="space-y-6" @submit.prevent="save">
+      <template v-if="isAdmin">
       <UCard>
         <template #header>
           <h2 class="text-lg font-semibold text-highlighted">General</h2>
@@ -274,6 +336,24 @@ const statusOptions = [
           </div>
           <UCheckbox v-model="form.backupsEnabled" />
         </label>
+      </UCard>
+      </template>
+
+      <UCard>
+        <template #header>
+          <h2 class="text-lg font-semibold text-highlighted">Stall rules and regulations</h2>
+          <p class="text-sm text-muted">Shown to applicants, who must accept them before applying for a stall. Use headings and lists to keep the rules easy to read.</p>
+        </template>
+        <AppLoadingState v-if="!rulesLoaded && rulesStatus === 'pending'" :count="3" height="h-8" />
+        <UAlert v-else-if="!rulesLoaded" color="error" icon="i-lucide-triangle-alert" title="Unable to load the stall rules" description="Please try again."><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refreshRules()" /></template></UAlert>
+        <ClientOnly v-else>
+          <div class="overflow-hidden rounded-lg border border-default">
+            <UEditor v-slot="{ editor }" v-model="stallRules" content-type="markdown" placeholder="Write the stall rules and regulations…" class="max-h-[32rem] min-h-64 w-full overflow-y-auto" :ui="{ base: 'px-4 py-3' }">
+              <UEditorToolbar :editor="editor" :items="rulesToolbar" class="sticky top-0 z-10 border-b border-default bg-default px-2 py-1" />
+            </UEditor>
+          </div>
+          <template #fallback><AppLoadingState :count="3" height="h-8" /></template>
+        </ClientOnly>
       </UCard>
 
       <div class="flex justify-end">

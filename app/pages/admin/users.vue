@@ -20,7 +20,6 @@ type DirectoryUser = {
 useHead({ title: 'Manage Users | iMapSU' })
 
 const ROLE_DOC_IDS: Record<string, string> = {
-  student: 'lfabw04fhi1fe91oh0heewup',
   'aspiring-tenant': 'y3b72vs2uj2bc0792pwjzdy4',
   'current-tenant': 'p0qt6v81dq4lzt614uqti8lp',
   oas: 'mtovgm1t97h0mr65bs9j9enq',
@@ -28,7 +27,6 @@ const ROLE_DOC_IDS: Record<string, string> = {
 }
 
 const ROLE_OPTIONS = [
-  { label: 'Student', value: 'student' },
   { label: 'Aspiring Tenant', value: 'aspiring-tenant' },
   { label: 'Current Tenant', value: 'current-tenant' },
   { label: 'OAS', value: 'oas' },
@@ -36,7 +34,7 @@ const ROLE_OPTIONS = [
 ]
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
@@ -44,7 +42,7 @@ const headers = {}
 const recordSearch = ref('')
 const recordsPage = useRecordPage([], {  }, recordSearch)
 const directoryQuery = computed(() => ({ ...recordsPage.query.value, ...(recordSearch.value.trim() ? { term: recordSearch.value.trim() } : {}) }))
-const { data: responseData, status, error, refresh } = await useFetch<{ data: DirectoryUser[]; meta: any }>('/api/user-directory', {
+const { data: responseData, status, error, refresh } = await useFetch<{ data: DirectoryUser[]; meta: any }>('/api/user-directory', { lazy: true,
   baseURL,
   headers,
   query: directoryQuery
@@ -78,6 +76,7 @@ const saving = ref(false)
 const editOpen = ref(false)
 const editUser = ref<DirectoryUser | null>(null)
 const editUsername = ref('')
+const editRole = ref('')
 const editEmail = ref('')
 const editError = ref('')
 
@@ -85,6 +84,7 @@ const openEdit = (user: DirectoryUser) => {
   editUser.value = user
   editUsername.value = user.username
   editEmail.value = user.email
+  editRole.value = user.role?.type ?? ''
   editError.value = ''
   editOpen.value = true
 }
@@ -102,7 +102,10 @@ const saveEdit = async () => {
       method: 'PUT',
       body: { username: editUsername.value, email: editEmail.value }
     })
-    toast.add({ title: 'User updated', description: editUsername.value, color: 'success', icon: 'i-lucide-check-circle-2' })
+    // The role is saved through its own request, as before, and only when it changed.
+    const roleChanged = editRole.value && editRole.value !== editUser.value.role?.type && ROLE_DOC_IDS[editRole.value]
+    if (roleChanged) await $api(`/api/auth/user/${editUser.value.id}`, { method: 'PUT', body: { role: editRole.value } })
+    notify.success('User updated', { description: roleChanged ? `${editUsername.value} is now ${roleLabel(editRole.value)}.` : editUsername.value })
     editOpen.value = false
     await refresh()
   } catch (err) {
@@ -112,39 +115,34 @@ const saveEdit = async () => {
   }
 }
 
-const changeRole = async (user: DirectoryUser, type: string) => {
-  if (!ROLE_DOC_IDS[type]) return
+const remove = async (user: DirectoryUser) => {
+  if (!await confirm({ title: 'Delete user?', description: `"${user.username}" (${user.email}) will be permanently removed. This cannot be undone.`, confirmLabel: 'Delete user', icon: 'i-lucide-user-x' })) return
   updating.value = user.id
   try {
-    await $api(`/api/auth/user/${user.id}`, {
-      method: 'PUT',
-      body: { role: type }
-    })
-    toast.add({ title: 'Role updated', description: `${user.username} is now ${roleLabel(type)}.`, color: 'success', icon: 'i-lucide-check-circle-2' })
+    await $api(`/api/auth/user/${user.id}`, { method: 'DELETE' })
+    notify.success('User deleted', { description: user.username })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to update role', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete user', { description: getErrorMessage(err) })
   } finally {
     updating.value = null
   }
 }
 
-const remove = async (user: DirectoryUser) => {
-  if (!await confirm({ title: 'Delete user?', description: `"${user.username}" (${user.email}) will be permanently removed. This cannot be undone.`, confirmLabel: 'Delete user', icon: 'i-lucide-user-x' })) return
-  try {
-    await $api(`/api/auth/user/${user.id}`, { method: 'DELETE' })
-    toast.add({ title: 'User deleted', description: user.username, color: 'success', icon: 'i-lucide-check-circle-2' })
-    await refresh()
-  } catch (err) {
-    toast.add({ title: 'Unable to delete user', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
-  }
-}
+const userMenuItems = (user: DirectoryUser) => [
+  [
+    { label: 'Reset password', icon: 'i-lucide-key-round', onSelect: () => openReset(user) },
+    { label: user.blocked ? 'Activate' : 'Deactivate', icon: user.blocked ? 'i-lucide-check-circle-2' : 'i-lucide-circle-slash', onSelect: () => toggleActive(user) },
+    ...(auth.user.value?.security?.mfaRequired && ['admin', 'oas'].includes(user.role?.type || '') ? [{ label: 'Reset authenticator', icon: 'i-lucide-shield-check', onSelect: () => resetAuthenticator(user) }] : [])
+  ],
+  [{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(user) }]
+]
 
 const createOpen = ref(false)
 const createUsername = ref('')
 const createEmail = ref('')
 const createPassword = ref('')
-const createRole = ref('student')
+const createRole = ref('aspiring-tenant')
 const createError = ref('')
 const creating = ref(false)
 
@@ -152,7 +150,7 @@ const openCreate = () => {
   createUsername.value = ''
   createEmail.value = ''
   createPassword.value = ''
-  createRole.value = 'student'
+  createRole.value = 'aspiring-tenant'
   createError.value = ''
   createOpen.value = true
 }
@@ -174,7 +172,7 @@ const createUser = async () => {
         role: createRole.value
       }
     })
-    toast.add({ title: 'Account created', description: createUsername.value, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Account created', { description: createUsername.value })
     createOpen.value = false
     await refresh()
   } catch (err) {
@@ -210,7 +208,7 @@ const submitReset = async () => {
       method: 'POST',
       body: { password: resetPassword.value }
     })
-    toast.add({ title: 'Password reset', description: resetUser.value.username, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Password reset', { description: resetUser.value.username })
     resetOpen.value = false
   } catch (err) {
     resetError.value = getErrorMessage(err)
@@ -229,15 +227,10 @@ const toggleActive = async (user: DirectoryUser) => {
   toggling.value = user.id
   try {
     await $api(`/api/auth/user/${user.id}/${next}`, { method: 'POST' })
-    toast.add({
-      title: next === 'activate' ? 'Account activated' : 'Account deactivated',
-      description: user.username,
-      color: 'success',
-      icon: 'i-lucide-check-circle-2'
-    })
+    notify.success(next === 'activate' ? 'Account activated' : 'Account deactivated', { description: user.username })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to update account', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to update account', { description: getErrorMessage(err) })
   } finally {
     toggling.value = null
   }
@@ -245,8 +238,8 @@ const toggleActive = async (user: DirectoryUser) => {
 const resetAuthenticator = async (user: DirectoryUser) => {
   if (!await confirm({ title: 'Reset authenticator?', description: `${user.username} will need to re-enroll their authenticator. Existing sessions will be revoked.`, confirmLabel: 'Reset authenticator', tone: 'warning', icon: 'i-lucide-shield-off' })) return
   updating.value = user.id
-  try { await $api('/api/auth/user/' + user.id + '/reset-mfa', { method: 'POST' }); toast.add({ title: 'Authenticator reset', description: 'Re-enrollment is required.', color: 'success' }); await refresh() }
-  catch (error) { toast.add({ title: 'Unable to reset authenticator', description: getErrorMessage(error), color: 'error' }) }
+  try { await $api('/api/auth/user/' + user.id + '/reset-mfa', { method: 'POST' }); notify.success('Authenticator reset', { description: 'Re-enrollment is required.' }); await refresh() }
+  catch (error) { notify.error('Unable to reset authenticator', { description: getErrorMessage(error) }) }
   finally { updating.value = null }
 }
 const accountStatus = (user: DirectoryUser) => {
@@ -269,7 +262,6 @@ const filteredUsers = computed(() => {
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
       <template #title>Users</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
           Manage system accounts, assigned roles, and account access.
@@ -281,7 +273,7 @@ const filteredUsers = computed(() => {
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="8" height="h-16" />
+    <AppLoadingState v-if="isInitialLoading" variant="table" :count="8" label="Loading users…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load users" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -290,13 +282,20 @@ const filteredUsers = computed(() => {
     <div v-else class="space-y-3">
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search users"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Name, email, or role…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredUsers.length }} of {{ users.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>
       <UEmpty v-if="!filteredUsers.length" icon="i-lucide-search" title="No matching users" description="Try another search or clear your search." />
-      <AppRecordTable v-else :items="filteredUsers" :columns="recordColumns" :item-key="user => user.id" caption="User directory">
+      <AppRecordTable v-else :items="filteredUsers" :columns="recordColumns" :item-key="user => user.id" caption="User directory" compact-actions>
         <template #cell-user="{ item }"><span class="flex items-center gap-2"><AppUserAvatar :user="item" size="xs" /><span class="text-toned">{{ item.username }}</span></span></template>
-        <template #actions="{ item }"><UButton v-if="auth.isAdmin.value && !isSelf(item)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
+        <template #actions="{ item }">
+          <template v-if="auth.isAdmin.value && !isSelf(item)">
+            <UButton label="Edit" color="neutral" variant="subtle" size="sm" @click="openEdit(item)" />
+            <UDropdownMenu :items="userMenuItems(item)" :content="{ align: 'end' }">
+              <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="More actions" title="More actions" :loading="toggling === item.id || updating === item.id" />
+            </UDropdownMenu>
+          </template>
+        </template>
         <template #details="{ item: user }"><UCard  :ui="{ body: 'p-4' }">
           <UAlert v-if="user.security?.lockedUntil && user.security.lockedUntil > Date.now()" class="mb-3" color="warning" :title="'Sign-in limited until ' + new Date(user.security.lockedUntil).toLocaleString()" />
           <UAlert v-if="!user.confirmed && !user.blocked" class="mb-3" color="warning" icon="i-lucide-mail-question" title="Email not verified" description="This account cannot sign in. A self-registered account is removed automatically if its email is still unverified after 24 hours." />
-          <UButton v-if="auth.user.value?.security?.mfaRequired && !isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
+          <UButton v-if="auth.user.value?.security?.mfaRequired && !isSelf(user) && ['admin', 'oas'].includes(user.role?.type || '')" class="mb-3 lg:hidden" label="Reset authenticator" icon="i-lucide-shield-check" color="neutral" variant="outline" size="sm" :loading="updating === user.id" @click="resetAuthenticator(user)" />
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
             <AppUserAvatar :user="user" size="lg" />
@@ -312,17 +311,10 @@ const filteredUsers = computed(() => {
 
           <div class="flex flex-wrap items-center gap-3">
             <UBadge :color="roleColor(user.role?.type)" variant="subtle">{{ roleLabel(user.role?.type) }}</UBadge>
+          </div>
+          <!-- Desktop rows hold these actions; phones have no row, so the card keeps them. -->
+          <div class="flex w-full flex-wrap items-center gap-2 lg:hidden">
 
-            <USelect
-              v-if="auth.isAdmin.value"
-              size="sm"
-              :aria-label="`Role for ${user.username}`"
-              :model-value="user.role?.type"
-              :items="ROLE_OPTIONS"
-              :disabled="updating === user.id || isSelf(user)"
-              class="w-44"
-              @update:model-value="(value: unknown) => value && changeRole(user, String(value))"
-            />
 
             <UButton
               v-if="auth.isAdmin.value && !isSelf(user)"
@@ -362,6 +354,7 @@ const filteredUsers = computed(() => {
               color="error"
               variant="ghost"
               size="sm"
+              :loading="updating === user.id"
               @click="remove(user)"
             />
           </div>
@@ -425,6 +418,10 @@ const filteredUsers = computed(() => {
 
           <UFormField label="Email" required>
             <UInput required v-model="editEmail" type="email" autocomplete="off" :disabled="saving" />
+          </UFormField>
+
+          <UFormField label="Role">
+            <USelect v-model="editRole" :items="ROLE_OPTIONS" :disabled="saving" class="w-full" />
           </UFormField>
 
           <UAlert v-if="editError" color="error" icon="i-lucide-triangle-alert" :description="editError" />

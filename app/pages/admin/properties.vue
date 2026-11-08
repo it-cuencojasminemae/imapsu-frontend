@@ -36,7 +36,7 @@ type ListResponse<T> = { data: T[] }
 useHead({ title: 'Manage Properties | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
@@ -46,7 +46,7 @@ const filterCampus = ref('all')
 const filterClassification = ref('all')
 const filterStatus = ref('all')
 const recordsPage = useRecordPage(["name","propertyCode","businessName","building","campus"], { campus: { ref: filterCampus, field: 'campus' }, classification: { ref: filterClassification, field: 'rentalClassification' }, status: { ref: filterStatus, field: 'space_status' } }, filterSearch)
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<PropertySpace>>('/api/property-spaces', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<PropertySpace>>('/api/property-spaces', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -250,10 +250,10 @@ const save = async () => {
     }
     if (editing.value) {
       await $api(`/api/property-spaces/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
-      toast.add({ title: 'Property updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Property updated')
     } else {
       await $api('/api/property-spaces', { method: 'POST', body })
-      toast.add({ title: 'Property created', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Property created')
     }
     formOpen.value = false
     await refresh()
@@ -264,15 +264,20 @@ const save = async () => {
   }
 }
 
+// The row's Delete button spins while its record is being removed.
+const deleting = ref<string | number | null>(null)
 const remove = async (property: PropertySpace) => {
   const tenantNote = property.space_status === 'Occupied' ? ' Its active tenancy will be ended and the tenant returned to aspiring tenant.' : ''
   if (!await confirm({ title: 'Delete rentable space?', description: `"${property.name}" (${property.propertyCode}) will be permanently removed.${tenantNote} This cannot be undone.`, confirmLabel: 'Delete space', icon: 'i-lucide-trash-2' })) return
+  deleting.value = property.documentId ?? property.id
   try {
     await $api(`/api/property-spaces/${property.documentId ?? property.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Property deleted', description: property.name, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Property deleted', { description: property.name })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete property', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete property', { description: getErrorMessage(err) })
+  } finally {
+    deleting.value = null
   }
 }
 </script>
@@ -280,8 +285,7 @@ const remove = async (property: PropertySpace) => {
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Management</template>
-      <template #title>Rentable Spaces</template>
+      <template #title>Rentable spaces</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Manage campus stalls and other rentable spaces, their locations, rental classifications, and occupancy information.</p></template>
       <template #actions><div class="flex items-center gap-3">
         <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" />
@@ -290,7 +294,7 @@ const remove = async (property: PropertySpace) => {
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="6" height="h-56" />
+    <AppLoadingState v-if="isInitialLoading" variant="cards" :count="6" label="Loading property spaces…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load property spaces" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -329,7 +333,7 @@ const remove = async (property: PropertySpace) => {
             <template #header>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <p class="font-mono text-xs text-muted">{{ property.propertyCode }}</p>
+                  <p class="text-xs text-muted">{{ property.propertyCode }}</p>
                   <h2 class="mt-1 truncate text-lg font-semibold text-highlighted">{{ property.name }}</h2>
                   <p v-if="property.businessName" class="truncate text-sm text-primary">{{ property.businessName }}</p>
                 </div>
@@ -384,7 +388,7 @@ const remove = async (property: PropertySpace) => {
 
             <div class="mt-4 flex gap-2 border-t border-default pt-4">
               <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(property)" />
-              <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(property)" />
+              <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (property.documentId ?? property.id)" :disabled="deleting !== null" @click="remove(property)" />
             </div>
           </UCard>
         </div>

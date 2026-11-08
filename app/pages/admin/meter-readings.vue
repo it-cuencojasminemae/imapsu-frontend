@@ -38,19 +38,19 @@ type ListResponse<T> = { data: T[] }
 useHead({ title: 'Meter Readings | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
-const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/api/tenancies', {
+const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/api/tenancies', { lazy: true,
   baseURL,
   headers,
   query: { 'populate[user]': true, 'populate[propertySpace]': true, 'pagination[pageSize]': 100 }
 })
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<MeterReading>>('/api/meter-readings', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<MeterReading>>('/api/meter-readings', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -190,10 +190,10 @@ const save = async () => {
     }
     if (editing.value) {
       await $api(`/api/meter-readings/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
-      toast.add({ title: 'Meter reading updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Meter reading updated')
     } else {
       await $api('/api/meter-readings', { method: 'POST', body })
-      toast.add({ title: 'Meter reading recorded', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Meter reading recorded')
     }
     cancelEdit()
     await refresh()
@@ -204,16 +204,21 @@ const save = async () => {
   }
 }
 
+// The row's Delete button spins while its record is being removed.
+const deleting = ref<string | number | null>(null)
 const remove = async (reading: MeterReading) => {
   const label = reading.tenancy?.propertySpace?.name ?? reading.readingDate ?? 'this reading'
   if (!await confirm({ title: 'Delete meter reading?', description: `The meter reading for ${label} will be permanently removed.`, confirmLabel: 'Delete reading', icon: 'i-lucide-trash-2' })) return
+  deleting.value = reading.documentId ?? reading.id
   try {
     await $api(`/api/meter-readings/${reading.documentId ?? reading.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Meter reading deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Meter reading deleted')
     if (editing.value?.documentId === (reading.documentId ?? reading.id)) cancelEdit()
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete meter reading', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete meter reading', { description: getErrorMessage(err) })
+  } finally {
+    deleting.value = null
   }
 }
 
@@ -238,8 +243,7 @@ const recordColumns = [
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Management</template>
-      <template #title>Meter Readings</template>
+      <template #title>Meter readings</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Record and review electricity and water readings used for utility consumption calculations. Review photo-assisted readings and enter any undetected values manually.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
     </AppPageHeader>
@@ -308,7 +312,7 @@ const recordColumns = [
 
       <div>
         <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-24" />
+    <AppLoadingState v-if="isInitialLoading" variant="table" :toolbar="false" :count="6" label="Loading meter readings…" />
 
         <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load meter readings" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -331,7 +335,7 @@ const recordColumns = [
               <UBadge v-if="isMine(reading)" color="primary" variant="subtle">Recorded by you</UBadge>
               <div v-if="auth.isStaff.value" class="flex gap-2">
                 <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(reading)" />
-                <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(reading)" />
+                <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (reading.documentId ?? reading.id)" :disabled="deleting !== null" @click="remove(reading)" />
               </div>
             </div>
 

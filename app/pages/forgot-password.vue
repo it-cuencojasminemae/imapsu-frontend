@@ -4,7 +4,7 @@ useHead({ title: 'Reset Password | iMapSU' })
 
 const route = useRoute()
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 
 const OTP_LENGTH = 6
 
@@ -118,7 +118,7 @@ const resend = async () => {
   try {
     await auth.requestPasswordReset(email.value)
     digits.value = Array(OTP_LENGTH).fill('')
-    toast.add({ title: 'Code requested', description: 'If an active account uses this email, a new code is on its way. Earlier codes no longer work.', color: 'success', icon: 'i-lucide-mail-check' })
+    notify.success('Code requested', { description: 'If an active account uses this email, a new code is on its way. Earlier codes no longer work.' })
     startResendCooldown()
   } catch (error: unknown) {
     errorMessage.value = messageOf(error, 'Unable to send another code. Please try again in a moment.')
@@ -222,7 +222,7 @@ const description = computed(() => ({
 
     <form method="post" v-else-if="step === 'request'" class="space-y-5" @submit.prevent="requestCode">
       <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
-      <UFormField label="Email Address" name="email" required>
+      <UFormField label="Email address" name="email" required>
         <UInput v-model="email" required type="email" placeholder="you@email.com" autocomplete="email" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
       </UFormField>
       <UButton data-prominent="true" type="submit" block size="xl" :loading="loading">
@@ -273,7 +273,7 @@ const description = computed(() => ({
       <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
       <AuthEmailStatus tone="success" label="Code verified for" :email="email" />
 
-      <UFormField label="New Password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
+      <UFormField label="New password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
         <UInput v-model="password" required :type="showPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }">
           <template #trailing>
             <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
@@ -294,7 +294,7 @@ const description = computed(() => ({
         </ul>
       </UFormField>
 
-      <UFormField label="Confirm New Password" name="confirmPassword" required :error="attempted && password !== confirmPassword ? 'Passwords do not match.' : undefined">
+      <UFormField label="Confirm new password" name="confirmPassword" required :error="attempted && password !== confirmPassword ? 'Passwords do not match.' : undefined">
         <UInput v-model="confirmPassword" required :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
           <template #trailing>
             <button type="button" class="text-dimmed transition-colors hover:text-highlighted" :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'" @click="showConfirmPassword = !showConfirmPassword">

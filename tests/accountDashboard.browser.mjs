@@ -82,20 +82,13 @@ try {
   assert.equal(await page.getByRole('link', { name: 'Home', exact: true }).count(), 0)
   check('guest root redirects to the campus map without Home navigation')
 
-  for (const role of ['student', 'aspiring-tenant', 'current-tenant', 'oas', 'admin']) {
+  for (const role of ['aspiring-tenant', 'current-tenant', 'oas', 'admin']) {
     await context.clearCookies()
     const start = fixture.state.requests.length
     await login(page, role)
     await waitPath(page, ['oas', 'admin'].includes(role) ? '/admin' : '/dashboard')
     await page.getByRole('heading', { level: 1 }).waitFor()
     const requests = fixture.state.requests.slice(start).map(request => request.path)
-    if (role === 'student') {
-      await page.getByRole('heading', { name: 'Latest announcements' }).waitFor()
-      assert.equal(await page.getByText('Available spaces', { exact: true }).count(), 0)
-      assert.equal(await page.getByText('Campus announcement 4', { exact: true }).count(), 0)
-      assert(!requests.includes('/api/rental-applications'))
-      assert(!requests.includes('/api/dashboard/billing-summary'))
-    }
     if (role === 'aspiring-tenant') {
       await page.getByText('applications in total', { exact: false }).waitFor()
       assert.match(await page.locator('main').innerText(), /23 applications in total/)
@@ -119,10 +112,10 @@ try {
   await waitPath(page, '/bills?page=2')
   check('authorized protected deep link survives sign-in')
   await context.clearCookies()
-  await login(page, 'student', 'test-password', '/admin/users')
+  await login(page, 'aspiring-tenant', 'test-password', '/admin/users')
   await waitPath(page, '/dashboard')
   await context.clearCookies()
-  await login(page, 'student', 'test-password', '//example.com')
+  await login(page, 'aspiring-tenant', 'test-password', '//example.com')
   await waitPath(page, '/dashboard')
   check('unauthorized and external sign-in destinations fall back to the role dashboard')
 
@@ -179,7 +172,7 @@ try {
   check('MFA sign-in completion uses the authenticated role dashboard')
 
   await context.clearCookies()
-  await login(page, 'student')
+  await login(page, 'aspiring-tenant')
   await waitPath(page, '/dashboard')
   await page.goto(origin + '/account?section=profile')
   await page.getByLabel('Full name', { exact: true }).waitFor()
@@ -371,7 +364,7 @@ try {
   check('empty dashboard datasets show honest empty states')
   await control({ empty: false })
   await page.setViewportSize({ width: 390, height: 844 })
-  for (const role of ['student', 'aspiring-tenant', 'current-tenant']) {
+  for (const role of ['aspiring-tenant', 'current-tenant']) {
     await context.clearCookies()
     await login(page, role)
     await waitPath(page, '/dashboard')

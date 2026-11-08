@@ -8,7 +8,7 @@ const sortModel=computed({get:()=>props.state.sort.value||'default',set:(value:s
 </script>
 <template>
   <div class="my-5 flex flex-wrap items-center justify-between gap-3" aria-label="Record pagination">
-    <p class="text-sm text-muted">{{ total }} records · Page {{ state.page.value }} of {{ Math.max(1,count) }}</p>
+    <p class="text-sm text-muted">{{ total }} {{ total === 1 ? 'record' : 'records' }} · Page {{ state.page.value }} of {{ Math.max(1,count) }}</p>
     <div class="flex flex-wrap items-center gap-2">
       <USelect v-model="sortModel" :items="[{label:'Current order',value:'default'},{label:'Newest first',value:'createdAt:desc'},{label:'Oldest first',value:'createdAt:asc'}]" aria-label="Record sort order" :disabled="pending" class="w-36" />
       <USelect v-model="state.pageSize.value" :items="[25,50,100]" aria-label="Records per page" :disabled="pending" class="w-20" />

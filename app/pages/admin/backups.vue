@@ -22,19 +22,19 @@ type BackupSettings = {
 }
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
-const { data: responseData, status, error, refresh } = await useFetch<{ backups: BackupMeta[] }>('/api/system/backups', {
+const { data: responseData, status, error, refresh } = await useFetch<{ backups: BackupMeta[] }>('/api/system/backups', { lazy: true,
   baseURL,
   headers
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: settingsDataResponse, refresh: refreshSettings, status: settingsDataStatus, error: settingsDataError } = await useFetch<BackupSettings>('/api/system/backups/settings', {
+const { data: settingsDataResponse, refresh: refreshSettings, status: settingsDataStatus, error: settingsDataError } = await useFetch<BackupSettings>('/api/system/backups/settings', { lazy: true,
   baseURL,
   headers
 })
@@ -57,12 +57,15 @@ const restoreTooLarge = computed(() => (restoreFile.value?.size ?? 0) > UPLOAD_L
 
 const createBackup = async () => {
   creating.value = true
+  const working = notify.loading('Creating backup…', 'Copying the database. Keep this page open.')
   try {
     const result = await $api<{ backup: BackupMeta }>('/api/system/backups', { method: 'POST' })
-    toast.add({ title: 'Backup created', description: result.backup.name, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.dismiss(working)
+    notify.success('Backup created', { description: result.backup.name })
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to create backup', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.dismiss(working)
+    notify.error('Unable to create backup', { description: getErrorMessage(err) })
   } finally {
     creating.value = false
   }
@@ -73,10 +76,10 @@ const removeBackup = async (backup: BackupMeta) => {
   deleting.value = backup.name
   try {
     await $api(`/api/system/backups/${backup.name}`, { method: 'DELETE' })
-    toast.add({ title: 'Backup deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Backup deleted')
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete backup', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete backup', { description: getErrorMessage(err) })
   } finally {
     deleting.value = null
   }
@@ -94,16 +97,20 @@ const runRestore = async (name: string, confirmation: string, request: { body?: 
   if (!await confirm({ title: 'Restore database?', description: `Restoring from "${name}" will REPLACE all current data with the contents of the backup. This cannot be undone.`, confirmLabel: 'Restore database', icon: 'i-lucide-database-backup' })) return false
 
   restoring.value = true
+  const working = notify.loading('Restoring database…', 'This can take a minute. Keep this page open.')
   try {
     const result = await $api<{ ok: boolean }>('/api/system/backups/restore', {
       method: 'POST',
       body: request.body,
       headers: { ...request.headers, 'X-Backup-Name': name, 'X-Restore-Confirm': confirmation }
     })
-    toast.add({ title: result.ok ? 'Database restored' : 'Restore could not be confirmed', description: result.ok ? 'Backup applied successfully.' : 'Review the system status before continuing.', color: result.ok ? 'success' : 'warning', icon: result.ok ? 'i-lucide-check-circle-2' : 'i-lucide-triangle-alert' })
+    notify.dismiss(working)
+    if (result.ok) notify.success('Database restored', { description: 'Backup applied successfully.' })
+    else notify.warning('Restore could not be confirmed', { description: 'Review the system status before continuing.' })
     return true
   } catch (err) {
-    toast.add({ title: 'Restore failed', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.dismiss(working)
+    notify.error('Restore failed', { description: getErrorMessage(err) })
     return false
   } finally {
     restoring.value = false
@@ -113,7 +120,7 @@ const runRestore = async (name: string, confirmation: string, request: { body?: 
 const restoreBackup = async () => {
   if (!restoreFile.value) return
   if (restoreTooLarge.value) {
-    toast.add({ title: 'Backup file is too large', description: `Uploaded dumps must be under 4 MB (this one is ${formatSize(restoreFile.value.size)}). Restore larger backups from the stored backup list instead.`, color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Backup file is too large', { description: `Uploaded dumps must be under 4 MB (this one is ${formatSize(restoreFile.value.size)}). Restore larger backups from the stored backup list instead.` })
     return
   }
   const restored = await runRestore(restoreFile.value.name, restoreConfirmation.value, {
@@ -151,8 +158,7 @@ const formatDate = (value: string) =>
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
-      <template #title>Database Backups</template>
+      <template #title>Database backups</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
           Create on-demand database backups, download dumps, and restore the database from a stored or uploaded backup file.
         </p></template>
@@ -228,7 +234,7 @@ const formatDate = (value: string) =>
       </template>
 
       <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-12" />
+    <AppLoadingState v-if="isInitialLoading" variant="rows" :count="4" label="Loading backups…" />
 
       <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load backups" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 

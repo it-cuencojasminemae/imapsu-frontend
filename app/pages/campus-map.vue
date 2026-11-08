@@ -5,8 +5,9 @@ import { PAMSU_BUILDINGS, pamsuBuildingFor, buildingStatusByOrder, propertiesInP
 import { mapBindingDiagnostics } from '~/utils/mapDiagnostics'
 import { fetchMapPages, type MapListResponse } from '~/utils/mapPagination'
 import { mapPropertyStatus, unobscuredMapInsets } from '~/utils/mapPresentation'
-import { stallFloorLabel, stallKey, stallPhotos, stallTitle, visibleStalls } from '~/utils/mapStalls'
+import { stallFloorLabel, stallKey, stallPhotos, stallTitle } from '~/utils/mapStalls'
 import { useMapStallDetails } from '~/composables/useMapStallDetails'
+import { landingPath } from '~/utils/accountNavigation'
 import { createReusableTemplate, useMediaQuery, useMounted } from '@vueuse/core'
 
 type MapLabel = {
@@ -23,10 +24,12 @@ useHead({
 definePageMeta({ pageTransition: false })
 
 const auth = useAuth()
-// Students only see occupied spaces, which they cannot rent.
-const spaceLabel = computed(() => auth.isStudent.value ? 'campus space' : 'rentable space')
-const toast = useToast()
+const spaceLabel = 'rentable space'
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
+const backLink = computed(() => auth.isAuthenticated.value
+  ? { to: landingPath(auth.user.value), label: 'Back to dashboard' }
+  : { to: '/', label: 'Back to home' })
 
 // Phones and narrow windows (the same 959px breakpoint as the mobile CSS).
 // False until mounted so the server render and hydration match the desktop.
@@ -53,12 +56,7 @@ const { data: labelsData, status: labelsStatus, refresh: refreshLabels } = await
 )
 
 const { data: retainedProperties } = useRequestPresentation(propertiesData, status)
-const properties = computed(() => {
-  const all = retainedProperties.value?.data ?? []
-  // Students don't see vacant spaces: the API filters them too, but drop them
-  // here as well so the panel and the building tints never leak vacancy data.
-  return visibleStalls(all, auth.isStudent.value)
-})
+const properties = computed(() => retainedProperties.value?.data ?? [])
 const statusByOrder = computed(() => buildingStatusByOrder(properties.value.filter(p => mapPropertyStatus(p.space_status))))
 const labels = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
@@ -197,7 +195,7 @@ const saveLabel = async () => {
     } else {
       await $api('/api/map-labels', { method: 'POST', body: { data: { buildingKey: key, label: name } } })
     }
-    toast.add({ title: 'Building name saved', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Building name saved')
     labelOpen.value = false
     await refreshLabels()
   } catch (err) {
@@ -217,7 +215,7 @@ const removeLabel = async () => {
     const existing = labelsData.value?.data.find((l) => normalizeBuildingName(l.buildingKey) === key)
     if (existing?.documentId) {
       await $api(`/api/map-labels/${existing.documentId}`, { method: 'DELETE' })
-      toast.add({ title: 'Building name removed', color: 'neutral', icon: 'i-lucide-eraser' })
+      notify.info('Building name removed')
     }
     labelOpen.value = false
     await refreshLabels()
@@ -239,15 +237,19 @@ const { stallOpen, selectedStallKey, selectedStall, selectStall, clearStall } = 
   labelMode
 )
 const galleryPhotos = computed(() => selectedStall.value ? propertyPhotos(selectedStall.value) : [])
-// Students rate an occupied stall straight from its details; guests sign in
-// first and land on the same pre-filled form.
-const rateStallLink = computed(() => {
-  const stall = selectedStall.value
-  if (stall?.space_status !== 'Occupied' || !stall.documentId) return null
-  const target = `/feedback?property=${stall.documentId}`
-  if (auth.isStudent.value) return target
-  return auth.isAuthenticated.value ? null : `/login?redirect=${encodeURIComponent(target)}`
-})
+// Anyone can rate an occupied stall, no account needed. Staff review
+// ratings instead of giving them.
+const canRateStall = computed(() => selectedStall.value?.space_status === 'Occupied' && !!selectedStall.value.documentId && !auth.isStaff.value)
+const ratingOpen = ref(false)
+const ratingStall = ref<{ documentId?: string; title: string } | null>(null)
+const openRating = () => {
+  if (!selectedStall.value) return
+  ratingStall.value = { documentId: selectedStall.value.documentId, title: stallTitle(selectedStall.value) }
+  // One dialog at a time: a dialog stacked on the stall details loses its
+  // clicks to the details' outside-click handling.
+  stallOpen.value = false
+  nextTick(() => { ratingOpen.value = true })
+}
 // The listing opens with this stall pinned and highlighted, so aspiring
 // tenants don't have to hunt for it among every space.
 const listingLink = computed(() => {
@@ -435,8 +437,7 @@ onBeforeUnmount(() => {
 
     <div ref="headingPanel" class="map-heading pointer-events-none absolute z-10">
       <div class="map-surface pointer-events-auto p-3.5">
-        <p class="map-eyebrow">Interactive Campus Map</p>
-        <h1 class="mt-0.5 text-xl font-semibold tracking-tight text-highlighted">Pampanga State University — Main Campus</h1>
+        <h1 class="text-xl font-semibold tracking-tight text-highlighted">Pampanga State University — Main Campus</h1>
 
     <details v-if="auth.isOas.value && modelReady" class="mt-3 rounded-md border border-default p-2 text-xs">
       <summary class="cursor-pointer font-medium">Map data diagnostics</summary>
@@ -446,7 +447,19 @@ onBeforeUnmount(() => {
       <p>Model orders without a directory entry: {{ bindingDiagnostics.modelOnly.join(', ') || 'None' }}</p>
       <p class="mt-2 text-muted">Review campus identifiers before changing associations.</p>
     </details>
-        <div class="relative mt-3">
+        <div class="mt-3 flex items-start gap-2">
+          <!-- The map runs without the app bar, so this is the way back out. -->
+          <UButton
+            :to="backLink.to"
+            color="neutral"
+            variant="outline"
+            square
+            icon="i-lucide-arrow-left"
+            :aria-label="backLink.label"
+            :title="backLink.label"
+            class="shrink-0"
+          />
+        <div class="relative min-w-0 flex-1">
           <UInput
             v-model="searchQuery"
             icon="i-lucide-search"
@@ -484,6 +497,7 @@ onBeforeUnmount(() => {
             No buildings or businesses match “{{ searchQuery }}”.
           </p>
         </div>
+        </div>
 
         <p class="map-instructions mt-2 flex items-center gap-1.5 text-[11px] text-muted">
           <UIcon name="i-lucide-mouse-pointer-click" class="size-3.5" />
@@ -520,9 +534,9 @@ onBeforeUnmount(() => {
         variant="solid"
         color="neutral"
         icon="i-lucide-tag"
-        :label="viewport.width < 1100 ? undefined : showNames ? 'Hide Labels' : 'Show Labels'"
-        :aria-label="showNames ? 'Hide Labels' : 'Show Labels'"
-        :title="showNames ? 'Hide Labels' : 'Show Labels'"
+        :label="viewport.width < 1100 ? undefined : showNames ? 'Hide labels' : 'Show labels'"
+        :aria-label="showNames ? 'Hide labels' : 'Show labels'"
+        :title="showNames ? 'Hide labels' : 'Show labels'"
         :disabled="!modelReady"
         @click="showNames = !showNames"
       />
@@ -532,9 +546,9 @@ onBeforeUnmount(() => {
         variant="solid"
         color="neutral"
         icon="i-lucide-rotate-ccw"
-        :label="viewport.width < 1100 ? undefined : 'Reset View'"
-        aria-label="Reset View"
-        title="Reset View"
+        :label="viewport.width < 1100 ? undefined : 'Reset view'"
+        aria-label="Reset view"
+        title="Reset view"
         :disabled="!modelReady"
         @click="viewer?.resetCamera()"
       />
@@ -544,9 +558,9 @@ onBeforeUnmount(() => {
         :color="isFullscreen ? 'primary' : 'neutral'"
         variant="solid"
         :icon="isFullscreen ? 'i-lucide-minimize' : 'i-lucide-maximize'"
-        :label="viewport.width < 1100 ? undefined : isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
-        :aria-label="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
-        :title="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
+        :label="viewport.width < 1100 ? undefined : isFullscreen ? 'Exit full screen' : 'Full screen'"
+        :aria-label="isFullscreen ? 'Exit full screen' : 'Full screen'"
+        :title="isFullscreen ? 'Exit full screen' : 'Full screen'"
         @click="toggleFullscreen"
       />
     </div>
@@ -566,7 +580,7 @@ onBeforeUnmount(() => {
             <h3 class="break-words text-base font-semibold">{{ selected ? displayName(selected) : '' }}</h3>
           </div>
           <p v-if="pinnedStall" class="mt-1 text-xs font-medium text-toned">Outdoor {{ spaceLabel }}</p>
-          <p v-else class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${spaceLabel}${buildingProperties.length === 1 ? '' : 's'} listed` : status === 'error' ? (auth.isStudent.value ? 'Campus space information unavailable' : 'Rental-space information unavailable') : `Loading ${spaceLabel}s…` }}</p>
+          <p v-else class="mt-1 text-xs font-medium text-toned">{{ status === 'success' ? `${buildingProperties.length} ${spaceLabel}${buildingProperties.length === 1 ? '' : 's'} listed` : status === 'error' ? 'Rental-space information unavailable' : `Loading ${spaceLabel}s…` }}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <UButton
@@ -657,15 +671,15 @@ onBeforeUnmount(() => {
     </DefineStallBody>
     <DefineStallFooter>
         <UButton color="neutral" variant="ghost" label="Back to spaces" icon="i-lucide-arrow-left" @click="stallOpen = false" />
-        <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="rateStallLink ? 'neutral' : 'primary'" :variant="rateStallLink ? 'outline' : 'solid'" icon="i-lucide-store" :label="auth.isStudent.value ? 'View in Campus spaces' : 'View property listing'" />
-        <UButton v-if="rateStallLink" :to="rateStallLink" size="sm" icon="i-lucide-star" label="Rate this stall" />
+        <UButton v-if="!auth.isAdmin.value" :to="listingLink" size="sm" :color="canRateStall ? 'neutral' : 'primary'" :variant="canRateStall ? 'outline' : 'solid'" icon="i-lucide-store" label="View property listing" />
+        <UButton v-if="canRateStall" size="sm" icon="i-lucide-star" label="Rate this stall" @click="openRating" />
     </DefineStallFooter>
 
     <UModal
       v-if="!isMobile"
       v-model:open="stallOpen"
-      :title="selectedStall ? stallTitle(selectedStall) : `${auth.isStudent.value ? 'Campus' : 'Rental'}-space details`"
-      :description="selected ? displayName(selected) : auth.isStudent.value ? 'Campus space' : 'Campus rental space'"
+      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
+      :description="selected ? displayName(selected) : 'Campus rental space'"
       portal="#campus-map-root"
       :content="{ onCloseAutoFocus: restoreStallFocus }"
       :ui="{ overlay: 'absolute z-40 bg-black/45 backdrop-blur-[2px]', content: 'absolute z-50 w-[calc(100%-2rem)] max-w-[800px] max-h-[calc(100%-2rem)] sm:max-h-[calc(100%-2rem)] rounded-xl', wrapper: 'min-w-0 pr-8', title: 'break-words', body: 'min-h-0 overflow-y-auto p-4 sm:p-6', footer: 'justify-between gap-3' }"
@@ -678,8 +692,8 @@ onBeforeUnmount(() => {
     <UDrawer
       v-else
       v-model:open="stallOpen"
-      :title="selectedStall ? stallTitle(selectedStall) : `${auth.isStudent.value ? 'Campus' : 'Rental'}-space details`"
-      :description="selected ? displayName(selected) : auth.isStudent.value ? 'Campus space' : 'Campus rental space'"
+      :title="selectedStall ? stallTitle(selectedStall) : 'Rental-space details'"
+      :description="selected ? displayName(selected) : 'Campus rental space'"
       portal="#campus-map-root"
       :content="{ onCloseAutoFocus: restoreStallFocus }"
       :ui="{ overlay: 'z-40 bg-black/45', content: 'z-50 max-h-[85dvh] rounded-t-2xl', container: 'gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]', title: 'break-words', footer: 'flex-row flex-wrap items-center justify-between gap-2' }"
@@ -688,6 +702,13 @@ onBeforeUnmount(() => {
       <template #body><StallBody /></template>
       <template #footer><StallFooter /></template>
     </UDrawer>
+
+    <StallRatingModal
+      v-model:open="ratingOpen"
+      :stall="ratingStall"
+      portal="#campus-map-root"
+      :ui="{ overlay: 'absolute z-[60] bg-black/45 backdrop-blur-[2px]', content: 'absolute z-[70] w-[calc(100%-2rem)] max-w-lg max-h-[calc(100%-2rem)] rounded-xl', body: 'min-h-0 overflow-y-auto' }"
+    />
 
     <div
       ref="legendPanel"
@@ -698,13 +719,13 @@ onBeforeUnmount(() => {
         {{ modelReady ? `${buildingCount} modeled buildings` : 'Campus overview' }}
       </p>
       <div class="mt-2 space-y-1">
-        <span v-if="!auth.isStudent.value" class="flex items-center gap-1.5">
+        <span class="flex items-center gap-1.5">
           <span class="size-2.5 rounded-full" :style="{ backgroundColor: MAP_STATUS_COLORS.vacant }" />
           Vacant space available
         </span>
         <span class="flex items-center gap-1.5">
           <span class="size-2.5 rounded-full" :style="{ backgroundColor: MAP_STATUS_COLORS.occupied }" />
-          {{ auth.isStudent.value ? 'Has occupied spaces' : 'Fully occupied' }}
+          Fully occupied
         </span>
       </div>
       <p class="map-legend-note mt-2 text-[10px] text-muted">Building colors show listed property status.</p>
@@ -761,13 +782,6 @@ onBeforeUnmount(() => {
 }
 .map-details { background: var(--ui-bg); backdrop-filter: none; }
 .map-heading { left: 16px; top: 16px; width: 340px; }
-.map-eyebrow {
-  color: var(--ui-primary);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
 .map-toolbar { right: 16px; top: 16px; }
 .map-toolbar :deep(button) { min-height: 40px; min-width: 40px; border-radius: 8px; }
 .map-labeling { top: 80px; right: 16px; }
@@ -821,14 +835,12 @@ onBeforeUnmount(() => {
   .map-data-status { top: 160px; left: 196px; right: 12px; bottom: auto; max-width: none; padding: 6px 9px; border-radius: 12px; font-size: 10px; }
   .map-data-status > div { flex-wrap: wrap; gap: 4px; }
 }
-/* Phones: the map fills everything below the app bar (63px bar + 1px
-   border) and the overlays shrink to a search bar, a corner button
-   stack and a legend chip. */
+/* Phones: the map fills the whole screen and the overlays shrink to a
+   search bar, a corner button stack and a legend chip. */
 @media (max-width: 959px) {
-  .campus-map-page:not(:fullscreen) { height: calc(100dvh - 64px); }
   .map-heading { left: 10px; right: 10px; top: 10px; width: auto; }
   .map-heading .map-surface { padding: 6px; }
-  .map-eyebrow, .map-heading h1 { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .map-heading h1 { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .map-heading details, .map-instructions { display: none; }
   .map-heading :deep(.mt-3) { margin-top: 0; }
   /* 16px keeps iOS Safari from zooming the page when the search is focused. */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { uploadInBatches } from '~/utils/uploadFile'
+import { MAINTENANCE_PRIORITIES, maintenanceCategoryIcon, maintenancePriorityColor, maintenanceStatusColor, ticketKey, ticketNumber, type MaintenancePhoto } from '~/utils/maintenance'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -17,6 +18,7 @@ type MaintenanceTicket = {
   status: 'Pending' | 'In Progress' | 'Completed'
   createdAt?: string
   completedAt?: string
+  archivedAt?: string | null
   actionNotes?: string
   images?: UploadedFile[] | null
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
@@ -32,17 +34,17 @@ type Tenancy = {
 type ListResponse<T> = { data: T[] }
 
 const CATEGORIES = ['Plumbing', 'Electrical', 'Structural', 'Internet', 'Other']
-const PRIORITIES = ['Low', 'Normal', 'High', 'Critical'] as const
+const PRIORITIES = MAINTENANCE_PRIORITIES
 
 useHead({ title: 'Maintenance | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<MaintenanceTicket>>('/api/maintenance-tickets', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<MaintenanceTicket>>('/api/maintenance-tickets', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -53,9 +55,9 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const tickets = computed(() => data.value?.data ?? [])
+const tickets = computed<MaintenanceTicket[]>(() => data.value?.data ?? [])
 
-const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/api/tenancies', {
+const { data: tenancyData } = await useCompleteFetch<ListResponse<Tenancy>>('/api/tenancies', { lazy: true,
   baseURL,
   headers,
   query: {
@@ -127,7 +129,7 @@ const submit = async () => {
     priority.value = 'Normal'
     description.value = ''
     imageFiles.value = []
-    toast.add({ title: 'Maintenance ticket submitted', description: 'Your issue is ready for the maintenance team to review.', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Maintenance ticket submitted', { description: 'Your issue is ready for the maintenance team to review.' })
     await refresh()
   } catch (err) {
     errorMessage.value = getErrorMessage(err)
@@ -136,40 +138,9 @@ const submit = async () => {
   }
 }
 
-const statusColor = (status: MaintenanceTicket['status']) => {
-  switch (status) {
-    case 'Completed':
-      return 'success'
-    case 'In Progress':
-      return 'secondary'
-    default:
-      return 'primary'
-  }
-}
-
-const priorityColor = (priority: MaintenanceTicket['priority']) => {
-  switch (priority) {
-    case 'Critical': return 'error'
-    case 'High': return 'warning'
-    case 'Low': return 'neutral'
-    default: return 'secondary'
-  }
-}
-
-const categoryIcon = (category: MaintenanceTicket['category']) => {
-  switch (category) {
-    case 'Plumbing':
-      return 'i-lucide-droplets'
-    case 'Electrical':
-      return 'i-lucide-zap'
-    case 'Structural':
-      return 'i-lucide-hammer'
-    case 'Internet':
-      return 'i-lucide-wifi'
-    default:
-      return 'i-lucide-package-open'
-  }
-}
+const statusColor = maintenanceStatusColor
+const priorityColor = maintenancePriorityColor
+const categoryIcon = maintenanceCategoryIcon
 
 const formatDate = (value?: string) => value
   ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -178,6 +149,22 @@ const formatDate = (value?: string) => value
 const formatDateTime = (value?: string) => value
   ? new Date(value).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   : ''
+
+// Read-only service history of each ticket, loaded when opened.
+const expandedHistory = ref<Record<string, boolean>>({})
+const toggleHistory = (ticket: MaintenanceTicket) => {
+  const key = ticketKey(ticket)
+  expandedHistory.value[key] = !expandedHistory.value[key]
+}
+
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
+const viewerPhotos = ref<MaintenancePhoto[]>([])
+const viewPhoto = (ticket: MaintenanceTicket, index: number) => {
+  viewerPhotos.value = ticket.images ?? []
+  viewerIndex.value = index
+  viewerOpen.value = true
+}
 
 const expandedFollowUps = ref<Record<string, boolean>>({})
 const toggleFollowUps = (ticket: MaintenanceTicket) => {
@@ -231,7 +218,6 @@ const submitFollowUp = async () => {
   <div>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Current tenant</template>
       <template #title>Maintenance</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Report a maintenance concern with your rental spaces and track its recorded status.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
@@ -249,7 +235,7 @@ const submitFollowUp = async () => {
             <div v-else-if="rentedProperties[0]" class="flex items-center gap-2 rounded-md border border-default bg-elevated px-3 py-2.5">
               <UIcon name="i-lucide-building-2" class="size-4 shrink-0 text-primary" />
               <span class="truncate text-sm font-medium text-highlighted">{{ rentedProperties[0].name }}</span>
-              <span class="font-mono text-xs text-muted">({{ rentedProperties[0].propertyCode }})</span>
+              <span class="text-xs text-muted">({{ rentedProperties[0].propertyCode }})</span>
             </div>
             <p v-else class="text-sm text-muted">No active tenancy found for your account.</p>
           </UFormField>
@@ -282,7 +268,7 @@ const submitFollowUp = async () => {
 
       <div class="lg:col-span-2">
         <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-28" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="4" label="Loading maintenance requests…" />
 
         <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load maintenance requests" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -297,25 +283,26 @@ const submitFollowUp = async () => {
                 </span>
                 <div class="min-w-0">
                   <p class="font-medium text-highlighted">{{ item.category }}</p>
-                  <p class="mt-0.5 text-xs text-muted">Reported {{ formatDate(item.createdAt) }}</p>
+                  <p class="mt-0.5 text-xs text-muted"><span class="font-medium tabular-nums text-toned">{{ ticketNumber(item) }}</span> · Reported {{ formatDate(item.createdAt) }}</p>
                 </div>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <UBadge :color="priorityColor(item.priority)" variant="subtle">{{ item.priority }}</UBadge>
-                <UBadge :color="statusColor(item.status)" variant="subtle">{{ item.status }}</UBadge>
+                <UBadge v-if="item.archivedAt" color="neutral" variant="subtle">Closed by office</UBadge>
+                <UBadge v-else :color="statusColor(item.status)" variant="subtle">{{ item.status }}</UBadge>
               </div>
             </div>
 
             <p class="mt-3 text-sm leading-relaxed text-toned">{{ item.description }}</p>
 
             <div v-if="item.images?.length" class="mt-4 flex flex-wrap gap-2">
-              <a v-for="image in item.images" :key="image.id" :href="`${baseURL}${image.url}`" target="_blank" rel="noopener">
-                <img :src="`${baseURL}${image.url}`" :alt="image.name || 'Ticket photo'" class="h-20 w-20 rounded-lg object-cover transition-transform hover:scale-105" />
-              </a>
+              <button v-for="(image, index) in item.images" :key="image.id" type="button" class="overflow-hidden rounded-lg ring-1 ring-default transition hover:ring-primary" :aria-label="`View photo ${index + 1} of ${item.images.length}`" @click="viewPhoto(item, index)">
+                <img :src="`${baseURL}${image.url}`" :alt="image.name || 'Ticket photo'" class="h-20 w-20 object-cover" />
+              </button>
             </div>
 
             <div v-if="item.actionNotes" class="mt-4 rounded-lg bg-primary/5 px-3 py-2">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted">Action taken</p>
+              <p class="text-xs font-medium text-muted">Action taken</p>
               <p class="mt-1 text-sm leading-relaxed text-toned">{{ item.actionNotes }}</p>
             </div>
 
@@ -327,7 +314,7 @@ const submitFollowUp = async () => {
             <p v-if="item.propertySpace" class="mt-3 flex items-center gap-1 text-xs text-muted">
               <UIcon name="i-lucide-building-2" class="size-3.5" />
               {{ item.propertySpace.name }}
-              <span class="font-mono">({{ item.propertySpace.propertyCode }})</span>
+              <span>({{ item.propertySpace.propertyCode }})</span>
             </p>
 
             <div v-if="item.followUps?.length" class="mt-4 border-t border-default pt-3">
@@ -346,8 +333,13 @@ const submitFollowUp = async () => {
               </div>
             </div>
 
-            <div v-if="item.status !== 'Completed'" class="mt-4 flex justify-end border-t border-default pt-3">
-              <UButton size="sm" color="primary" variant="subtle" icon="i-lucide-message-square-text" label="Follow up" @click="openFollowUp(item)" />
+            <div v-if="expandedHistory[ticketKey(item)]" class="mt-4 border-t border-default pt-4">
+              <MaintenanceActivityTimeline :ticket-id="ticketKey(item)" :reporter-id="auth.user.value?.id" />
+            </div>
+
+            <div class="mt-4 flex items-center justify-between gap-2 border-t border-default pt-3">
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-history" :trailing-icon="expandedHistory[ticketKey(item)] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" :label="expandedHistory[ticketKey(item)] ? 'Hide history' : 'History'" :aria-expanded="!!expandedHistory[ticketKey(item)]" @click="toggleHistory(item)" />
+              <UButton v-if="item.status !== 'Completed' && !item.archivedAt" size="sm" color="primary" variant="subtle" icon="i-lucide-message-square-text" label="Follow up" @click="openFollowUp(item)" />
             </div>
           </UCard>
         </div>
@@ -355,6 +347,8 @@ const submitFollowUp = async () => {
     </div>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />
   </main>
+
+  <MaintenancePhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :photos="viewerPhotos" />
 
   <UModal v-model:open="followUpOpen" class="max-w-xl" title="Follow up on ticket" :description="followUpTarget ? `${followUpTarget.category} — ${followUpTarget.propertySpace?.name ?? 'maintenance ticket'}` : undefined">
     <template #body>

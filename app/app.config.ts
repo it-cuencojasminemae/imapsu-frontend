@@ -49,6 +49,10 @@ export default defineAppConfig({
     inputMenu: {
       slots: { content: menuMotion }
     },
+    // A shade darker than the default so loading placeholders read on white cards.
+    skeleton: {
+      base: 'animate-pulse rounded-md bg-accented/80'
+    },
     dropdownMenu: {
       slots: { content: menuMotion }
     },
@@ -68,12 +72,35 @@ export default defineAppConfig({
         }
       }
     },
+    // Toasts are white cards with a colored status icon, a bold title, a muted
+    // description and a countdown bar along the bottom edge in the same color.
+    // They slide in from the side with a slight scale and slide back out.
+    toast: {
+      slots: {
+        root: 'relative group overflow-hidden bg-default rounded-xl ring-1 ring-default shadow-[0_12px_32px_-12px_rgb(28_25_23/0.28)] pl-4 pr-3 pt-3.5 pb-4 flex gap-3',
+        title: 'text-sm font-semibold text-highlighted',
+        description: 'text-sm leading-relaxed text-muted',
+        icon: 'shrink-0 size-5',
+        actions: 'flex gap-1.5 shrink-0',
+        progress: 'absolute inset-x-0 bottom-0 [&_[data-slot=base]]:h-[3px] [&_[data-slot=base]]:rounded-none [&_[data-slot=base]]:bg-transparent'
+      },
+      variants: {
+        orientation: {
+          vertical: { root: 'items-start', actions: 'items-start mt-3' }
+        }
+      }
+    },
     toaster: {
-      slots: { base: 'duration-(--app-motion-menu)' },
+      slots: { viewport: 'w-[calc(100%-2rem)] sm:w-[25rem]' },
       compoundVariants: [
         {
-          position: ['bottom-left', 'bottom-center', 'bottom-right'],
-          class: { base: 'data-[state=open]:animate-[toast-slide-in-from-bottom_var(--app-motion-overlay)_var(--app-overlay-ease)]' }
+          position: ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-right'],
+          class: { base: 'data-[state=open]:animate-[imapsu-toast-in_var(--app-motion-overlay)_var(--app-ease)] data-[state=closed]:animate-[imapsu-toast-out_220ms_var(--ease-in)]' }
+        },
+        {
+          // Phones show toasts bottom-center (see app.vue), where they rise in from below.
+          position: ['bottom-center'],
+          class: { base: 'data-[state=open]:animate-[imapsu-toast-rise-in_var(--app-motion-overlay)_var(--app-ease)] data-[state=closed]:animate-[imapsu-toast-rise-out_220ms_var(--ease-in)]' }
         }
       ]
     },

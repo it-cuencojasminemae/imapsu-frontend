@@ -15,6 +15,7 @@ type NotificationItem = {
 
 const auth = useAuth()
 const { $api } = useStrapi()
+const notify = useNotify()
 
 const open = ref(false)
 const loading = ref(false)
@@ -22,6 +23,38 @@ const notifications = ref<NotificationItem[]>([])
 const unread = ref(0)
 
 let poll: ReturnType<typeof setInterval> | null = null
+
+// A new announcement gets the filled highlight toast once per browser
+// session. On the first check after signing in only announcements from the
+// last few days count, so old unread ones do not pop up every visit.
+const ANNOUNCED_KEY = 'imapsu:announced'
+const RECENT_MS = 3 * 24 * 60 * 60 * 1000
+let announced: Set<string> | null = null
+
+const readAnnounced = () => {
+  try { return new Set<string>(JSON.parse(sessionStorage.getItem(ANNOUNCED_KEY) ?? '[]')) } catch { return new Set<string>() }
+}
+
+const announceNew = (list: NotificationItem[]) => {
+  if (auth.isStaff.value) return
+  const firstCheck = announced === null
+  announced ??= readAnnounced()
+  const seen = announced
+  const fresh = list.filter((item) => {
+    if (item.type !== 'announcement' || item.read) return false
+    if (seen.has(String(item.documentId ?? item.id))) return false
+    return !firstCheck || !item.createdAt || Date.now() - new Date(item.createdAt).getTime() < RECENT_MS
+  })
+  for (const item of list) if (item.type === 'announcement') seen.add(String(item.documentId ?? item.id))
+  try { sessionStorage.setItem(ANNOUNCED_KEY, JSON.stringify([...seen])) } catch { /* storage may be blocked */ }
+  if (!fresh.length) return
+  const newest = fresh[0]!
+  notify.highlight(fresh.length === 1 ? 'New announcement' : `${fresh.length} new announcements`, {
+    description: newest.description ?? undefined,
+    duration: 10000,
+    actions: [{ label: 'View', onClick: () => openNotification(newest) }]
+  })
+}
 
 const load = async () => {
   if (!auth.isAuthenticated.value) return
@@ -33,6 +66,7 @@ const load = async () => {
     ])
     notifications.value = list.data ?? []
     unread.value = count.count ?? 0
+    announceNew(notifications.value)
   } catch {
     // ignore transient failures
   } finally {

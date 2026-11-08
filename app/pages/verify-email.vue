@@ -12,7 +12,7 @@ definePageMeta({
 
 const route = useRoute()
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 
 const OTP_LENGTH = 6
 const RESEND_COOLDOWN_SECONDS = 90
@@ -111,7 +111,7 @@ const verify = async () => {
   verifying.value = true
   try {
     verifiedUser.value = await auth.confirmEmail(email.value, code.value)
-    toast.add({ title: 'Email verified', description: 'Your account is now active. You can now sign in to access campus services.', color: 'success', icon: 'i-lucide-mail-check' })
+    notify.success('Email verified', { description: 'Your account is now active. You can now sign in to access campus services.' })
   } catch (error: unknown) {
     errorMessage.value = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
       ?? 'We could not verify that code. It may be incorrect or expired.'
@@ -128,10 +128,10 @@ const resend = async () => {
   resending.value = true
   try {
     await auth.resendConfirmation(email.value)
-    toast.add({ title: 'New code sent', description: `A fresh verification code was sent to ${email.value}.`, color: 'success', icon: 'i-lucide-mail-check' })
+    notify.success('New code sent', { description: `A fresh verification code was sent to ${email.value}.` })
     startResendCooldown()
   } catch {
-    toast.add({ title: 'Unable to resend', description: 'Please try again in a moment.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to resend', { description: 'Please try again in a moment.' })
   } finally {
     resending.value = false
   }

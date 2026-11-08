@@ -2,7 +2,7 @@
 import http from 'node:http'
 
 export async function startAccountDashboardApi(port = 1341) {
-  const roles = ['student', 'aspiring-tenant', 'current-tenant', 'oas', 'admin']
+  const roles = ['aspiring-tenant', 'current-tenant', 'oas', 'admin']
   const profiles = new Map(roles.map((type, index) => [type, {
     id: 700 + index, username: `qa-${type}`, email: `${type}@example.test`, fullName: `Campus ${type}`,
     role: { id: index + 1, name: type, type }, bio: '', contactNumber: '',

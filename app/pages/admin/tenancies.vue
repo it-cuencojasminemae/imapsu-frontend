@@ -25,14 +25,14 @@ type DirectoryUser = { id: number; username: string; email: string; confirmed?: 
 useHead({ title: 'Manage Tenancies | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordSearch = ref('')
 const recordsPage = useRecordPage(["propertySpace.name","propertySpace.propertyCode","user.username","status"], {  }, recordSearch)
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Tenancy>>('/api/tenancies', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Tenancy>>('/api/tenancies', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -43,10 +43,10 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: userDataResponse, refresh: refreshUsers, status: userDataStatus, error: userDataError } = await useCompleteFetch<ListResponse<DirectoryUser>>('/api/user-directory', { baseURL, headers })
+const { data: userDataResponse, refresh: refreshUsers, status: userDataStatus, error: userDataError } = await useCompleteFetch<ListResponse<DirectoryUser>>('/api/user-directory', { lazy: true, baseURL, headers })
 const { data: userData } = useRequestPresentation(userDataResponse, userDataStatus)
 
-const { data: propertyData, refresh: refreshProperties } = await useCompleteFetch<ListResponse<MapProperty & { documentId: string }>>('/api/properties', {
+const { data: propertyData, refresh: refreshProperties } = await useCompleteFetch<ListResponse<MapProperty & { documentId: string }>>('/api/properties', { lazy: true,
   baseURL,
   headers,
   query: { 'pagination[pageSize]': 100 }
@@ -234,10 +234,10 @@ const save = async () => {
     }
     if (editing.value) {
       await $api(`/api/tenancies/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
-      toast.add({ title: 'Tenancy updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Tenancy updated')
     } else {
       await $api('/api/tenancies', { method: 'POST', body })
-      toast.add({ title: 'Tenancy created', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Tenancy created')
     }
     formOpen.value = false
     await refresh()
@@ -248,15 +248,20 @@ const save = async () => {
   }
 }
 
+// The row's Delete button spins while its record is being removed.
+const deleting = ref<string | number | null>(null)
 const remove = async (tenancy: Tenancy) => {
   const label = tenancy.propertySpace?.name ?? tenancy.user?.username ?? 'this tenancy'
   if (!await confirm({ title: 'Delete tenancy?', description: `The tenancy for ${label} will be permanently removed.`, confirmLabel: 'Delete tenancy', icon: 'i-lucide-trash-2' })) return
+  deleting.value = tenancy.documentId ?? tenancy.id
   try {
     await $api(`/api/tenancies/${tenancy.documentId ?? tenancy.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Tenancy deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Tenancy deleted')
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete tenancy', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete tenancy', { description: getErrorMessage(err) })
+  } finally {
+    deleting.value = null
   }
 }
 
@@ -271,6 +276,10 @@ const openHistory = (tenancy: Tenancy) => {
   }
   historyOpen.value = true
 }
+const tenancyMenuItems = (tenancy: Tenancy) => [
+  [{ label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(tenancy) }],
+  [{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(tenancy) }]
+]
 const recordColumns = [
  { key: 'space', label: 'Property', value: (tenancy: Tenancy) => tenancy.propertySpace?.name || 'Property' },
  { key: 'tenant', label: 'Tenant', value: (tenancy: Tenancy) => tenancy.user?.username || '—' },
@@ -287,7 +296,6 @@ const filteredTenancies = computed(() => {
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Management</template>
       <template #title>Tenancies</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Manage tenant records, assigned rental spaces, contract terms, and occupancy history.</p></template>
       <template #actions><div class="flex flex-wrap items-center gap-3">
@@ -297,7 +305,7 @@ const filteredTenancies = computed(() => {
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="3" height="h-28" />
+    <AppLoadingState v-if="isInitialLoading" variant="table" :count="6" label="Loading tenancies…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load tenancies" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -306,15 +314,20 @@ const filteredTenancies = computed(() => {
     <div v-else class="space-y-4">
       <div class="imapsu-toolbar rounded-xl border border-default bg-default p-4"><UFormField label="Search tenancies"><UInput v-model="recordSearch" icon="i-lucide-search" placeholder="Tenant, property, code, or status…" /></UFormField><div class="mt-3 flex items-center justify-between gap-2"><p class="text-sm text-muted">Showing {{ filteredTenancies.length }} of {{ tenancies.length }}</p><UButton v-if="recordSearch" label="Clear search" color="neutral" variant="ghost" size="sm" @click="recordSearch = ''" /></div></div>
       <UEmpty v-if="!filteredTenancies.length" icon="i-lucide-search" title="No matching tenancies" description="Try another search or clear your search." />
-      <AppRecordTable v-else :items="filteredTenancies" :columns="recordColumns" :item-key="tenancy => tenancy.documentId ?? tenancy.id" caption="Tenancies">
+      <AppRecordTable v-else :items="filteredTenancies" :columns="recordColumns" :item-key="tenancy => tenancy.documentId ?? tenancy.id" caption="Tenancies" compact-actions>
         <template #cell-tenant="{ item }"><span class="flex items-center gap-2"><AppUserAvatar v-if="item.user" :user="item.user" size="xs" /><span class="text-toned">{{ item.user?.username || '—' }}</span></span></template>
-        <template #actions="{ item }"><UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" /></template>
+        <template #actions="{ item }">
+          <UButton label="Edit" color="neutral" variant="subtle" size="sm" @click="openEdit(item)" />
+          <UDropdownMenu :items="tenancyMenuItems(item)" :content="{ align: 'end' }">
+            <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="More actions" title="More actions" />
+          </UDropdownMenu>
+        </template>
         <template #details="{ item: tenancy }"><UCard  :ui="{ body: 'p-5' }">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="font-medium text-highlighted">{{ tenancy.propertySpace?.name ?? 'Property' }}</p>
             <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              <span v-if="tenancy.propertySpace" class="font-mono">{{ tenancy.propertySpace.propertyCode }}</span>
+              <span v-if="tenancy.propertySpace">{{ tenancy.propertySpace.propertyCode }}</span>
               <span v-if="tenancy.propertySpace?.building" class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3.5" />{{ tenancy.propertySpace.building }}</span>
               <span v-if="tenancy.user" class="flex items-center gap-1.5"><AppUserAvatar :user="tenancy.user" />{{ tenancy.user.username }}</span>
             </p>
@@ -328,10 +341,11 @@ const filteredTenancies = computed(() => {
           <div><dt class="text-xs text-muted">Monthly rent</dt><dd class="font-medium text-highlighted">{{ formatCurrency(tenancy.monthlyRent) }}</dd></div>
         </dl>
 
-        <div class="mt-4 flex gap-2 border-t border-default pt-4">
+        <!-- Desktop rows already hold these actions; phones have no row, so the card keeps them. -->
+        <div class="mt-4 flex gap-2 border-t border-default pt-4 lg:hidden">
           <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(tenancy)" />
           <UButton label="History" icon="i-lucide-history" color="neutral" variant="subtle" size="sm" @click="openHistory(tenancy)" />
-          <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(tenancy)" />
+          <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (tenancy.documentId ?? tenancy.id)" :disabled="deleting !== null" @click="remove(tenancy)" />
         </div>
       </UCard></template>
       </AppRecordTable>

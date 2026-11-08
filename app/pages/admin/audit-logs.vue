@@ -51,7 +51,7 @@ const headers = {}
 const search = ref('')
 const actionFilter = ref<string>('all')
 const recordsPage = useRecordPage(["description","entityLabel","actorUsername","entityType"], { action: { ref: actionFilter, field: 'action' } }, search)
-const { data: responseData, status, error, refresh } = await useFetch<AuditListResponse>('/api/audit-logs', {
+const { data: responseData, status, error, refresh } = await useFetch<AuditListResponse>('/api/audit-logs', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({ sort: 'createdAt:desc', ...recordsPage.query.value }))
@@ -103,8 +103,7 @@ const columns = [
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
-      <template #title>Audit Logs</template>
+      <template #title>Audit logs</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
           Review recorded system activity and administrative actions. Audit records cannot be edited or deleted.
         </p></template>
@@ -120,7 +119,7 @@ const columns = [
     </div>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="8" height="h-14" />
+    <AppLoadingState v-if="isInitialLoading" variant="rows" :count="8" label="Loading audit logs…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load audit logs" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 

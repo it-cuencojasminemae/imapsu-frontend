@@ -2,7 +2,7 @@
 import { checkPasswordStrength, PASSWORD_REQUIREMENTS } from '~/utils/password'
 const auth = useAuth()
 const { $api, getErrorMessage } = useStrapi()
-const toast = useToast()
+const notify = useNotify()
 const emit = defineEmits<{ passwordUpdated: [] }>()
 const props = defineProps<{ beforeUpdate?: () => boolean | Promise<boolean> }>()
 const currentPassword = ref('')
@@ -37,7 +37,7 @@ const savePassword = async () => {
       method: 'PUT',
       body: { currentPassword: currentPassword.value, newPassword: newPassword.value }
     })
-    toast.add({ title: 'Password updated', description:'Sign in again with your new password.', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Password updated', { description: 'Sign in again with your new password.' })
     currentPassword.value = ''; newPassword.value = ''; confirmPassword.value = ''
     emit('passwordUpdated')
     auth.user.value = null

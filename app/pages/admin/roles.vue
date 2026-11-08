@@ -160,11 +160,11 @@ const PROTECTED_ACTIONS = new Set(['api::auth.auth.me', 'api::auth.auth.updateAc
 const CATALOG_ACTIONS = new Set(PERMISSION_CATALOG.flatMap(section => section.permissions.map(permission => permission.action)))
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
-const { data: responseData, status, error, refresh } = await useFetch<RoleInfo[]>('/api/roles', { baseURL, headers })
+const { data: responseData, status, error, refresh } = await useFetch<RoleInfo[]>('/api/roles', { lazy: true, baseURL, headers })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
@@ -228,7 +228,7 @@ const save = async (role: RoleInfo) => {
       method: 'PUT',
       body: { actions: selected.value[role.type] ?? [] }
     })
-    toast.add({ title: 'Permissions updated', description: `${role.name} role saved.`, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Permissions updated', { description: `${role.name} role saved.` })
     await refresh()
   } catch (err) {
     saveError.value = getErrorMessage(err)
@@ -259,8 +259,7 @@ const roleColor = (type: string) => {
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
-      <template #title>Roles &amp; Permissions</template>
+      <template #title>Roles &amp; permissions</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
           Manage role-specific access to system functions. Required account capabilities remain enabled.
         </p></template>
@@ -270,7 +269,7 @@ const roleColor = (type: string) => {
     <UAlert v-if="saveError" color="error" icon="i-lucide-triangle-alert" title="Unable to save permissions" :description="saveError" class="mb-6" />
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="3" height="h-64" />
+    <AppLoadingState v-if="isInitialLoading" variant="form" :count="3" label="Loading roles…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load roles" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -299,7 +298,7 @@ const roleColor = (type: string) => {
 
         <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div v-for="section in PERMISSION_CATALOG" :key="section.label">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">{{ section.label }}</p>
+            <p class="mb-2 text-xs font-medium text-muted">{{ section.label }}</p>
             <ul class="space-y-1.5">
               <li v-for="permission in section.permissions" :key="permission.action">
                 <label

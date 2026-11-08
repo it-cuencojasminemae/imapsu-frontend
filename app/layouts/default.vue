@@ -9,11 +9,10 @@ const brandTagline = computed(() => {
   if (auth.isAdmin.value) return 'MIS Administration'
   if (auth.isCurrentTenant.value) return 'Tenant Portal'
   if (auth.isAspiringTenant.value) return 'Aspiring Tenant Portal'
-  if (auth.isStudent.value) return 'Student Portal'
   return 'Interactive Map-Driven Stall Management System'
 })
 
-const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password', '/privacy'].includes(route.path))
+const isStandalonePage = computed(() => ['/login', '/register', '/verify-email', '/forgot-password', '/privacy', '/community-guidelines'].includes(route.path))
 const isMapPage = computed(() => route.path === '/campus-map')
 const { baseURL } = useStrapi()
 const { data: systemStatus } = useFetch<{ systemStatus?: string; maintenanceBanner?: string }>('/api/system-settings/public', { baseURL, key: 'system-status', default: () => ({}) })
@@ -31,7 +30,7 @@ const signOut = async () => {
   if (accountDirty.value && !await confirm({ title: 'Sign out without saving?', description: 'You have unsaved account changes. They will be lost if you sign out now.', confirmLabel: 'Sign out', cancelLabel: 'Keep editing', tone: 'warning', icon: 'i-lucide-log-out' })) return
   await auth.logout()
   drawerOpen.value = false
-  await navigateTo('/campus-map')
+  await navigateTo('/')
 }
 const navigationTrigger = useTemplateRef('navigationTrigger')
 const drawerFocus = {
@@ -120,7 +119,7 @@ const userItems = computed(() => {
         </div>
 
         <div v-if="auth.isAuthenticated.value" class="border-t border-white/10 bg-black/20 px-2.5 py-3">
-          <div v-if="!sidebarCollapsed" class="rounded-xl border border-white/10 bg-white/5 p-2.5">
+          <div v-if="!sidebarCollapsed" class="px-1">
             <div class="flex items-center gap-3">
               <UAvatar :src="auth.avatarUrl.value ?? undefined" :text="(auth.displayName.value ?? '?').charAt(0).toUpperCase()" :alt="auth.displayName.value" size="2xl" />
               <div class="min-w-0">
@@ -139,13 +138,14 @@ const userItems = computed(() => {
           <NavGuestCard v-if="!sidebarCollapsed" />
           <div v-else class="flex flex-col items-center gap-1 border-t border-white/10 pt-3">
             <UButton to="/login" square variant="ghost" color="neutral" icon="i-lucide-log-in" aria-label="Sign in" title="Sign in" class="text-maroon-100 hover:bg-white/10 hover:text-white" />
-            <UButton to="/register" square variant="ghost" color="neutral" icon="i-lucide-user-plus" aria-label="Create an account" title="Create an account" class="text-maroon-100 hover:bg-white/10 hover:text-white" />
+            <UButton to="/register?role=aspiring-tenant" square variant="ghost" color="neutral" icon="i-lucide-user-plus" aria-label="Apply now" title="Apply now" class="text-maroon-100 hover:bg-white/10 hover:text-white" />
           </div>
         </div>
       </aside>
 
       <div class="min-w-0 flex-1" :class="{ 'flex min-h-0 flex-col': isMapPage }">
-        <header v-if="!isStandalonePage" class="sticky top-0 z-40 shrink-0">
+        <!-- The campus map runs full screen; it has its own way back. -->
+        <header v-if="!isStandalonePage && !isMapPage" class="sticky top-0 z-40 shrink-0">
           <div class="imapsu-appbar">
             <div class="flex h-[63px] items-center gap-2 px-3 sm:gap-4 sm:px-6">
               <div class="flex min-w-0 items-center gap-1 sm:gap-2">
@@ -178,9 +178,8 @@ const userItems = computed(() => {
                     </template>
                     <template #content-top>
                       <div class="imapsu-account-head">
-                        <svg class="imapsu-account-head-accent" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C45 38 85 28 120 6" /></svg>
                         <UAvatar :src="auth.avatarUrl.value ?? undefined" :text="(auth.displayName.value ?? '?').charAt(0).toUpperCase()" :alt="auth.displayName.value" size="2xl" />
-                        <div class="relative min-w-0">
+                        <div class="min-w-0">
                           <p class="truncate text-sm font-semibold text-white">{{ auth.displayName.value }}</p>
                           <p v-if="auth.user.value?.email" class="truncate text-xs text-maroon-100">{{ auth.user.value.email }}</p>
                         </div>
@@ -190,7 +189,7 @@ const userItems = computed(() => {
                 </template>
                 <template v-else>
                   <UButton to="/login" color="neutral" variant="ghost" label="Sign in" class="shrink-0 max-sm:px-2 max-sm:text-xs" />
-                  <UButton to="/register" label="Register" class="shrink-0 max-sm:px-2 max-sm:text-xs" data-prominent="true" />
+                  <UButton to="/register?role=aspiring-tenant" label="Apply now" class="shrink-0 max-sm:px-2 max-sm:text-xs" data-prominent="true" />
                 </template>
               </div>
             </div>
@@ -203,7 +202,7 @@ const userItems = computed(() => {
       </div>
     </div>
 
-    <UDrawer v-if="!isStandalonePage" v-model:open="drawerOpen" direction="left" title="Navigation" description="Campus and account navigation" :content="drawerFocus" :close="{ 'aria-label': 'Close navigation', class: 'text-white hover:bg-white/10' }" :ui="{ content: 'w-80 max-w-[85vw] bg-maroon-950! ring-maroon-950!', description: 'sr-only', handle: '!bg-gold-400' }">
+    <UDrawer v-if="!isStandalonePage && !isMapPage" v-model:open="drawerOpen" direction="left" title="Navigation" description="Campus and account navigation" :content="drawerFocus" :close="{ 'aria-label': 'Close navigation', class: 'text-white hover:bg-white/10' }" :ui="{ content: 'w-80 max-w-[85vw] bg-maroon-950! ring-maroon-950!', description: 'sr-only', handle: '!bg-gold-400' }">
       <template #title>
         <div class="flex items-center gap-2.5">
           <BrandLogo size="size-11" />

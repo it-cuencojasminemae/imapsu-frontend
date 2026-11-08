@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { accountSection, internalRedirect, landingPath, requiresAccountSetup, SECURITY_PATH } from '../app/utils/accountNavigation.ts'
 
-test('guests enter the map and all five roles enter their dashboards', () => {
-  assert.equal(landingPath(null), '/campus-map')
+test('guests enter the landing page and all five roles enter their dashboards', () => {
+  assert.equal(landingPath(null), '/')
   for (const type of ['student', 'aspiring-tenant', 'current-tenant', 'oas', 'admin']) {
     assert.equal(landingPath({ role: { type } }), ['oas', 'admin'].includes(type) ? '/admin' : '/dashboard')
   }

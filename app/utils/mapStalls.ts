@@ -4,9 +4,6 @@ export type StallPhoto = { id: number; url: string; name?: string }
 
 export const stallKey = (property: MapProperty) => String(property.documentId ?? property.id ?? property.propertyCode)
 
-export const visibleStalls = (properties: MapProperty[], isStudent: boolean) =>
-  isStudent ? properties.filter(property => property.space_status === 'Occupied') : properties
-
 export function stallTitle(property: MapProperty): string {
   return (property.space_status === 'Occupied' ? property.businessName?.trim() : '') || property.name?.trim() || property.propertyCode
 }

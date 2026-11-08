@@ -9,7 +9,7 @@ type Announcement = {
   documentId?: string
   title: string
   body: string
-  audience: 'Everyone' | 'Students' | 'Tenants'
+  audience: 'Everyone' | 'Tenants'
   pinned?: boolean
   publishedAt?: string
   publishAt?: string
@@ -30,13 +30,13 @@ type Acknowledgment = {
 useHead({ title: 'Announcements | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Announcement>>('/api/announcements', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Announcement>>('/api/announcements', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({ sort: 'pinned:desc,publishedAt:desc', ...recordsPage.query.value }))
@@ -45,7 +45,7 @@ const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useR
 
 
 const announcements = computed(() => data.value?.data ?? [])
-const { data: countResponse, status: countStatus, refresh: refreshCounts } = await useFetch<{ counts: Record<string, number> }>('/api/dashboard/acknowledgment-summary', { baseURL, query:computed(()=>({ids:announcements.value.map(item=>item.documentId).filter(Boolean).join(',')})) })
+const { data: countResponse, status: countStatus, refresh: refreshCounts } = await useFetch<{ counts: Record<string, number> }>('/api/dashboard/acknowledgment-summary', { lazy: true, baseURL, query:computed(()=>({ids:announcements.value.map(item=>item.documentId).filter(Boolean).join(',')})) })
 const { data: countData } = useRequestPresentation(countResponse,countStatus)
 const ackCountFor = (item:Announcement) => countData.value?.counts[String(item.documentId ?? item.id)] ?? 'Unavailable'
 const ackModalOpen = ref(false), ackTarget = ref<Announcement|null>(null)
@@ -127,10 +127,10 @@ const save = async () => {
     }
     if (editing.value) {
       await $api(`/api/announcements/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
-      toast.add({ title: 'Announcement updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Announcement updated')
     } else {
       await $api('/api/announcements', { method: 'POST', body })
-      toast.add({ title: 'Announcement created', description: 'It is now visible to its audience.', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Announcement created', { description: 'It is now visible to its audience.' })
     }
     formOpen.value = false
     await refresh()
@@ -141,14 +141,19 @@ const save = async () => {
   }
 }
 
+// The row's Delete button spins while its record is being removed.
+const deleting = ref<string | number | null>(null)
 const remove = async (item: Announcement) => {
   if (!await confirm({ title: 'Delete announcement?', description: `\u201c${item.title}\u201d will be permanently removed.`, confirmLabel: 'Delete announcement', icon: 'i-lucide-trash-2' })) return
+  deleting.value = item.documentId ?? item.id
   try {
     await $api(`/api/announcements/${item.documentId ?? item.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Announcement deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Announcement deleted')
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete announcement', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete announcement', { description: getErrorMessage(err) })
+  } finally {
+    deleting.value = null
   }
 }
 
@@ -163,10 +168,10 @@ const togglePin = async (item: Announcement) => {
       method: 'PUT',
       body: { data: { pinned: !item.pinned } }
     })
-    toast.add({ title: item.pinned ? 'Announcement unpinned' : 'Announcement pinned', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success(item.pinned ? 'Announcement unpinned' : 'Announcement pinned')
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to update announcement', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to update announcement', { description: getErrorMessage(err) })
   } finally {
     togglingPin.value = null
   }
@@ -178,8 +183,6 @@ const formatDate = (value?: string) => value
 
 const audienceColor = (audience: Announcement['audience']) => {
   switch (audience) {
-    case 'Students':
-      return 'secondary'
     case 'Tenants':
       return 'primary'
     default:
@@ -198,7 +201,6 @@ const formatDateTime = (value?: string | null) => value
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Management</template>
       <template #title>Announcements</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Manage official notices, memorandums, and advisories for authorized audiences.</p></template>
       <template #actions><div class="flex items-center gap-2">
@@ -208,7 +210,7 @@ const formatDateTime = (value?: string | null) => value
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-32" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="4" label="Loading announcements…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load announcements" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -230,7 +232,7 @@ const formatDateTime = (value?: string | null) => value
             <UBadge :color="audienceColor(item.audience)" variant="subtle">{{ item.audience }}</UBadge>
             <UButton :icon="item.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'" :label="item.pinned ? 'Unpin' : 'Pin'" color="neutral" variant="ghost" size="sm" :loading="togglingPin === String(item.documentId ?? item.id)" @click="togglePin(item)" />
             <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" />
-            <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(item)" />
+            <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (item.documentId ?? item.id)" :disabled="deleting !== null" @click="remove(item)" />
           </div>
         </div>
         <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-toned">{{ item.body }}</p>
@@ -278,7 +280,7 @@ const formatDateTime = (value?: string | null) => value
           </UFormField>
 
           <UFormField label="Audience" required>
-            <USelect v-model="form.audience" :items="[{ label: 'Everyone', value: 'Everyone' }, { label: 'Students', value: 'Students' }, { label: 'Tenants', value: 'Tenants' }]" />
+            <USelect v-model="form.audience" :items="[{ label: 'Everyone', value: 'Everyone' }, { label: 'Tenants', value: 'Tenants' }]" />
           </UFormField>
 
           <div class="flex items-center justify-between gap-3 rounded-lg border border-default px-3 py-2.5">

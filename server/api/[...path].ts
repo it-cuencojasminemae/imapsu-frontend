@@ -4,7 +4,7 @@ import { trustedClientIP } from '../utils/trusted-proxy'
 import { gatewaySession, refreshGatewaySession } from '../utils/gateway-session'
 import { defineEventHandler, getRequestURL, getHeader, getRequestIP, readBody, setHeader, setResponseStatus, sendStream, createError, deleteCookie } from 'h3'
 
-const allowed = new Set(['auth','property-spaces','properties','tenancies','bills','rental-applications','renewal-intents','maintenance-tickets','feedbacks','meter-readings','announcements','announcement-acknowledgments','notifications','map-labels','map-zones','status-histories','audit-logs','system-settings','system','roles','user-directory','users','upload','media','dashboard'])
+const allowed = new Set(['auth','property-spaces','properties','tenancies','bills','rental-applications','renewal-intents','maintenance-tickets','feedbacks','stall-ratings','meter-readings','announcements','announcement-acknowledgments','notifications','map-labels','map-zones','status-histories','audit-logs','system-settings','system','roles','user-directory','users','upload','media','dashboard'])
 const equal = (a: string,b: string) => { const x=Buffer.from(a),y=Buffer.from(b); return x.length===y.length && timingSafeEqual(x,y) }
 export default defineEventHandler(async event => {
   const config=useRuntimeConfig(event)

@@ -25,6 +25,7 @@ type Bill = {
   verificationNote?: string
   paidAt?: string
   orNumber?: string
+  orSource?: 'ocr' | 'manual' | null
   receipt?: { id: number; url?: string; name?: string } | null
   tenancy?: {
     documentId?: string
@@ -46,7 +47,7 @@ type MeterReading = {
 useHead({ title: 'Manage Bills | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
@@ -56,7 +57,7 @@ const filterTenancy = ref('all')
 const filterStatus = ref('All')
 const filterPeriod = ref('')
 const recordsPage = useRecordPage(["period","orNumber","tenancy.propertySpace.name","tenancy.propertySpace.propertyCode","tenancy.user.username"], { tenancy: { ref: filterTenancy, field: 'tenancy.documentId' }, status: { ref: filterStatus, field: 'status' }, period: { ref: filterPeriod, field: 'period', operation: '$containsi' } }, filterSearch)
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Bill>>('/api/bills', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Bill>>('/api/bills', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -68,15 +69,16 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: tenancyData } = await useCompleteFetch<ListResponse<{ documentId: string; status: string; monthlyRent?: number | string; user?: { username?: string } | null; propertySpace?: { name?: string; propertyCode?: string } | null }>>('/api/tenancies', {
+const { data: tenancyData } = await useCompleteFetch<ListResponse<{ documentId: string; status: string; monthlyRent?: number | string; user?: { username?: string } | null; propertySpace?: { name?: string; propertyCode?: string } | null }>>('/api/tenancies', { lazy: true,
   baseURL,
   headers,
   query: { 'populate[user]': true, 'populate[propertySpace]': true, 'pagination[pageSize]': 100 }
 })
 
-const { data: billingSummaryResponse, status: billingSummaryStatus, error: billingSummaryError, refresh: refreshBillingSummary } = await useFetch<any>('/api/dashboard/billing-summary', { baseURL, headers })
+const { data: billingSummaryResponse, status: billingSummaryStatus, error: billingSummaryError, refresh: refreshBillingSummary } = await useFetch<any>('/api/dashboard/billing-summary', { lazy: true, baseURL, headers })
 const { data: billingSummary } = useRequestPresentation(billingSummaryResponse, billingSummaryStatus)
-watch(responseData, () => { refreshBillingSummary() })
+// The first lazy response arrives alongside the summary request, so only later list changes refresh it.
+watch(responseData, (_next, previous) => { if (previous) refreshBillingSummary() })
 const bills = computed(() => data.value?.data ?? [])
 const tenancyOptions = computed(() => (tenancyData.value?.data ?? []).map(tenancy => ({
   label: `${tenancy.propertySpace?.name ?? 'Property'} — ${tenancy.user?.username ?? 'No user'}`,
@@ -203,8 +205,6 @@ const form = reactive({
   waterCurrent: '',
   waterRate: '',
   additionalCharges: '',
-  status: 'Unpaid' as Bill['status'],
-  verificationNote: ''
 })
 
 const openCreate = () => {
@@ -219,9 +219,7 @@ const openCreate = () => {
     waterPrevious: '',
     waterCurrent: '',
     waterRate: '',
-    additionalCharges: '',
-    status: 'Unpaid',
-    verificationNote: ''
+    additionalCharges: ''
   })
   formError.value = ''
   resetReadingPrefill()
@@ -240,26 +238,12 @@ const openEdit = (bill: Bill) => {
     waterPrevious: bill.waterMeterPrevious != null ? String(bill.waterMeterPrevious) : '',
     waterCurrent: bill.waterMeterCurrent != null ? String(bill.waterMeterCurrent) : '',
     waterRate: bill.waterRate != null ? String(bill.waterRate) : '',
-    additionalCharges: bill.additionalCharges != null ? String(bill.additionalCharges) : '',
-    status: bill.status ?? 'Unpaid',
-    verificationNote: bill.verificationNote ?? ''
+    additionalCharges: bill.additionalCharges != null ? String(bill.additionalCharges) : ''
   })
   formError.value = ''
   resetReadingPrefill()
   formOpen.value = true
 }
-
-// Overdue follows the due date on the server, and a payment needs a receipt picture on the bill.
-const formStatusOptions = computed(() => {
-  const noReceipt = !editing.value?.receipt
-  return [
-    { label: 'Unpaid', value: 'Unpaid' },
-    { label: 'For Verification', value: 'For Verification', disabled: noReceipt },
-    { label: 'Verified', value: 'Verified', disabled: noReceipt },
-    { label: 'Rejected', value: 'Rejected' },
-    { label: 'Overdue', value: 'Overdue', disabled: true }
-  ]
-})
 
 const selectedTenancy = computed(() =>
   (tenancyData.value?.data ?? []).find(tenancy => tenancy.documentId === form.tenancy) ?? null
@@ -451,16 +435,16 @@ const save = async () => {
         waterRate: form.waterRate === '' ? blank : Number(form.waterRate),
         waterCharge: waterCharge.value === 0 ? noCharge : Number(waterCharge.value.toFixed(2)),
         additionalCharges: additionalChargesNum.value === 0 ? noCharge : Number(additionalChargesNum.value.toFixed(2)),
-        status: form.status,
-        verificationNote: form.verificationNote?.trim() || blank
+        // Status changes go through Verify, Reject, Record receipt and Reset to Unpaid.
+        ...(editing.value ? {} : { status: 'Unpaid' })
       }
     }
     if (editing.value) {
       await $api(`/api/bills/${editing.value.documentId ?? editing.value.id}`, { method: 'PUT', body })
-      toast.add({ title: 'Bill updated', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Bill updated')
     } else {
       await $api('/api/bills', { method: 'POST', body })
-      toast.add({ title: 'Bill issued', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Bill issued')
     }
     formOpen.value = false
     await refresh()
@@ -471,14 +455,19 @@ const save = async () => {
   }
 }
 
+// The row's Delete button spins while its record is being removed.
+const deleting = ref<string | number | null>(null)
 const remove = async (bill: Bill) => {
   if (!await confirm({ title: 'Delete bill?', description: `This ${formatCurrency(bill.amount)} bill${bill.period ? ` for ${bill.period}` : ''} will be permanently removed.`, confirmLabel: 'Delete bill', icon: 'i-lucide-trash-2' })) return
+  deleting.value = bill.documentId ?? bill.id
   try {
     await $api(`/api/bills/${bill.documentId ?? bill.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Bill deleted', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Bill deleted')
     await refresh()
   } catch (err) {
-    toast.add({ title: 'Unable to delete bill', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to delete bill', { description: getErrorMessage(err) })
+  } finally {
+    deleting.value = null
   }
 }
 
@@ -504,15 +493,12 @@ const setBillStatus = async (bill: Bill, nextStatus: Bill['status'], extra: Reco
       method: 'PUT',
       body: { data: { status: nextStatus, ...extra } }
     })
-    toast.add({
-      title: `Bill ${nextStatus === 'Verified' ? 'verified' : nextStatus === 'Rejected' ? 'rejected' : 'reset to Unpaid'}`,
-      color: nextStatus === 'Verified' ? 'success' : 'neutral',
-      icon: 'i-lucide-check-circle-2'
-    })
+    if (nextStatus === 'Verified') notify.success('Bill verified')
+    else notify.info(`Bill ${nextStatus === 'Rejected' ? 'rejected' : 'reset to Unpaid'}`)
     await refresh()
     return true
   } catch (err) {
-    toast.add({ title: 'Unable to update bill', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to update bill', { description: getErrorMessage(err) })
     return false
   } finally {
     workflowBusy.value = null
@@ -525,11 +511,19 @@ const isBusy = (bill: Bill) => workflowBusy.value === String(bill.documentId ?? 
 const awaitsReceipt = (bill: Bill) => !isVerified(bill) && !isForVerification(bill)
 const recordLabel = (bill: Bill) => bill.receipt ? 'Update receipt' : 'Record receipt'
 
+// Undoes a verification or rejection made by mistake.
+const canReset = (bill: Bill) => isVerified(bill) || bill.status === 'Rejected'
+const resetToUnpaid = async (bill: Bill) => {
+  if (!await confirm({ title: 'Reset bill to Unpaid?', description: `The ${formatCurrency(bill.amount)} bill${bill.period ? ` for ${bill.period}` : ''} goes back to Unpaid so the tenant can submit a receipt again.`, confirmLabel: 'Reset to Unpaid', icon: 'i-lucide-rotate-ccw' })) return
+  await setBillStatus(bill, 'Unpaid', { verificationNote: null })
+}
+
 const billMenuItems = (bill: Bill) => [
   [
     ...(awaitsReceipt(bill) ? [] : [{ label: recordLabel(bill), icon: 'i-lucide-receipt-text', onSelect: () => openRecord(bill) }]),
     { label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(bill) },
-    { label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(bill) }
+    { label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(bill) },
+    ...(canReset(bill) ? [{ label: 'Reset to Unpaid', icon: 'i-lucide-rotate-ccw', onSelect: () => resetToUnpaid(bill) }] : [])
   ],
   [{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(bill) }]
 ]
@@ -607,12 +601,9 @@ const confirmRecord = async () => {
     }
     const updated = await $api<{ data: Bill }>(`/api/bills/${bill.documentId ?? bill.id}`, { method: 'PUT', body: { data } })
     const flags = updated?.data?.reviewFlags ?? []
-    toast.add({
-      title: isVerified(bill) ? 'Receipt updated' : 'Receipt recorded and verified',
-      description: flags.length ? flags.join('; ') : undefined,
-      color: flags.length ? 'warning' : 'success',
-      icon: flags.length ? 'i-lucide-triangle-alert' : 'i-lucide-check-circle-2'
-    })
+    const recordedTitle = isVerified(bill) ? 'Receipt updated' : 'Receipt recorded and verified'
+    if (flags.length) notify.warning(recordedTitle, { description: flags.join('; ') })
+    else notify.success(recordedTitle)
     recordOpen.value = false
     await refresh()
   } catch (err) {
@@ -677,7 +668,6 @@ const recordColumns = [
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Management</template>
       <template #title>Bills</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Review advance billing information for rent, electricity, and water charges. Record and verify official receipts issued by the University Cashier.</p></template>
       <template #actions><div class="flex items-center gap-3">
@@ -689,7 +679,7 @@ const recordColumns = [
 
     <UAlert v-if="billingSummaryError" class="mb-4" color="warning" title="Billing totals unavailable" description="Displayed records remain available; retry to confirm totals." />
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-24" />
+    <AppLoadingState v-if="isInitialLoading" variant="table" :count="6" label="Loading bills…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load bills" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -780,7 +770,7 @@ const recordColumns = [
           <div class="min-w-0">
             <p class="font-medium text-highlighted">{{ bill.period || 'Billing period' }}</p>
             <p v-if="bill.tenancy" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              <span v-if="bill.tenancy.propertySpace">{{ bill.tenancy.propertySpace.name }} <span class="font-mono">({{ bill.tenancy.propertySpace.propertyCode }})</span></span>
+              <span v-if="bill.tenancy.propertySpace">{{ bill.tenancy.propertySpace.name }} <span>({{ bill.tenancy.propertySpace.propertyCode }})</span></span>
               <span v-if="bill.tenancy.user" class="flex items-center gap-1.5"><AppUserAvatar :user="bill.tenancy.user" />{{ bill.tenancy.user.username }}</span>
             </p>
           </div>
@@ -799,8 +789,9 @@ const recordColumns = [
           <div><dt class="text-xs text-muted">Due date</dt><dd class="font-medium text-highlighted">{{ formatDate(bill.dueDate) || '—' }}</dd></div>
           <div v-if="bill.status === 'Verified'"><dt class="text-xs text-muted">Verified on</dt><dd class="font-medium text-highlighted">{{ formatDateTime(bill.paidAt) || '—' }}</dd></div>
           <div>
-            <dt class="text-xs text-muted">Official Receipt Number</dt>
+            <dt class="text-xs text-muted">Official receipt number</dt>
             <dd class="font-mono font-medium text-highlighted">{{ bill.orNumber || '—' }}</dd>
+            <dd v-if="bill.orNumber && bill.orSource" class="mt-0.5 inline-flex items-center gap-1 text-xs text-muted"><UIcon :name="bill.orSource === 'ocr' ? 'i-lucide-scan-text' : 'i-lucide-keyboard'" class="size-3.5" />{{ bill.orSource === 'ocr' ? 'Read by OCR' : 'Typed by tenant' }}</dd>
           </div>
           <div>
             <dt class="text-xs text-muted">Receipt</dt>
@@ -827,7 +818,8 @@ const recordColumns = [
           <UButton :label="recordLabel(bill)" icon="i-lucide-receipt-text" color="neutral" variant="subtle" size="sm" @click="openRecord(bill)" />
           <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(bill)" />
           <UButton label="History" icon="i-lucide-history" color="neutral" variant="subtle" size="sm" @click="openHistory(bill)" />
-          <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="remove(bill)" />
+          <UButton v-if="canReset(bill)" label="Reset to unpaid" icon="i-lucide-rotate-ccw" color="neutral" variant="subtle" size="sm" @click="resetToUnpaid(bill)" />
+          <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (bill.documentId ?? bill.id)" :disabled="deleting !== null" @click="remove(bill)" />
         </div>
       </UCard></template>
       </AppRecordTable>
@@ -844,7 +836,7 @@ const recordColumns = [
               <div><dt class="text-xs text-muted">Stall</dt><dd class="font-medium text-highlighted">{{ verifyTarget.tenancy?.propertySpace?.name || '—' }}</dd></div>
               <div><dt class="text-xs text-muted">Period</dt><dd class="font-medium text-highlighted">{{ verifyTarget.period || '—' }}</dd></div>
               <div><dt class="text-xs text-muted">Total</dt><dd class="font-semibold text-highlighted">{{ formatCurrency(verifyTarget.amount) }}</dd></div>
-              <div class="col-span-2"><dt class="text-xs text-muted">Official Receipt Number</dt><dd class="font-mono font-medium text-highlighted">{{ verifyTarget.orNumber || '—' }}</dd></div>
+              <div class="col-span-2"><dt class="text-xs text-muted">Official receipt number</dt><dd class="font-mono font-medium text-highlighted">{{ verifyTarget.orNumber || '—' }}</dd><dd v-if="verifyTarget.orNumber && verifyTarget.orSource" class="mt-0.5 inline-flex items-center gap-1 text-xs text-muted"><UIcon :name="verifyTarget.orSource === 'ocr' ? 'i-lucide-scan-text' : 'i-lucide-keyboard'" class="size-3.5" />{{ verifyTarget.orSource === 'ocr' ? 'Read by OCR' : 'Typed by tenant' }}</dd></div>
             </dl>
             <a v-if="verifyTarget.receipt" :href="`${baseURL}${verifyTarget.receipt.url}`" target="_blank" rel="noopener" class="group block text-sm font-medium text-primary">
               <img :src="`${baseURL}${verifyTarget.receipt.url}`" :alt="verifyTarget.receipt.name || 'Payment receipt'" class="max-h-72 w-full rounded-md border border-default object-contain" />
@@ -883,7 +875,7 @@ const recordColumns = [
               <span v-if="recordPicture" class="max-w-64 truncate text-sm text-muted">{{ recordPicture.name }}</span>
             </div>
           </UFormField>
-          <UFormField label="Official Receipt Number" required>
+          <UFormField label="Official receipt number" required>
             <UInput v-model="recordNumber" placeholder="e.g. 8823109" :disabled="recording" />
           </UFormField>
           <p v-if="!isVerified(recordTarget)" class="text-sm text-muted">Saving marks this bill as Verified. The tenant sees the receipt on their Bills page and can no longer change it.</p>
@@ -953,7 +945,7 @@ const recordColumns = [
             <UInput v-model="form.period" placeholder="e.g. 2026-08" />
           </UFormField>
 
-          <UFormField label="Official Receipt Number" description="Official Receipt number extracted from the tenant's uploaded receipt (or entered manually).">
+          <UFormField label="Official receipt number" description="Official Receipt number extracted from the tenant's uploaded receipt (or entered manually).">
             <UInput v-model="form.orNumber" placeholder="e.g. 8823109" />
           </UFormField>
 
@@ -995,18 +987,11 @@ const recordColumns = [
             <UInput v-model="form.additionalCharges" type="number" min="0" step="0.01" placeholder="e.g. 150" />
           </UFormField>
 
-          <div class="grid gap-4 sm:grid-cols-2">
+          <div>
             <UFormField label="Due date" description="Bills are always due on the 10th of the month after the billing period, and become Overdue automatically the day after.">
               <UInput :model-value="dueDatePreview" disabled />
             </UFormField>
-            <UFormField label="Status" description="For Verification and Verified need a receipt picture and number on the bill. Use Record receipt to add them.">
-              <USelect v-model="form.status" :items="formStatusOptions" />
-            </UFormField>
           </div>
-
-          <UFormField label="Verification note" description="Visible to the tenant when a receipt is rejected.">
-            <UTextarea v-model="form.verificationNote" :rows="2" />
-          </UFormField>
 
           <div class="rounded-lg border border-default p-4">
             <p class="text-xs font-medium text-muted">Summary</p>

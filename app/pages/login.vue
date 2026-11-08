@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { internalRedirect, landingPath, requiresAccountSetup, RESTRICTED_SIGN_IN, SECURITY_PATH } from '~/utils/accountNavigation'
 definePageMeta({ middleware: 'guest' })
-useHead({ title: 'Sign In | iMapSU' })
+useHead({ title: 'Sign in | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const route = useRoute()
 const router = useRouter()
 const destination = () => {
@@ -44,7 +44,7 @@ const handleLogin = async () => {
   try {
     await auth.login(identifier.value, password.value)
     if (auth.mfaPending.value) return
-    toast.add({ title: 'Signed in successfully', description: `Signed in as ${auth.user.value?.username}`, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Signed in successfully', { description: `Signed in as ${auth.user.value?.username}` })
     await navigateTo(destination(), { replace: true })
   } catch (error: unknown) {
     const message = (error as { data?: { error?: { message?: string } } })?.data?.error?.message
@@ -54,7 +54,7 @@ const handleLogin = async () => {
       return
     }
     loginError.value = message ?? 'Check your credentials and try again.'
-    toast.add({ title: 'Sign in failed', description: message ?? 'Check your credentials and try again.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Sign in failed', { description: message ?? 'Check your credentials and try again.' })
   } finally {
     loading.value = false
   }
@@ -65,10 +65,10 @@ const resendVerification = async () => {
   resending.value = true
   try {
     await auth.resendConfirmation(verificationEmail.value)
-    toast.add({ title: 'Verification requested', description: 'If the account needs verification, a new code has been requested.', color: 'success', icon: 'i-lucide-mail-check' })
+    notify.success('Verification requested', { description: 'If the account needs verification, a new code has been requested.' })
     needsVerification.value = false
   } catch {
-    toast.add({ title: 'Unable to resend', description: 'Please try again in a moment.', color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Unable to resend', { description: 'Please try again in a moment.' })
   } finally {
     resending.value = false
   }
@@ -76,7 +76,7 @@ const resendVerification = async () => {
 </script>
 
 <template>
-  <AuthShell heading="Your campus map, your stalls, your opportunities." description="Easily explore campus stalls, manage your space, and stay connected with iMapSU.">
+  <AuthShell heading="Bills, receipts and repairs for your campus stall." description="Tenants pay bills and report repairs here. Applicants follow their rental application.">
     <div class="imapsu-auth-card imapsu-auth-card--login">
       <form method="post" v-if="auth.mfaPending.value" class="space-y-5" @submit.prevent="submitMfa">
         <div>
@@ -149,9 +149,9 @@ const resendVerification = async () => {
         <NuxtLink to="/register" class="imapsu-auth-link">Create one</NuxtLink>
       </p>
       <div class="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs whitespace-nowrap sm:gap-x-3 sm:text-sm">
-        <NuxtLink to="/campus-map" class="imapsu-auth-link inline-flex items-center gap-1.5">
+        <NuxtLink to="/" class="imapsu-auth-link inline-flex items-center gap-1.5">
           <UIcon name="i-lucide-arrow-left" class="size-3.5" />
-          Back to campus map
+          Back to home
         </NuxtLink>
         <span class="text-dimmed max-[339px]:hidden" aria-hidden="true">|</span>
         <NuxtLink to="/privacy" class="imapsu-auth-link">Data Privacy Notice</NuxtLink>

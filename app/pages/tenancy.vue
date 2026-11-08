@@ -34,12 +34,12 @@ type ListResponse<T> = { data: T[] }
 useHead({ title: 'My Tenancy | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Tenancy>>('/api/tenancies', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<Tenancy>>('/api/tenancies', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -49,7 +49,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: renewalDataResponse, refresh: refreshRenewals, status: renewalDataStatus, error: renewalDataError } = await useCompleteFetch<ListResponse<RenewalIntent>>('/api/renewal-intents', {
+const { data: renewalDataResponse, refresh: refreshRenewals, status: renewalDataStatus, error: renewalDataError } = await useCompleteFetch<ListResponse<RenewalIntent>>('/api/renewal-intents', { lazy: true,
   baseURL,
   headers,
   query: {
@@ -95,6 +95,24 @@ const decidedRenewalFor = (tenancy: Tenancy) =>
 
 const pendingRenewalFor = (tenancy: Tenancy) =>
   renewals.value.find(renewal => renewal.tenancy?.documentId === (tenancy.documentId ?? tenancy.id) && renewal.status === 'Pending')
+
+// Renewal opens only in the last week of a contract. A contract with no end
+// date is open-ended, so there is nothing to renew.
+const RENEWAL_WINDOW_DAYS = 7
+const todayInManila = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const daysUntilEnd = (tenancy: Tenancy) => tenancy.endDate
+  ? Math.round((Date.parse(tenancy.endDate.slice(0, 10) + 'T00:00:00Z') - Date.parse(todayInManila() + 'T00:00:00Z')) / 86_400_000)
+  : null
+const canRenew = (tenancy: Tenancy) => {
+  const days = daysUntilEnd(tenancy)
+  return days != null && days <= RENEWAL_WINDOW_DAYS
+}
+const renewalPrompt = (tenancy: Tenancy) => {
+  const days = daysUntilEnd(tenancy) ?? 0
+  if (days < 0) return 'Your contract has ended. File your renewal to keep your space.'
+  if (days === 0) return 'Your contract ends today. File your renewal to keep your space.'
+  return `Your contract ends in ${days} day${days === 1 ? '' : 's'}. File your renewal before it ends.`
+}
 
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshRenewals()])
@@ -155,7 +173,7 @@ const submitRenewal = async () => {
         message: renewMessage.value || undefined
       }
     })
-    toast.add({ title: 'Renewal intent submitted', description: 'Your request is now pending review by the administration.', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Renewal intent submitted', { description: 'Your request is now pending review by the administration.' })
     renewOpen.value = false
     await refreshRenewals()
   } catch (err) {
@@ -242,7 +260,7 @@ const submitPhotos = async (tenancy: Tenancy) => {
     await refresh()
     delete photoDrafts.value[key]
     delete photoDirty.value[key]
-    toast.add({ title: 'Photos saved', description: 'Your space photos were saved and now appear on the campus map.', color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success('Photos saved', { description: 'Your space photos were saved and now appear on the campus map.' })
   } catch (err) {
     photoErrorFor.value[key] = getErrorMessage(err)
   } finally {
@@ -261,14 +279,13 @@ const discardPhotos = (tenancy: Tenancy) => {
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>Current tenant</template>
-      <template #title>My Tenancy</template>
+      <template #title>My tenancy</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Review your assigned rental spaces, contract terms, and tenancy renewal information.</p></template>
       <template #actions><UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refreshAll" /></template>
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="2" height="h-40" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="2" label="Loading your tenancy…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load your tenancy" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -280,7 +297,7 @@ const discardPhotos = (tenancy: Tenancy) => {
           <div>
             <p class="text-sm font-medium text-highlighted">{{ tenancy.propertySpace?.name ?? 'Property' }}</p>
             <p v-if="tenancy.propertySpace" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              <span class="font-mono">{{ tenancy.propertySpace.propertyCode }}</span>
+              <span>{{ tenancy.propertySpace.propertyCode }}</span>
               <span class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3.5" />{{ tenancy.propertySpace.building }}<template v-if="tenancy.propertySpace.floor"> · {{ tenancy.propertySpace.floor }}</template></span>
             </p>
           </div>
@@ -296,7 +313,7 @@ const discardPhotos = (tenancy: Tenancy) => {
         <div class="mt-5 border-t border-default pt-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-sm font-medium text-highlighted">Space photos</p>
-            <p class="text-xs text-muted">Shown on the campus map so students can see your space.</p>
+            <p class="text-xs text-muted">Shown on the campus map so visitors can find your space.</p>
           </div>
           <div class="mt-3 flex flex-wrap items-start gap-3">
             <template v-if="draftsFor(tenancy).length">
@@ -337,14 +354,14 @@ const discardPhotos = (tenancy: Tenancy) => {
           <p v-if="photoErrorFor[tenancyKey(tenancy)]" class="mt-2 text-xs text-error">{{ photoErrorFor[tenancyKey(tenancy)] }}</p>
         </div>
 
-        <div v-if="tenancy.status === 'Active'" class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4">
+        <div v-if="tenancy.status === 'Active' && (pendingRenewalFor(tenancy) || canRenew(tenancy))" class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4">
           <template v-if="pendingRenewalFor(tenancy)">
             <p class="flex items-center gap-2 text-sm text-toned"><UIcon name="i-lucide-hourglass" class="size-4 text-secondary" />Your contract renewal is pending review.</p>
             <UBadge color="secondary" variant="subtle">Renewal pending</UBadge>
           </template>
           <template v-else>
             <div class="min-w-0">
-              <p class="text-sm text-muted">Planning to stay? File your renewal before the contract ends.</p>
+              <p class="text-sm text-muted">{{ renewalPrompt(tenancy) }}</p>
               <p v-if="decidedRenewalFor(tenancy)" class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-toned">
                 Your last renewal request:
                 <UBadge :color="renewalColor(decidedRenewalFor(tenancy)!.status)" variant="subtle">{{ decidedRenewalFor(tenancy)!.status }}</UBadge>

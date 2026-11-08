@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { MapProperty } from '../app/types/map.ts'
-import { resolveStallPhotoUrl, stallFloorLabel, stallPhotos, stallTitle, visibleStalls } from '../app/utils/mapStalls.ts'
+import { resolveStallPhotoUrl, stallFloorLabel, stallPhotos, stallTitle } from '../app/utils/mapStalls.ts'
 import { useMapStallDetails } from '../app/composables/useMapStallDetails.ts'
 import { effectScope, ref } from 'vue'
 
@@ -30,17 +30,10 @@ test('vacant stalls use listing photos and absent or unsafe URLs do not become i
   for (const url of [undefined, '', '  ', 'data:image/png;base64,abc', 'file:///photo.png', 'https://[invalid']) assert.equal(resolveStallPhotoUrl(url, baseURL), null)
 })
 
-test('titles and student visibility follow occupancy without changing record order', () => {
+test('titles follow occupancy', () => {
   assert.equal(stallTitle(property), 'Campus Cafe')
   assert.equal(stallTitle({ ...property, space_status: 'Vacant' }), 'Stall 1')
   assert.equal(stallTitle({ ...property, businessName: ' ', name: '' }), 'A-01')
-  const occupied = { ...property, propertyCode: 'A-03' }
-  const vacant = { ...property, propertyCode: 'A-02', space_status: 'Vacant' as const }
-  const unknown = { ...property, propertyCode: 'A-04', space_status: 'Pending' as MapProperty['space_status'] }
-  const records = [property, vacant, occupied, unknown]
-  assert.deepEqual(visibleStalls(records, true).map(p => p.propertyCode), ['A-01', 'A-03'])
-  assert.equal(visibleStalls(records, false), records)
-  assert.equal(records.length, 4)
 })
 
 test('stall selection uses the latest response and closes when a refresh removes access', () => {

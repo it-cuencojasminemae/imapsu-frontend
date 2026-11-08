@@ -32,14 +32,14 @@ type ListResponse<T> = { data: T[] }
 useHead({ title: 'Rental Applications | iMapSU' })
 
 const auth = useAuth()
-const toast = useToast()
+const notify = useNotify()
 const { confirm } = useConfirmDialog()
 const route = useRoute()
 const { baseURL, $api, getErrorMessage } = useStrapi()
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
-const { data: responseData, status, error, refresh } = await useFetch<ListResponse<RentalApplication>>('/api/rental-applications', {
+const { data: responseData, status, error, refresh } = await useFetch<ListResponse<RentalApplication>>('/api/rental-applications', { lazy: true,
   baseURL,
   headers,
   query: computed(() => ({
@@ -54,7 +54,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
 
-const { data: propertyData } = await useCompleteFetch<ListResponse<PropertySpace>>('/api/properties', {
+const { data: propertyData, status: propertyStatus } = await useCompleteFetch<ListResponse<PropertySpace>>('/api/properties', { lazy: true,
   baseURL,
   headers,
   query: {
@@ -67,6 +67,54 @@ const { data: propertyData } = await useCompleteFetch<ListResponse<PropertySpace
   }
 })
 
+// Stalls the applicant already has an open application for. Only one open
+// application per stall is allowed, so the lookup greys these out.
+const OPEN_STATUSES = ['Pending', 'For Review', 'For Recommendation', 'Approved']
+const { data: openData, status: openStatus, refresh: refreshOpen } = await useCompleteFetch<ListResponse<RentalApplication>>('/api/rental-applications', { lazy: true,
+  baseURL,
+  headers,
+  query: {
+    'fields[0]': 'status',
+    'populate[propertySpace][fields][0]': 'name',
+    'populate[tenancy][fields][0]': 'status',
+    ...Object.fromEntries(OPEN_STATUSES.map((value, index) => [`filters[status][$in][${index}]`, value]))
+  }
+})
+const appliedStallIds = computed(() => new Set(
+  (openData.value?.data ?? [])
+    .filter(item => OPEN_STATUSES.includes(item.status) && !item.tenancy && item.propertySpace?.documentId)
+    .map(item => item.propertySpace!.documentId!)
+))
+// The application being edited may keep its own stall.
+const alreadyApplied = (documentId?: string) => !!documentId && appliedStallIds.value.has(documentId) && documentId !== editing.value?.propertySpace?.documentId
+const stallLabel = (item: PropertySpace) => `${item.name} (${item.propertyCode})${alreadyApplied(item.documentId) ? ' · already applied' : ''}`
+
+// Applications accept PDF, Word, JPG and PNG only; the server checks the
+// file contents as well.
+const ALLOWED_EXTENSIONS = /\.(pdf|docx?|jpe?g|png)$/i
+const FILE_ACCEPT = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
+const allowedFiles = (files: File[]) => {
+  const rejected = files.filter(file => !ALLOWED_EXTENSIONS.test(file.name))
+  if (rejected.length === 0) return true
+  notify.error('Unsupported file type', { description: `${rejected.map(file => file.name).join(', ')} cannot be attached. Upload PDF, Word (.doc, .docx), JPG or PNG files only.` })
+  return false
+}
+
+// The stall rules and regulations every applicant accepts when applying.
+const rulesAccepted = ref(false)
+const rulesOpen = ref(false)
+const { data: rulesData, status: rulesStatus, refresh: refreshRules } = await useFetch<{ data: { stallRules: string } }>('/api/system-settings/stall-rules', {
+  baseURL,
+  headers,
+  lazy: true,
+  server: false
+})
+const stallRules = computed(() => rulesData.value?.data?.stallRules ?? '')
+const openRules = () => {
+  rulesOpen.value = true
+  if (!stallRules.value) refreshRules()
+}
+
 const applications = computed(() => data.value?.data ?? [])
 const vacantProperties = computed(() => propertyData.value?.data ?? [])
 const propertyOptions = computed(() => vacantProperties.value.map(property => ({
@@ -74,21 +122,25 @@ const propertyOptions = computed(() => vacantProperties.value.map(property => ({
   value: property.documentId
 })))
 
-// A stall can stop being vacant after applying, and the lookup only lists vacant
-// ones, so the edit form adds the application's own stall to keep its name.
+// The lookup only fetches 25 stalls at a time, so the full vacant list backs the
+// chosen stall's name. A stall can also stop being vacant after applying, so the
+// edit form adds the application's own stall to keep its name.
 const lookupFallback = computed(() => {
   const stall = editing.value?.propertySpace
   return stall?.documentId && !propertyOptions.value.some(option => option.value === stall.documentId)
     ? [...propertyOptions.value, { label: `${stall.name} (${stall.propertyCode})`, value: stall.documentId }]
     : propertyOptions.value
 })
+const chosenStall = computed(() => vacantProperties.value.find(property => property.documentId === selectedProperty.value) ?? null)
 
 const docSections: { key: DocField; label: string; hint: string }[] = [
-  { key: 'letterOfIntent', label: 'Letter of intent', hint: 'Signed letter of intent in PDF or Word format.' },
-  { key: 'dtiDocuments', label: 'DTI business documents', hint: 'e.g. DTI business name registration, SEC/DTI incorporation documents.' },
+  { key: 'letterOfIntent', label: 'Letter of intent', hint: 'Signed letter of intent as a PDF, Word, JPG or PNG file.' },
+  { key: 'dtiDocuments', label: 'SEC/DTI business documents', hint: 'e.g. DTI business name registration or SEC certificate of incorporation.' },
   { key: 'birDocuments', label: 'BIR business documents', hint: 'e.g. BIR Certificate of Registration (2303), latest tax returns.' },
   { key: 'businessPermits', label: 'Business permits', hint: 'e.g. city/municipal business permit, fire safety inspection certificate.' }
 ]
+// Mid-sentence labels keep acronyms such as SEC/DTI and BIR in capitals.
+const inSentence = (label: string) => /^[A-Z][a-z]/.test(label) ? label[0]!.toLowerCase() + label.slice(1) : label
 const stagedSections = computed(() => docSections.filter(section => section.key !== 'letterOfIntent') as { key: Exclude<DocField, 'letterOfIntent'>; label: string; hint: string }[])
 
 const docsOf = (item: RentalApplication, key: DocField) => {
@@ -115,7 +167,9 @@ const staged = reactive<Record<Exclude<DocField, 'letterOfIntent'>, StagedFile[]
 let stagedKey = 0
 const addFiles = (field: Exclude<DocField, 'letterOfIntent'>, files?: FileList) => {
   if (!files) return
-  Array.from(files).forEach(file => staged[field].push({ key: stagedKey++, file }))
+  const list = Array.from(files)
+  if (!allowedFiles(list)) return
+  list.forEach(file => staged[field].push({ key: stagedKey++, file }))
 }
 const removeFile = (field: Exclude<DocField, 'letterOfIntent'>, key: number) => {
   staged[field] = staged[field].filter(entry => entry.key !== key)
@@ -144,7 +198,14 @@ const resetForm = () => {
   staged.birDocuments = []
   staged.businessPermits = []
   docSections.forEach(section => { kept[section.key] = [] })
+  rulesAccepted.value = false
   errorMessage.value = ''
+}
+
+const chooseLetter = (input: HTMLInputElement) => {
+  const file = input.files?.[0]
+  if (file && allowedFiles([file])) letterFile.value = file
+  input.value = ''
 }
 
 const openNew = () => {
@@ -162,21 +223,19 @@ const openEdit = (item: RentalApplication) => {
   formOpen.value = true
 }
 
-// The OAS starts work once an application leaves Pending, so edits stop there.
-// It can still be withdrawn until a lease exists.
+// The OAS starts work once an application leaves Pending, so edits and
+// cancelling stop there.
 const canEdit = (item: RentalApplication) => item.status === 'Pending'
-const canCancel = (item: RentalApplication) => ['Pending', 'For Review', 'For Recommendation', 'Approved'].includes(item.status) && !item.tenancy
+const canCancel = (item: RentalApplication) => item.status === 'Pending' && !item.tenancy
+const underReview = (item: RentalApplication) => ['For Review', 'For Recommendation', 'Approved'].includes(item.status) && !item.tenancy
 
 const cancellingId = ref<string | number | null>(null)
 const cancelApplication = async (item: RentalApplication) => {
   const docId = item.documentId ?? item.id
   const stall = item.propertySpace?.name ?? 'this space'
-  const approved = item.status === 'Approved'
   if (!await confirm({
     title: 'Cancel this application?',
-    description: approved
-      ? `Your approved application for ${stall} will be closed and your office visit dropped. To rent it later you would need to apply again.`
-      : `Your application for ${stall} will be closed and the OAS will stop processing it. To rent it later you would need to apply again.`,
+    description: `Your application for ${stall} will be closed and the OAS will stop processing it. To rent it later you would need to apply again.`,
     confirmLabel: 'Cancel application',
     cancelLabel: 'Keep application',
     icon: 'i-lucide-circle-x'
@@ -184,24 +243,41 @@ const cancelApplication = async (item: RentalApplication) => {
   cancellingId.value = docId
   try {
     await $api(`/api/rental-applications/${docId}/cancel`, { method: 'PUT', body: {} })
-    toast.add({ title: 'Application cancelled', description: `Your application for ${stall} was cancelled.`, color: 'success', icon: 'i-lucide-check-circle-2' })
-    await refresh()
+    notify.success('Application cancelled', { description: `Your application for ${stall} was cancelled.` })
+    await Promise.all([refresh(), refreshOpen()])
   } catch (err) {
-    toast.add({ title: 'Could not cancel the application', description: getErrorMessage(err), color: 'error', icon: 'i-lucide-triangle-alert' })
+    notify.error('Could not cancel the application', { description: getErrorMessage(err) })
     await refresh()
   } finally {
     cancellingId.value = null
   }
 }
 
-const preselectProperty = typeof route.query.property === 'string' ? route.query.property : null
-
-onMounted(() => {
-  if (preselectProperty && vacantProperties.value.some(property => property.documentId === preselectProperty)) {
-    resetForm()
-    selectedProperty.value = preselectProperty
-    formOpen.value = true
+// Apply on Rentable spaces links here with ?property=<documentId>. The stall
+// list and the open applications load lazily, so the form waits for both
+// before it opens with that stall already chosen.
+const preselectProperty = computed(() => typeof route.query.property === 'string' ? route.query.property : '')
+let handledPreselect = ''
+const applyPreselect = () => {
+  const id = preselectProperty.value
+  if (!id || id === handledPreselect) return
+  if (propertyStatus.value === 'idle' || propertyStatus.value === 'pending' || openStatus.value === 'idle' || openStatus.value === 'pending') return
+  handledPreselect = id
+  const stall = vacantProperties.value.find(property => property.documentId === id)
+  if (!stall) {
+    notify.warning('That space is no longer vacant', { description: 'Choose another vacant space for your application.' })
+    return
   }
+  if (alreadyApplied(id)) {
+    notify.info(`You already applied for ${stall.name}`, { description: 'Your open application for this stall is listed below.' })
+    return
+  }
+  resetForm()
+  selectedProperty.value = id
+  formOpen.value = true
+}
+onMounted(() => {
+  watch([preselectProperty, propertyStatus, openStatus], applyPreselect, { immediate: true })
 })
 
 const submit = async () => {
@@ -210,18 +286,26 @@ const submit = async () => {
     errorMessage.value = 'Please choose a vacant property.'
     return
   }
+  if (alreadyApplied(selectedProperty.value)) {
+    errorMessage.value = 'You already have an open application for this stall. Please choose another stall.'
+    return
+  }
   if (!letterFile.value && kept.letterOfIntent.length === 0) {
     errorMessage.value = 'Please attach your signed letter of intent.'
     return
   }
   for (const section of stagedSections.value) {
     if (staged[section.key].length === 0 && kept[section.key].length === 0) {
-      errorMessage.value = `Please attach your ${section.label.toLowerCase()}.`
+      errorMessage.value = `Please attach your ${inSentence(section.label)}.`
       return
     }
   }
   if (!productsServices.value.trim()) {
     errorMessage.value = 'Please describe the products or services you plan to offer.'
+    return
+  }
+  if (!editing.value && !rulesAccepted.value) {
+    errorMessage.value = 'Please confirm that you have read and will follow the Rules and Regulations.'
     return
   }
 
@@ -260,20 +344,22 @@ const submit = async () => {
         method: 'PUT',
         body: { data: { ...fields, message: message.value.trim() || null } }
       })
-      toast.add({ title: 'Application updated', description: 'Your changes were saved.', color: 'success', icon: 'i-lucide-check-circle-2' })
+      notify.success('Application updated', { description: 'Your changes were saved.' })
     } else {
       await $api('/api/rental-applications', {
         method: 'POST',
-        body: { ...fields, message: message.value || undefined }
+        body: { ...fields, message: message.value || undefined, rulesAccepted: true }
       })
+      notify.success('Application submitted', { description: 'The OAS will review your application.' })
     }
     // The next open resets the form; doing it now would flip the title while the dialog fades out.
     formOpen.value = false
-    await refresh()
+    await Promise.all([refresh(), refreshOpen()])
   } catch (err) {
-    errorMessage.value = getErrorMessage(err)
-    // The OAS may have started on it while the form was open, which locks the card.
-    if (editing.value) await refresh()
+    notify.error(editing.value ? 'Could not save your changes' : 'Could not submit the application', { description: getErrorMessage(err) })
+    // The OAS may have started on it while the form was open, which locks the
+    // card, and another tab may have applied for the same stall.
+    await Promise.all([editing.value ? refresh() : Promise.resolve(), refreshOpen()])
   } finally {
     submitting.value = false
   }
@@ -299,6 +385,7 @@ const missingError = ref('')
 
 const uploadMissing = async (item: RentalApplication, field: DocField, files?: FileList) => {
   if (!files || files.length === 0) return
+  if (!allowedFiles(Array.from(files))) return
   const docId = item.documentId ?? item.id
   missingKey.value = `${docId}:${field}`
   missingError.value = ''
@@ -322,7 +409,7 @@ const uploadMissing = async (item: RentalApplication, field: DocField, files?: F
       body: { data: { [field]: value } }
     })
     const section = docSections.find(entry => entry.key === field)
-    toast.add({ title: `${section?.label ?? 'Documents'} added`, description: `Your ${section?.label.toLowerCase() ?? 'documents'} were attached to this application.`, color: 'success', icon: 'i-lucide-check-circle-2' })
+    notify.success(`${section?.label ?? 'Documents'} added`, { description: `Your ${section ? inSentence(section.label) : 'documents'} were attached to this application.` })
     await refresh()
   } catch (err) {
     missingError.value = getErrorMessage(err)
@@ -357,8 +444,7 @@ const appearanceDayPassed = (value?: string) => {
 <template>
   <main class="imapsu-page">
     <AppPageHeader>
-      <template #eyebrow>{{ auth.isCurrentTenant.value ? 'Current tenant' : 'Aspiring tenant' }}</template>
-      <template #title>Rental Applications</template>
+      <template #title>Rental applications</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Submit a rental application for a vacant space and track its review status. Applications follow the university's established approval process.</p></template>
       <template #actions><div class="flex items-center gap-2">
         <UButton label="Refresh" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" />
@@ -368,7 +454,7 @@ const appearanceDayPassed = (value?: string) => {
 
     <div>
         <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="4" height="h-28" />
+    <AppLoadingState v-if="isInitialLoading" variant="list" :toolbar="false" :count="4" label="Loading your applications…" />
 
         <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load rental applications" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 
@@ -380,7 +466,7 @@ const appearanceDayPassed = (value?: string) => {
               <div class="min-w-0">
                 <p v-if="item.propertySpace" class="font-medium text-highlighted">
                   {{ item.propertySpace.name }}
-                  <span class="font-mono text-xs text-muted">({{ item.propertySpace.propertyCode }})</span>
+                  <span class="text-xs text-muted">({{ item.propertySpace.propertyCode }})</span>
                 </p>
                 <p v-else class="text-sm text-muted">Property removed</p>
                 <p class="mt-1 text-xs text-muted">Submitted {{ formatDate(item.createdAt) }}</p>
@@ -424,7 +510,7 @@ const appearanceDayPassed = (value?: string) => {
                   <label v-else class="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': missingKey === `${item.documentId ?? item.id}:${section.key}` }">
                     <UIcon name="i-lucide-folder-up" class="size-4" />
                     {{ section.key === 'letterOfIntent' ? 'Attach file' : 'Attach files' }}
-                    <input type="file" accept=".pdf,.doc,.docx" :multiple="section.key !== 'letterOfIntent'" class="sr-only" :disabled="missingKey === `${item.documentId ?? item.id}:${section.key}`" @change="(event: Event) => { const input = event.target as HTMLInputElement; uploadMissing(item, section.key, input.files).then(() => { input.value = '' }) }" />
+                    <input type="file" :accept="FILE_ACCEPT" :multiple="section.key !== 'letterOfIntent'" class="sr-only" :disabled="missingKey === `${item.documentId ?? item.id}:${section.key}`" @change="(event: Event) => { const input = event.target as HTMLInputElement; uploadMissing(item, section.key, input.files).then(() => { input.value = '' }) }" />
                   </label>
                 </div>
               </div>
@@ -438,79 +524,147 @@ const appearanceDayPassed = (value?: string) => {
 
             <div v-if="canCancel(item)" class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4">
               <p class="flex items-center gap-1.5 text-xs text-muted">
-                <UIcon :name="canEdit(item) ? 'i-lucide-pencil-line' : 'i-lucide-lock'" class="size-3.5 shrink-0" />
-                {{ canEdit(item) ? 'You can edit this application until the OAS starts reviewing it.' : 'The OAS is already processing this application, so it can no longer be edited.' }}
+                <UIcon name="i-lucide-pencil-line" class="size-3.5 shrink-0" />
+                You can edit or cancel this application until the OAS starts reviewing it.
               </p>
               <div class="flex flex-wrap gap-2">
                 <UButton v-if="canEdit(item)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="outline" size="sm" :disabled="cancellingId === (item.documentId ?? item.id)" @click="openEdit(item)" />
                 <UButton label="Cancel application" icon="i-lucide-circle-x" color="error" variant="outline" size="sm" :loading="cancellingId === (item.documentId ?? item.id)" @click="cancelApplication(item)" />
               </div>
             </div>
+            <p v-else-if="underReview(item)" class="mt-4 flex items-center gap-1.5 border-t border-default pt-4 text-xs text-muted">
+              <UIcon name="i-lucide-lock" class="size-3.5 shrink-0" />
+              The OAS is already reviewing this application, so it can no longer be edited or cancelled.
+            </p>
           </UCard>
         </div>
     </div>
 
-    <UModal v-model:open="formOpen" class="max-w-2xl" :title="editing ? 'Edit application' : 'New application'" :description="editing ? 'Update your application while it is still pending. A complete document set is required: letter of intent, DTI and BIR business documents, and business permits.' : 'Apply to rent a vacant campus space. A complete document set is required: letter of intent, DTI and BIR business documents, and business permits.'">
+    <UModal
+      v-model:open="formOpen"
+      class="max-w-3xl"
+      :title="editing ? 'Edit application' : 'New application'"
+      :description="editing ? 'Update your application while it is still pending.' : 'Apply to rent a vacant campus space.'"
+      :ui="{ body: 'p-5 sm:p-7', footer: 'px-5 py-4 sm:px-7' }"
+    >
       <template #body>
-        <form class="space-y-5" @submit.prevent="submit">
-        <UFormField label="Vacant property" name="propertySpace" required>
-          <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="item => item.name + ' (' + item.propertyCode + ')'" :value="item => item.documentId" :query="{ 'filters[space_status][$eq]': 'Vacant' }" :fallback="lookupFallback" />
-          <p v-if="vacantProperties.length === 0" class="mt-1 text-xs text-muted">No vacant spaces are currently available.</p>
-        </UFormField>
+        <form id="application-form" class="space-y-8" @submit.prevent="submit">
+          <section class="space-y-4">
+            <h3 class="text-sm font-semibold text-highlighted">Stall</h3>
+            <UFormField label="Vacant property" name="propertySpace" required>
+              <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="stallLabel" :value="item => item.documentId" :is-disabled="item => alreadyApplied(item.documentId)" :query="{ 'filters[space_status][$eq]': 'Vacant' }" :fallback="lookupFallback" placeholder="Search vacant stalls…" />
+              <p v-if="vacantProperties.length === 0" class="mt-2 text-xs text-muted">No vacant spaces are currently available.</p>
+              <p v-else-if="appliedStallIds.size" class="mt-2 text-xs text-muted">Stalls you already have an open application for cannot be chosen again.</p>
+            </UFormField>
+            <div v-if="chosenStall" class="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-default bg-elevated/40 px-4 py-3.5 text-sm">
+              <div class="min-w-0">
+                <p class="text-xs text-muted">{{ chosenStall.propertyCode }}</p>
+                <p class="font-medium text-highlighted">{{ chosenStall.name }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-muted">Location</p>
+                <p class="font-medium text-highlighted">{{ chosenStall.building || 'Not set' }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-muted">Monthly rent</p>
+                <p class="font-semibold text-primary">{{ chosenStall.monthlyRent ? `₱${Number(chosenStall.monthlyRent).toLocaleString()}` : 'Not set' }}</p>
+              </div>
+            </div>
+          </section>
 
-        <UFormField label="Letter of intent" name="letterOfIntent" required>
-          <label class="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': submitting }">
-            <UIcon name="i-lucide-folder-up" class="size-4" />
-            Choose file
-            <input :key="letterFormKey" type="file" accept=".pdf,.doc,.docx" class="sr-only" :disabled="submitting" @change="(event: Event) => { const input = event.target as HTMLInputElement; letterFile = input.files?.[0] ?? letterFile; input.value = '' }" />
-          </label>
-          <ul v-if="letterFile || kept.letterOfIntent.length" class="mt-2 space-y-1">
-            <li v-for="doc in (letterFile ? [] : kept.letterOfIntent)" :key="doc.id" class="flex items-center justify-between gap-2 rounded-md border border-default px-2 py-1 text-sm">
-              <span class="flex min-w-0 items-center gap-1.5 truncate text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ doc.name || 'Current letter of intent' }}</span></span>
-              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${doc.name || 'letter of intent'}`" :disabled="submitting" @click="removeKept('letterOfIntent', doc.id)" />
-            </li>
-            <li v-if="letterFile" class="flex items-center justify-between gap-2 rounded-md border border-default px-2 py-1 text-sm">
-              <span class="flex min-w-0 items-center gap-1.5 truncate text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ letterFile.name }}</span></span>
-              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :disabled="submitting" @click="letterFile = undefined" />
-            </li>
-          </ul>
-          <p v-else class="mt-1 text-xs text-muted">Attach your signed letter of intent in PDF or Word format.</p>
-        </UFormField>
+          <section class="space-y-4 border-t border-default pt-7">
+            <div>
+              <h3 class="text-sm font-semibold text-highlighted">Required documents</h3>
+              <p class="mt-1 text-sm text-muted">All four are required. Accepted files: PDF, Word (.doc, .docx), JPG and PNG.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="flex flex-col gap-3 rounded-lg border border-default p-4">
+                <div>
+                  <p class="text-sm font-medium text-highlighted">Letter of intent <span class="text-error">*</span></p>
+                  <p class="mt-1 text-xs leading-relaxed text-muted">Your signed letter of intent, as one file.</p>
+                </div>
+                <ul v-if="letterFile || kept.letterOfIntent.length" class="space-y-1.5">
+                  <li v-for="doc in (letterFile ? [] : kept.letterOfIntent)" :key="doc.id" class="flex items-center justify-between gap-2 rounded-md bg-elevated/60 py-1 pl-2.5 pr-1 text-sm">
+                    <span class="flex min-w-0 items-center gap-1.5 text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ doc.name || 'Current letter of intent' }}</span></span>
+                    <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${doc.name || 'letter of intent'}`" :disabled="submitting" @click="removeKept('letterOfIntent', doc.id)" />
+                  </li>
+                  <li v-if="letterFile" class="flex items-center justify-between gap-2 rounded-md bg-elevated/60 py-1 pl-2.5 pr-1 text-sm">
+                    <span class="flex min-w-0 items-center gap-1.5 text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ letterFile.name }}</span></span>
+                    <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${letterFile.name}`" :disabled="submitting" @click="letterFile = undefined" />
+                  </li>
+                </ul>
+                <label class="mt-auto flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2.5 text-sm font-medium text-primary hover:border-primary hover:bg-primary/5" :class="{ 'pointer-events-none opacity-60': submitting }">
+                  <UIcon name="i-lucide-folder-up" class="size-4" />
+                  {{ letterFile || kept.letterOfIntent.length ? 'Replace file' : 'Choose file' }}
+                  <input :key="letterFormKey" type="file" :accept="FILE_ACCEPT" class="sr-only" :disabled="submitting" @change="(event: Event) => chooseLetter(event.target as HTMLInputElement)" />
+                </label>
+              </div>
 
-        <UFormField v-for="section in stagedSections" :key="section.key" :label="section.label" required>
-          <label class="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary" :class="{ 'pointer-events-none opacity-60': submitting }">
-            <UIcon name="i-lucide-folder-up" class="size-4" />
-            Choose files
-            <input type="file" accept=".pdf,.doc,.docx" multiple class="sr-only" :disabled="submitting" @change="(event: Event) => { const input = event.target as HTMLInputElement; addFiles(section.key, input.files); input.value = '' }" />
-          </label>
-          <ul v-if="staged[section.key].length || kept[section.key].length" class="mt-2 space-y-1">
-            <li v-for="doc in kept[section.key]" :key="doc.id" class="flex items-center justify-between gap-2 rounded-md border border-default px-2 py-1 text-sm">
-              <span class="flex min-w-0 items-center gap-1.5 truncate text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ doc.name || 'Current document' }}</span></span>
-              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${doc.name || 'document'}`" :disabled="submitting" @click="removeKept(section.key, doc.id)" />
-            </li>
-            <li v-for="entry in staged[section.key]" :key="entry.key" class="flex items-center justify-between gap-2 rounded-md border border-default px-2 py-1 text-sm">
-              <span class="flex min-w-0 items-center gap-1.5 truncate text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ entry.file.name }}</span></span>
-              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :disabled="submitting" @click="removeFile(section.key, entry.key)" />
-            </li>
-          </ul>
-          <p v-else class="mt-1 text-xs text-muted">{{ section.hint }}</p>
-        </UFormField>
+              <div v-for="section in stagedSections" :key="section.key" class="flex flex-col gap-3 rounded-lg border border-default p-4">
+                <div>
+                  <p class="text-sm font-medium text-highlighted">{{ section.label }} <span class="text-error">*</span></p>
+                  <p class="mt-1 text-xs leading-relaxed text-muted">{{ section.hint }}</p>
+                </div>
+                <ul v-if="staged[section.key].length || kept[section.key].length" class="space-y-1.5">
+                  <li v-for="doc in kept[section.key]" :key="doc.id" class="flex items-center justify-between gap-2 rounded-md bg-elevated/60 py-1 pl-2.5 pr-1 text-sm">
+                    <span class="flex min-w-0 items-center gap-1.5 text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ doc.name || 'Current document' }}</span></span>
+                    <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${doc.name || 'document'}`" :disabled="submitting" @click="removeKept(section.key, doc.id)" />
+                  </li>
+                  <li v-for="entry in staged[section.key]" :key="entry.key" class="flex items-center justify-between gap-2 rounded-md bg-elevated/60 py-1 pl-2.5 pr-1 text-sm">
+                    <span class="flex min-w-0 items-center gap-1.5 text-toned"><UIcon name="i-lucide-file-text" class="size-3.5 shrink-0" /><span class="truncate">{{ entry.file.name }}</span></span>
+                    <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="`Remove ${entry.file.name}`" :disabled="submitting" @click="removeFile(section.key, entry.key)" />
+                  </li>
+                </ul>
+                <label class="mt-auto flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2.5 text-sm font-medium text-primary hover:border-primary hover:bg-primary/5" :class="{ 'pointer-events-none opacity-60': submitting }">
+                  <UIcon name="i-lucide-folder-up" class="size-4" />
+                  {{ staged[section.key].length || kept[section.key].length ? 'Add more files' : 'Choose files' }}
+                  <input type="file" :accept="FILE_ACCEPT" multiple class="sr-only" :disabled="submitting" @change="(event: Event) => { const input = event.target as HTMLInputElement; addFiles(section.key, input.files); input.value = '' }" />
+                </label>
+              </div>
+            </div>
+          </section>
 
-        <UFormField label="Products / services" name="productsServices" required description="Describe what your business will offer from this space.">
-          <UTextarea required v-model="productsServices" :rows="3" placeholder="e.g. A coffee shop and bakery offering specialty drinks, pastries, and light meals." :disabled="submitting" />
-        </UFormField>
+          <section class="space-y-5 border-t border-default pt-7">
+            <h3 class="text-sm font-semibold text-highlighted">Your business</h3>
+            <UFormField label="Products / services" name="productsServices" required description="Describe what your business will offer from this space." :ui="{ description: 'mb-2' }">
+              <UTextarea v-model="productsServices" required class="w-full" :rows="4" autoresize placeholder="e.g. A coffee shop and bakery offering specialty drinks, pastries, and light meals." :disabled="submitting" />
+            </UFormField>
+            <UFormField label="Message" name="message" hint="Optional">
+              <UTextarea v-model="message" class="w-full" placeholder="Anything else the OAS should know?" :rows="4" autoresize :disabled="submitting" />
+            </UFormField>
+          </section>
 
-        <UFormField label="Message" name="message">
-          <UTextarea v-model="message" placeholder="Anything else you want to add? (Optional)" :rows="4" :disabled="submitting" />
-        </UFormField>
+          <div v-if="!editing" class="rounded-lg border border-default px-4 py-3.5">
+            <UCheckbox v-model="rulesAccepted" name="rulesAccepted" :disabled="submitting">
+              <template #label>
+                I have read and will follow the
+                <button type="button" class="font-medium text-primary underline-offset-2 hover:underline" @click.stop.prevent="openRules">Rules and Regulations</button>
+              </template>
+            </UCheckbox>
+          </div>
 
-        <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
-
-        <div class="flex justify-end gap-2">
-          <UButton :label="editing ? 'Discard changes' : 'Close'" color="neutral" variant="ghost" :disabled="submitting" @click="formOpen = false" />
-          <UButton data-prominent="true" type="submit" :loading="submitting">{{ editing ? 'Save changes' : 'Submit application' }}</UButton>
-        </div>
+          <UAlert v-if="errorMessage" color="error" icon="i-lucide-triangle-alert" :description="errorMessage" />
         </form>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton :label="editing ? 'Discard changes' : 'Close'" color="neutral" variant="ghost" :disabled="submitting" @click="formOpen = false" />
+          <UButton data-prominent="true" type="submit" form="application-form" :loading="submitting">{{ editing ? 'Save changes' : 'Submit application' }}</UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="rulesOpen" class="max-w-2xl" title="Rules and regulations" description="Every stall lessee agrees to follow these rules for the whole term of the lease.">
+      <template #body>
+        <AppLoadingState v-if="rulesStatus === 'pending' && !stallRules" :count="3" height="h-6" />
+        <UAlert v-else-if="!stallRules" color="error" icon="i-lucide-triangle-alert" title="Unable to load the rules" description="Please try again."><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refreshRules()" /></template></UAlert>
+        <UEditor v-else :model-value="stallRules" content-type="markdown" :editable="false" :ui="{ base: 'sm:px-0' }" />
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton label="Close" color="neutral" variant="ghost" @click="rulesOpen = false" />
+          <UButton v-if="formOpen && !editing && !rulesAccepted" data-prominent="true" label="I agree" icon="i-lucide-check" @click="rulesAccepted = true; rulesOpen = false" />
+        </div>
       </template>
     </UModal>
     <AppRecordPagination :state="recordsPage" :response="data" :pending="status === 'pending'" />

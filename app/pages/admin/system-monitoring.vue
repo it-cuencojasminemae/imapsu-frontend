@@ -39,7 +39,7 @@ const auth = useAuth()
 const { baseURL } = useStrapi()
 const headers = {}
 
-const { data: responseData, status, error, refresh } = await useFetch<HealthResponse>('/api/system/health', {
+const { data: responseData, status, error, refresh } = await useFetch<HealthResponse>('/api/system/health', { lazy: true,
   baseURL,
   headers
 })
@@ -119,8 +119,7 @@ watch(health, () => { checkedAt.value = new Date().toISOString() })
 <template>
   <main class="imapsu-page imapsu-page--admin">
     <AppPageHeader>
-      <template #eyebrow>Administration</template>
-      <template #title>System Monitoring</template>
+      <template #title>System monitoring</template>
       <template #description><p class="mt-2 max-w-xl text-muted">
           Review database connectivity, server resources, sign-in activity, and recorded incidents. Checks refresh every 30 seconds.
         </p></template>
@@ -131,7 +130,7 @@ watch(health, () => { checkedAt.value = new Date().toISOString() })
     </AppPageHeader>
 
     <AppRefreshState :refreshing="isRefreshing" :failed="hasLoaded && !!error" @retry="refresh" />
-    <AppLoadingState v-if="isInitialLoading" :count="3" height="h-56" />
+    <AppLoadingState v-if="isInitialLoading" variant="stats" :count="3" label="Loading system health…" />
 
     <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load system health" description="Please try again." ><template #actions><UButton label="Retry" color="neutral" variant="outline" @click="refresh" /></template></UAlert>
 

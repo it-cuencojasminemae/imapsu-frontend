@@ -9,19 +9,19 @@ const { data: responseData, status, refresh } = useFetch<{ total: number; occupi
   key, baseURL, headers: authHeaders
 })
 const { data, hasLoaded, isInitialLoading, isInitialError, isRefreshing } = useRequestPresentation(responseData, status)
-const stats = computed(() => [{ label: 'Listed property spaces', value: data.value?.total ?? 0 }, { label: 'Occupied property spaces', value: data.value?.occupied ?? 0 }, ...(!auth.isStudent.value ? [{ label: 'Available property spaces', value: data.value?.vacant ?? 0 }] : [])])
+const stats = computed(() => [{ label: 'Listed property spaces', value: data.value?.total ?? 0 }, { label: 'Occupied property spaces', value: data.value?.occupied ?? 0 }, { label: 'Available property spaces', value: data.value?.vacant ?? 0 }])
 </script>
 
 <template>
 <section aria-labelledby="summary-title">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 id="summary-title" class="text-lg font-semibold tracking-tight text-highlighted">Property Overview</h2>
+          <h2 id="summary-title" class="text-lg font-semibold tracking-tight text-highlighted">Property overview</h2>
           <UButton label="Refresh overview" icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh()" />
         </div>
         <div v-if="isInitialLoading" role="status" aria-live="polite" aria-busy="true">
           <p class="mb-3 text-sm text-muted">Loading property overview…</p>
-          <div class="grid gap-3 sm:grid-cols-2" :class="!auth.isStudent.value && 'lg:grid-cols-3'">
-            <USkeleton v-for="index in (auth.isStudent.value ? 2 : 3)" :key="index" class="h-22 rounded-xl" aria-hidden="true" />
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <USkeleton v-for="index in 3" :key="index" class="h-22 rounded-xl" aria-hidden="true" />
           </div>
         </div>
         <UAlert v-else-if="isInitialError" color="error" icon="i-lucide-triangle-alert" title="Unable to load the property overview." description="Please try again. Availability cannot be confirmed while records are unavailable.">
@@ -29,7 +29,7 @@ const stats = computed(() => [{ label: 'Listed property spaces', value: data.val
         </UAlert>
         <template v-else-if="hasLoaded">
           <AppRefreshState :refreshing="isRefreshing" :failed="status === 'error'" @retry="refresh()" />
-          <div class="grid gap-3 sm:grid-cols-2" :class="!auth.isStudent.value && 'lg:grid-cols-3'">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div v-for="stat in stats" :key="stat.label" class="rounded-xl border border-default bg-default px-5 py-4">
               <p class="text-2xl font-semibold tracking-tight text-highlighted tabular-nums">{{ stat.value }}</p>
               <p class="mt-1 text-sm text-muted">{{ stat.label }}</p>
