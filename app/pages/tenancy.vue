@@ -107,6 +107,10 @@ const canRenew = (tenancy: Tenancy) => {
   const days = daysUntilEnd(tenancy)
   return days != null && days <= RENEWAL_WINDOW_DAYS
 }
+// The day the renewal window opens, as a calendar date (YYYY-MM-DD).
+const renewalOpensOn = (tenancy: Tenancy) => tenancy.endDate
+  ? new Date(Date.parse(tenancy.endDate.slice(0, 10) + 'T00:00:00Z') - RENEWAL_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
+  : ''
 const renewalPrompt = (tenancy: Tenancy) => {
   const days = daysUntilEnd(tenancy) ?? 0
   if (days < 0) return 'Your contract has ended. File your renewal to keep your space.'
@@ -354,20 +358,24 @@ const discardPhotos = (tenancy: Tenancy) => {
           <p v-if="photoErrorFor[tenancyKey(tenancy)]" class="mt-2 text-xs text-error">{{ photoErrorFor[tenancyKey(tenancy)] }}</p>
         </div>
 
-        <div v-if="tenancy.status === 'Active' && (pendingRenewalFor(tenancy) || canRenew(tenancy))" class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4">
+        <div v-if="tenancy.status === 'Active' && (pendingRenewalFor(tenancy) || tenancy.endDate)" class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4">
           <template v-if="pendingRenewalFor(tenancy)">
             <p class="flex items-center gap-2 text-sm text-toned"><UIcon name="i-lucide-hourglass" class="size-4 text-secondary" />Your contract renewal is pending review.</p>
             <UBadge color="secondary" variant="subtle">Renewal pending</UBadge>
           </template>
           <template v-else>
             <div class="min-w-0">
-              <p class="text-sm text-muted">{{ renewalPrompt(tenancy) }}</p>
+              <p v-if="canRenew(tenancy)" class="text-sm text-muted">{{ renewalPrompt(tenancy) }}</p>
+              <p v-else class="text-sm text-muted">Renewal opens on {{ formatDate(renewalOpensOn(tenancy)) }}, {{ RENEWAL_WINDOW_DAYS }} days before your contract ends.</p>
               <p v-if="decidedRenewalFor(tenancy)" class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-toned">
                 Your last renewal request:
                 <UBadge :color="renewalColor(decidedRenewalFor(tenancy)!.status)" variant="subtle">{{ decidedRenewalFor(tenancy)!.status }}</UBadge>
               </p>
             </div>
-            <UButton label="Renew contract" icon="i-lucide-file-signature" size="sm" @click="openRenew(tenancy)" />
+            <UButton v-if="canRenew(tenancy)" label="Renew contract" icon="i-lucide-file-signature" size="sm" @click="openRenew(tenancy)" />
+            <UTooltip v-else :text="`Available from ${formatDate(renewalOpensOn(tenancy))}`">
+              <span><UButton label="Renew contract" icon="i-lucide-file-signature" size="sm" disabled /></span>
+            </UTooltip>
           </template>
         </div>
       </UCard>

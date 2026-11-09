@@ -60,7 +60,7 @@ const formatDate = (value?: string) => value
     <AppPageHeader>
       <template #title>Stall ratings</template>
       <template #description>
-        <p class="mt-2 max-w-xl text-muted">What visitors say about your stall. Anyone can rate a stall from the campus map; ratings that break the <NuxtLink to="/community-guidelines" class="font-medium text-primary hover:underline">community guidelines</NuxtLink> are hidden by the OAS.</p>
+        <p class="mt-2 max-w-xl text-muted">What visitors say about your stall. Anyone can rate a stall from the campus map and see its ratings there; ratings that break the <NuxtLink to="/community-guidelines" class="font-medium text-primary hover:underline">community guidelines</NuxtLink> are hidden by the OAS.</p>
       </template>
       <template #actions><UButton label="Refresh" color="neutral" variant="ghost" :loading="status === 'pending'" @click="refresh" /></template>
     </AppPageHeader>

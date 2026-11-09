@@ -76,7 +76,7 @@ const SCENE_BACKGROUND_LIGHT = '#e8ede7'
 const SCENE_BACKGROUND_DARK = '#202a28'
 const BUILDING_WHITE = '#ffffff'
 const HIGHLIGHT_COLOR = '#e6b53a'
-const STATUS_COLORS = { Vacant: MAP_STATUS_COLORS.vacant, Occupied: MAP_STATUS_COLORS.occupied }
+const STATUS_COLORS = { 'Vacant': MAP_STATUS_COLORS.vacant, 'Occupied': MAP_STATUS_COLORS.occupied, 'In review': MAP_STATUS_COLORS.reviewing }
 const DEFAULT_COLOR = MAP_STATUS_COLORS.unlisted
 
 const colorMode = useColorMode()

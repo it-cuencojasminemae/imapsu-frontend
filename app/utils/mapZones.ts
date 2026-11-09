@@ -7,7 +7,9 @@ import type { MapProperty } from '~/types/map'
 export const MAP_STATUS_COLORS = {
   vacant: '#22c55e',
   occupied: '#b84034',
-  unlisted: '#d4af37'
+  unlisted: '#d4af37',
+  // A vacant stall the OAS is reviewing an application for.
+  reviewing: '#f97316'
 } as const
 
 export const DEFAULT_ZONE_COLOR = MAP_STATUS_COLORS.unlisted

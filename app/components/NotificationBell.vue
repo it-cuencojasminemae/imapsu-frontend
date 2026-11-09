@@ -74,11 +74,17 @@ const load = async () => {
   }
 }
 
-const targetFor = ({ type, entityType }: NotificationItem) => {
+// OAS updates about one application or renewal open its review page.
+const STAFF_REVIEW_KIND: Record<string, 'application' | 'renewal'> = { 'rental-application': 'application', 'renewal-intent': 'renewal' }
+
+const targetFor = ({ type, entityType, entityId }: NotificationItem) => {
   if (auth.isStaff.value) {
     switch (type) {
-      case 'application':
-        return '/admin/applications'
+      case 'application': {
+        const kind = entityType ? STAFF_REVIEW_KIND[entityType] : undefined
+        // Demo-seeded notifications carry numeric ids, which the review page cannot open.
+        return kind && entityId && !/^\d+$/.test(entityId) ? reviewPath({ kind, documentId: entityId, id: entityId }) : '/admin/applications'
+      }
       case 'ticket':
       case 'follow-up':
         return '/admin/maintenance'

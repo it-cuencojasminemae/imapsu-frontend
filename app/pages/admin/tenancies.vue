@@ -115,10 +115,13 @@ const startDateError = computed(() => form.startDate && form.startDate < EARLIES
 
 // The stall this tenancy already holds isn't occupied by anyone else. Only an
 // active tenancy needs a free stall; a past one may be recorded on any stall.
-type StallChoice = { documentId?: string; space_status?: string }
+type StallChoice = { documentId?: string; space_status?: string; inReview?: boolean }
 const holdsStall = (stall: StallChoice) => editing.value?.status === 'Active' && stall.documentId === editing.value.propertySpace?.documentId
+// A stall in review is still free to lease here; the badge only warns that
+// an application for it is being reviewed.
 const stallBadge = (stall: StallChoice) => {
   if (holdsStall(stall)) return { label: 'This tenancy', color: 'neutral' as const }
+  if (stall.space_status === 'Vacant' && stall.inReview) return { label: 'In review', color: 'warning' as const }
   return stall.space_status === 'Vacant' ? { label: 'Available', color: 'success' as const } : { label: 'Occupied', color: 'error' as const }
 }
 const stallUnavailable = (stall: StallChoice) => form.status === 'Active' && stall.space_status !== 'Vacant' && !holdsStall(stall)

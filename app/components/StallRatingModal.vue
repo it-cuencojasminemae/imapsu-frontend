@@ -4,6 +4,7 @@
 // stall per tenant; only a hash of it is stored.
 const props = defineProps<{ stall: { documentId?: string; title: string } | null; portal?: string; ui?: Record<string, string> }>()
 const open = defineModel<boolean>('open', { default: false })
+const emit = defineEmits<{ rated: [] }>()
 
 const COMMENT_MAX = 500
 const categories = ['Product', 'Service', 'Cleanliness', 'Environment', 'Staff']
@@ -61,6 +62,7 @@ const submit = async () => {
       body: { propertySpace: props.stall.documentId, rating: rating.value, category: category.value, comment: comment.value.trim() || undefined, deviceToken: deviceToken() }
     })
     done.value = 'saved'
+    emit('rated')
     notify.success('Thanks for your rating', { description: `Your rating for ${props.stall.title} was sent.` })
   } catch (err: any) {
     const status = err?.statusCode ?? err?.status ?? err?.response?.status
@@ -76,7 +78,7 @@ const submit = async () => {
   <UModal
     v-model:open="open"
     :title="stall ? `Rate ${stall.title}` : 'Rate this stall'"
-    description="Your rating is anonymous. Only the stall's tenant and the OAS can read it."
+    description="Your rating is anonymous. Anyone can see it on the stall's page unless the OAS hides it for breaking the community guidelines."
     :portal="portal"
     :ui="ui"
   >

@@ -40,7 +40,7 @@ const sections = [
     <div class="space-y-6 text-sm leading-relaxed text-toned">
       <p>
         Ratings help stall tenants improve and help the Office of Auxiliary Services (OAS) look after campus services.
-        Only the stall's tenant and the OAS can read the ratings it receives. Ratings are anonymous: iMapSU does not ask who you are.
+        Anyone can see a stall's average rating and its latest ratings on the campus map. Ratings are anonymous: iMapSU does not ask who you are.
       </p>
 
       <section v-for="section in sections" :key="section.title">

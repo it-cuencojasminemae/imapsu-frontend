@@ -26,7 +26,7 @@ type RentalApplication = {
   tenancy?: { documentId?: string } | null
 }
 
-type PropertySpace = { documentId: string; name: string; propertyCode: string; building: string; monthlyRent?: number | string }
+type PropertySpace = { documentId: string; name: string; propertyCode: string; building: string; monthlyRent?: number | string; inReview?: boolean }
 type ListResponse<T> = { data: T[] }
 
 useHead({ title: 'Rental Applications | iMapSU' })
@@ -87,7 +87,11 @@ const appliedStallIds = computed(() => new Set(
 ))
 // The application being edited may keep its own stall.
 const alreadyApplied = (documentId?: string) => !!documentId && appliedStallIds.value.has(documentId) && documentId !== editing.value?.propertySpace?.documentId
-const stallLabel = (item: PropertySpace) => `${item.name} (${item.propertyCode})${alreadyApplied(item.documentId) ? ' · already applied' : ''}`
+// A stall the OAS is reviewing someone else's application for is closed to
+// new applications. The applicant's own stalls read "already applied" instead.
+const inReview = (item?: PropertySpace | null) => !!item?.inReview && !appliedStallIds.value.has(item.documentId) && item.documentId !== editing.value?.propertySpace?.documentId
+const unavailable = (item: PropertySpace) => alreadyApplied(item.documentId) || inReview(item)
+const stallLabel = (item: PropertySpace) => `${item.name} (${item.propertyCode})${alreadyApplied(item.documentId) ? ' · already applied' : inReview(item) ? ' · in review' : ''}`
 
 // Applications accept PDF, Word, JPG and PNG only; the server checks the
 // file contents as well.
@@ -272,6 +276,10 @@ const applyPreselect = () => {
     notify.info(`You already applied for ${stall.name}`, { description: 'Your open application for this stall is listed below.' })
     return
   }
+  if (inReview(stall)) {
+    notify.warning(`${stall.name} is in review`, { description: 'The OAS is reviewing another application for this stall. Choose another vacant space.' })
+    return
+  }
   resetForm()
   selectedProperty.value = id
   formOpen.value = true
@@ -288,6 +296,10 @@ const submit = async () => {
   }
   if (alreadyApplied(selectedProperty.value)) {
     errorMessage.value = 'You already have an open application for this stall. Please choose another stall.'
+    return
+  }
+  if (inReview(chosenStall.value)) {
+    errorMessage.value = 'This stall is being reviewed for another applicant. Please choose another stall.'
     return
   }
   if (!letterFile.value && kept.letterOfIntent.length === 0) {
@@ -552,9 +564,9 @@ const appearanceDayPassed = (value?: string) => {
           <section class="space-y-4">
             <h3 class="text-sm font-semibold text-highlighted">Stall</h3>
             <UFormField label="Vacant property" name="propertySpace" required>
-              <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="stallLabel" :value="item => item.documentId" :is-disabled="item => alreadyApplied(item.documentId)" :query="{ 'filters[space_status][$eq]': 'Vacant' }" :fallback="lookupFallback" placeholder="Search vacant stalls…" />
+              <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="stallLabel" :value="item => item.documentId" :is-disabled="unavailable" :query="{ 'filters[space_status][$eq]': 'Vacant' }" :fallback="lookupFallback" placeholder="Search vacant stalls…" />
               <p v-if="vacantProperties.length === 0" class="mt-2 text-xs text-muted">No vacant spaces are currently available.</p>
-              <p v-else-if="appliedStallIds.size" class="mt-2 text-xs text-muted">Stalls you already have an open application for cannot be chosen again.</p>
+              <p v-else class="mt-2 text-xs text-muted">Stalls marked "in review" are being reviewed for another applicant and cannot be chosen.<template v-if="appliedStallIds.size"> Stalls you already have an open application for cannot be chosen again.</template></p>
             </UFormField>
             <div v-if="chosenStall" class="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-default bg-elevated/40 px-4 py-3.5 text-sm">
               <div class="min-w-0">

@@ -7,7 +7,7 @@ export type MapPosition = { x: number; y: number; z: number }
 export type MapPin = MapPosition & {
   id: string
   label?: string
-  status?: 'Vacant' | 'Occupied'
+  status?: 'Vacant' | 'Occupied' | 'In review'
   muted?: boolean
 }
 
@@ -30,6 +30,8 @@ export type MapProperty = {
   building: string
   floor?: string
   space_status: 'Vacant' | 'Occupied'
+  // Set by the server while an application for this stall is being reviewed.
+  inReview?: boolean
   businessName?: string
   productsServices?: string
   operatingDetails?: string

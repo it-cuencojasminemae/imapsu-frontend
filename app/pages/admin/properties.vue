@@ -2,6 +2,7 @@
 import { PAMSU_BUILDINGS } from '~/utils/pamsu'
 import { uploadInBatches } from '~/utils/uploadFile'
 import type { MapPin, MapPosition } from '~/types/map'
+import { stallStatus } from '~/utils/stallStatus'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -26,6 +27,7 @@ type PropertySpace = {
   productsServices?: string
   operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
+  inReview?: boolean
   monthlyRent?: number | string
   mapPosition?: MapPosition | null
   tenancies?: { documentId?: string; status?: string; user?: { username?: string; email?: string; avatar?: { url?: string } | null } | null }[] | null
@@ -161,7 +163,7 @@ const form = reactive({
 const mapPickerOpen = ref(false)
 const otherStallPins = computed<MapPin[]>(() => properties.value
   .filter(property => property.mapPosition && (property.documentId ?? property.id) !== (editing.value?.documentId ?? editing.value?.id))
-  .map(property => ({ id: String(property.documentId ?? property.id), ...property.mapPosition!, label: property.name, status: property.space_status })))
+  .map(property => ({ id: String(property.documentId ?? property.id), ...property.mapPosition!, label: property.name, status: stallStatus(property) ?? undefined })))
 const onBuildingPicked = (name: string) => {
   if (buildingOptions.value.includes(name)) form.building = name
 }
@@ -337,7 +339,7 @@ const remove = async (property: PropertySpace) => {
                   <h2 class="mt-1 truncate text-lg font-semibold text-highlighted">{{ property.name }}</h2>
                   <p v-if="property.businessName" class="truncate text-sm text-primary">{{ property.businessName }}</p>
                 </div>
-                <UBadge :color="property.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ property.space_status }}</UBadge>
+                <UBadge :color="stallStatus(property) === 'Vacant' ? 'secondary' : stallStatus(property) === 'In review' ? 'warning' : 'neutral'" variant="subtle">{{ stallStatus(property) ?? property.space_status }}</UBadge>
               </div>
             </template>
 

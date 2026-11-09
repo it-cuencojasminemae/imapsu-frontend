@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MapPin, MapProperty } from '~/types/map'
 import { pamsuBuildingFor } from '~/utils/pamsu'
+import { stallStatus } from '~/utils/stallStatus'
 
 // Lets the OAS choose an existing stall by clicking its pin on the campus map.
 // Only vacant stalls can be chosen, plus `currentId`: the stall the record being
@@ -24,7 +25,7 @@ const pins = computed<MapPin[]>(() => placed.value.map(stall => ({
   id: stall.documentId as string,
   ...stall.mapPosition!,
   label: stall.name,
-  status: stall.space_status,
+  status: stallStatus(stall) ?? undefined,
   muted: !selectable(stall)
 })))
 const draft = computed(() => placed.value.find(stall => stall.documentId === draftId.value) ?? null)

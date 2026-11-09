@@ -5,6 +5,7 @@ import { PAMSU_BUILDINGS, pamsuBuildingFor, buildingStatusByOrder, propertiesInP
 import { mapBindingDiagnostics } from '~/utils/mapDiagnostics'
 import { fetchMapPages, type MapListResponse } from '~/utils/mapPagination'
 import { mapPropertyStatus, unobscuredMapInsets } from '~/utils/mapPresentation'
+import { stallStatus, stallStatusColor } from '~/utils/stallStatus'
 import { stallFloorLabel, stallKey, stallPhotos, stallTitle } from '~/utils/mapStalls'
 import { useMapStallDetails } from '~/composables/useMapStallDetails'
 import { landingPath } from '~/utils/accountNavigation'
@@ -98,9 +99,12 @@ const pinnedStall = ref<MapProperty | null>(null)
 const displayName = (zone: MapZone) => labels.value[normalizeBuildingName(zone.name)] ?? zone.name
 const selectedColor = computed(() => {
   const occupancy = pinnedStall.value
-    ? mapPropertyStatus(pinnedStall.value.space_status)
+    ? stallStatus(pinnedStall.value)
     : selected.value?.buildingOrder != null ? statusByOrder.value[String(selected.value.buildingOrder)] : undefined
-  return occupancy === 'Vacant' ? MAP_STATUS_COLORS.vacant : occupancy === 'Occupied' ? MAP_STATUS_COLORS.occupied : MAP_STATUS_COLORS.unlisted
+  return occupancy === 'Vacant' ? MAP_STATUS_COLORS.vacant
+    : occupancy === 'Occupied' ? MAP_STATUS_COLORS.occupied
+      : occupancy === 'In review' ? MAP_STATUS_COLORS.reviewing
+        : MAP_STATUS_COLORS.unlisted
 })
 
 type SearchResult = {
@@ -241,6 +245,8 @@ const galleryPhotos = computed(() => selectedStall.value ? propertyPhotos(select
 // ratings instead of giving them.
 const canRateStall = computed(() => selectedStall.value?.space_status === 'Occupied' && !!selectedStall.value.documentId && !auth.isStaff.value)
 const ratingOpen = ref(false)
+// Bumped after a rating is sent so the stall's rating summary reloads.
+const ratingsVersion = ref(0)
 const ratingStall = ref<{ documentId?: string; title: string } | null>(null)
 const openRating = () => {
   if (!selectedStall.value) return
@@ -282,7 +288,7 @@ const afterStallLeave = () => {
 // A stall outside any mapped building gets a panel of its own.
 const stallPins = computed<MapPin[]>(() => properties.value
   .filter(property => property.mapPosition)
-  .map(property => ({ id: stallKey(property), ...property.mapPosition!, label: stallTitle(property), status: property.space_status })))
+  .map(property => ({ id: stallKey(property), ...property.mapPosition!, label: stallTitle(property), status: stallStatus(property) ?? undefined })))
 const selectPin = (id: string) => {
   const property = properties.value.find(item => stallKey(item) === id)
   if (!property || labelMode.value) return
@@ -303,7 +309,7 @@ const selectPin = (id: string) => {
 watch(galleryPhotos, photos => { if (photoIndex.value >= photos.length) photoIndex.value = 0 })
 watch(propertiesData, () => failedPhotos.clear())
 
-const propertyBadgeColor = (property: MapProperty) => (property.space_status === 'Vacant' ? 'success' : property.space_status === 'Occupied' ? 'error' : 'neutral')
+const propertyBadgeColor = (property: MapProperty) => stallStatusColor(stallStatus(property))
 
 const mapContainer = ref<HTMLElement | null>(null)
 const headingPanel = ref<HTMLElement | null>(null)
@@ -622,7 +628,7 @@ onBeforeUnmount(() => {
               <span class="min-w-0 space-y-1.5">
                 <span class="block line-clamp-2 text-sm font-semibold leading-snug text-highlighted">{{ stallTitle(property) }}</span>
                 <span v-if="stallFloorLabel(property.floor)" class="block truncate text-[11px] text-muted">{{ stallFloorLabel(property.floor) }}</span>
-                <UBadge size="sm" variant="subtle" :color="propertyBadgeColor(property)">{{ mapPropertyStatus(property.space_status) ?? 'Status unavailable' }}</UBadge>
+                <UBadge size="sm" variant="subtle" :color="propertyBadgeColor(property)">{{ stallStatus(property) ?? 'Status unavailable' }}</UBadge>
               </span>
               <UIcon name="i-lucide-chevron-right" class="size-4 text-muted" />
             </button>
@@ -660,12 +666,14 @@ onBeforeUnmount(() => {
               <div><dt class="text-xs text-muted">Stall name</dt><dd class="mt-1 font-semibold">{{ selectedStall.name }}</dd></div>
               <div><dt class="text-xs text-muted">Floor</dt><dd class="mt-1 font-medium">{{ stallFloorLabel(selectedStall.floor) ?? 'Not specified' }}</dd></div>
             </dl>
-            <UBadge variant="subtle" :color="propertyBadgeColor(selectedStall)">{{ mapPropertyStatus(selectedStall.space_status) ?? 'Status unavailable' }}</UBadge>
+            <UBadge variant="subtle" :color="propertyBadgeColor(selectedStall)">{{ stallStatus(selectedStall) ?? 'Status unavailable' }}</UBadge>
           </div>
           <template v-if="selectedStall.space_status === 'Occupied'">
             <div v-if="selectedStall.productsServices"><h4 class="text-sm font-semibold">Products / services</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.productsServices }}</p></div>
             <div v-if="selectedStall.operatingDetails"><h4 class="text-sm font-semibold">Operating details</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.operatingDetails }}</p></div>
+            <StallRatingSummary v-if="selectedStall.documentId" :document-id="selectedStall.documentId" :refresh-key="ratingsVersion" />
           </template>
+          <p v-else-if="stallStatus(selectedStall) === 'In review'" class="text-sm text-muted">The OAS is reviewing an application for this space, so it is not open to new applications right now.</p>
           <p v-else-if="selectedStall.space_status === 'Vacant'" class="text-sm text-muted">This space is currently vacant.</p>
         </div>
     </DefineStallBody>
@@ -707,6 +715,7 @@ onBeforeUnmount(() => {
       v-model:open="ratingOpen"
       :stall="ratingStall"
       portal="#campus-map-root"
+      @rated="ratingsVersion++"
       :ui="{ overlay: 'absolute z-[60] bg-black/45 backdrop-blur-[2px]', content: 'absolute z-[70] w-[calc(100%-2rem)] max-w-lg max-h-[calc(100%-2rem)] rounded-xl', body: 'min-h-0 overflow-y-auto' }"
     />
 
@@ -726,6 +735,10 @@ onBeforeUnmount(() => {
         <span class="flex items-center gap-1.5">
           <span class="size-2.5 rounded-full" :style="{ backgroundColor: MAP_STATUS_COLORS.occupied }" />
           Fully occupied
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="size-2.5 rounded-full" :style="{ backgroundColor: MAP_STATUS_COLORS.reviewing }" />
+          Stall in review
         </span>
       </div>
       <p class="map-legend-note mt-2 text-[10px] text-muted">Building colors show listed property status.</p>

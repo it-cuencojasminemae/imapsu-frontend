@@ -343,6 +343,12 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
                 {{ isUploading(bill) ? 'Uploading…' : 'Upload receipt' }}
                 <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
               </label>
+              <!-- Phones open the camera straight away; the OR number is read from the photo the same way. -->
+              <label v-if="!isUploading(bill)" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-default px-3 py-2 text-sm font-medium text-primary hover:border-primary sm:hidden">
+                <UIcon name="i-lucide-camera" class="size-4" />
+                Take photo
+                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="sr-only" @change="(event: Event) => onReceiptSelected(bill, event)" />
+              </label>
               <span v-if="selectedFiles[billKey(bill)]" class="max-w-64 truncate text-sm text-muted">{{ selectedFiles[billKey(bill)].name }}</span>
               <span v-else-if="isUploading(bill)" class="text-sm text-muted">Reading official receipt number…</span>
             </div>
@@ -358,6 +364,10 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-default px-2.5 py-1.5 text-xs font-medium text-muted hover:border-primary hover:text-primary" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
                 <UIcon name="i-lucide-repeat" class="size-3.5" /> Replace
                 <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
+              </label>
+              <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-default px-2.5 py-1.5 text-xs font-medium text-muted hover:border-primary hover:text-primary sm:hidden" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
+                <UIcon name="i-lucide-camera" class="size-3.5" /> Retake
+                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
               </label>
               <UButton
                 icon="i-lucide-trash-2"

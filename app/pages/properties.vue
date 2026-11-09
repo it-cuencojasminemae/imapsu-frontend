@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { stallStatus } from '~/utils/stallStatus'
+
 definePageMeta({
   middleware: 'auth'
 })
@@ -18,6 +20,7 @@ type PropertySpace = {
   productsServices?: string
   operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
+  inReview?: boolean
   monthlyRent?: number | string
   photos?: { id: number; url?: string; name?: string }[] | null
   tenantPhotos?: { id: number; url?: string; name?: string }[] | null
@@ -112,7 +115,11 @@ const openDetails = (card: Card) => {
   detailsId.value = card.documentId ?? card.id
 }
 
-const canApply = (card: Card) => (auth.isAspiringTenant.value || auth.isCurrentTenant.value) && card.space_status === 'Vacant' && !!card.documentId
+// A vacant stall the OAS is reviewing an application for reads "In review"
+// and stays closed to new applications until that review ends.
+const cardStatus = (card: Card) => stallStatus(card) ?? card.space_status
+const cardStatusColor = (card: Card) => cardStatus(card) === 'Vacant' ? 'secondary' : cardStatus(card) === 'In review' ? 'warning' : 'neutral'
+const canApply = (card: Card) => (auth.isAspiringTenant.value || auth.isCurrentTenant.value) && cardStatus(card) === 'Vacant' && !!card.documentId
 
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshSummary()])
@@ -205,7 +212,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
               <p class="text-xs text-muted">{{ card.propertyCode }}</p>
               <h2 class="mt-1 break-words text-lg font-semibold text-highlighted">{{ cardTitle(card) }}</h2>
             </div>
-            <UBadge :color="card.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ card.space_status }}</UBadge>
+            <UBadge :color="cardStatusColor(card)" variant="subtle">{{ cardStatus(card) }}</UBadge>
           </div>
         </template>
 
@@ -272,7 +279,8 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <p class="text-sm">No photos yet</p>
           </div>
 
-          <UBadge :color="detailsCard.space_status === 'Vacant' ? 'secondary' : 'neutral'" variant="subtle">{{ detailsCard.space_status }}</UBadge>
+          <UBadge :color="cardStatusColor(detailsCard)" variant="subtle">{{ cardStatus(detailsCard) }}</UBadge>
+          <p v-if="cardStatus(detailsCard) === 'In review'" class="text-sm text-muted">The OAS is reviewing an application for this space, so it is not open to new applications right now.</p>
 
           <dl class="grid gap-4 text-sm sm:grid-cols-2">
             <div class="sm:col-span-2">
@@ -287,6 +295,8 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.productsServices" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Products / services</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.productsServices }}</dd></div>
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.operatingDetails" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Operating details</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.operatingDetails }}</dd></div>
           </dl>
+
+          <StallRatingSummary v-if="detailsCard.space_status === 'Occupied' && detailsCard.documentId" :document-id="detailsCard.documentId" />
 
           <div class="flex flex-wrap justify-end gap-2">
             <UButton color="neutral" variant="ghost" label="Close" @click="detailsId = null" />
