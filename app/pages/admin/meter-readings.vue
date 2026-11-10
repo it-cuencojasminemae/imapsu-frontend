@@ -70,7 +70,10 @@ const readings = computed(() => data.value?.data ?? [])
 
 const stallOf = (reading: MeterReading) => reading.propertySpace ?? reading.tenancy?.propertySpace ?? null
 const stallLabel = (stall?: Stall | null) => stall ? `${stall.name ?? 'Stall'}${stall.propertyCode ? ` (${stall.propertyCode})` : ''}` : 'No stall'
-const isBilled = (reading: MeterReading) => (reading.bills?.length ?? 0) > 0
+// A voided bill keeps its own copy of the values, so only bills that still
+// stand lock the reading; voiding a wrong bill lets the reading be corrected.
+const standingBills = (reading: MeterReading) => (reading.bills ?? []).filter(bill => bill.status !== 'Void')
+const isBilled = (reading: MeterReading) => standingBills(reading).length > 0
 
 const todayInManila = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const thisMonth = () => todayInManila().slice(0, 7)
@@ -554,7 +557,7 @@ const recordColumns = [
                 </table>
               </div>
 
-              <p v-if="isBilled(reading)" class="mt-3 text-xs text-muted">Billed for {{ reading.bills!.map(bill => bill.period).filter(Boolean).join(', ') || 'this period' }}. Its meter values can no longer change.</p>
+              <p v-if="isBilled(reading)" class="mt-3 text-xs text-muted">Billed for {{ standingBills(reading).map(bill => bill.period).filter(Boolean).join(', ') || 'this period' }}. Its meter values can no longer change.</p>
               <p v-else-if="!reading.period" class="mt-3 text-xs text-muted">Recorded before readings had a billing period. Edit it to set one so Issue Bill can use it.</p>
 
               <div v-if="reading.electricMeterImage || reading.waterMeterImage" class="mt-3 grid grid-cols-2 gap-2">
