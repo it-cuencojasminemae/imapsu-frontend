@@ -106,6 +106,8 @@ const onReceiptSelected = (bill: Bill, event: Event) => {
   uploadReceipt(bill, file, input)
 }
 
+const { readOrNumber } = useReceiptOcr()
+
 const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) => {
   const key = billKey(bill)
   uploadingKeys[key] = true
@@ -114,9 +116,12 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
   selectedFiles[key] = file
   const reading = notify.loading('Reading official receipt number…', 'This can take a few seconds.')
   try {
+    const prepared = await prepareUpload(file)
+    // The number is read here in the browser while the picture uploads.
+    const ocrOrNumber = readOrNumber(prepared)
     const form = new FormData()
     form.append('purpose', 'receipt')
-    form.append('files', await prepareUpload(file))
+    form.append('files', prepared)
     const uploaded = await $api<{ id: number; url?: string }[]>('/api/upload', {
       method: 'POST',
       body: form
@@ -126,7 +131,7 @@ const uploadReceipt = async (bill: Bill, file: File, input?: HTMLInputElement) =
 
     const updated = await $api<{ data: Bill }>(`/api/bills/${key}`, {
       method: 'PUT',
-      body: { data: { receipt: fileId } }
+      body: { data: { receipt: fileId, ocrOrNumber: await ocrOrNumber } }
     })
     const detected = updated?.data?.orNumber
     orNumberDraft[key] = detected ?? ''
