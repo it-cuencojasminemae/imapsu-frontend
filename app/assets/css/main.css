@@ -117,6 +117,9 @@ label:has(input[type='file']:focus-visible) { outline: 2px solid var(--ui-primar
 .imapsu-record-table :where(th, td).is-numeric { text-align: right; }
 .imapsu-record-table td .imapsu-record-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .imapsu-record-table td .imapsu-record-actions--compact { flex-wrap: nowrap; align-items: center; justify-content: flex-end; }
+/* Compact rows keep text, badges and buttons on one centre line, and the Action header sits over the right-aligned buttons. */
+.imapsu-record-table--compact :where(th, td) { vertical-align: middle; }
+.imapsu-record-table--compact th.is-actions { text-align: right; }
 /* Sign-in, sign-up and verification screens: they follow the theme, stacked below 1024px and split above it. The brand panel and the pictures stay wine red in both, so their text stays white. */
 .imapsu-auth-page { --auth-reveal: 600ms; --auth-stagger: 100ms; --auth-tint: #0000000a; --auth-frame: var(--ui-bg); --auth-backdrop: var(--app-page-background); display: flow-root; position: relative; isolation: isolate; min-height: 100svh; overflow-x: clip; background: var(--auth-backdrop); color: var(--ui-text); }
 /* The theme's lighter red is too faint for small links on white. */

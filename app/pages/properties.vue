@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { stallStatus } from '~/utils/stallStatus'
 
-definePageMeta({
-  middleware: 'auth'
-})
+// Open to everyone: prospective tenants can browse stall details before
+// signing in, and sign in only to apply.
 
 type PropertySpace = {
   id: string | number
@@ -120,13 +119,16 @@ const openDetails = (card: Card) => {
 const cardStatus = (card: Card) => stallStatus(card) ?? card.space_status
 const cardStatusColor = (card: Card) => cardStatus(card) === 'Vacant' ? 'secondary' : cardStatus(card) === 'In review' ? 'warning' : 'neutral'
 const canApply = (card: Card) => (auth.isAspiringTenant.value || auth.isCurrentTenant.value) && cardStatus(card) === 'Vacant' && !!card.documentId
+// Guests see the same vacant stalls with a sign-in step in front of Apply.
+const signInToApply = (card: Card) => !auth.isAuthenticated.value && cardStatus(card) === 'Vacant' && !!card.documentId
+const signInLink = (card: Card) => `/login?redirect=${encodeURIComponent(`/rental-applications?property=${card.documentId}`)}`
 
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshSummary()])
 }
 
 const formatCurrency = (amount?: number | string) => {
-  if (amount == null || amount === '') return 'Not set'
+  if (amount == null || amount === '') return auth.isAuthenticated.value ? 'Not set' : 'Sign in to view'
 
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -142,7 +144,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
   <main class="imapsu-page">
     <AppPageHeader>
       <template #title>Rentable spaces</template>
-      <template #description><p class="mt-2 max-w-xl text-muted">Browse registered campus stalls and other rentable spaces. Information shown depends on your account access.</p></template>
+      <template #description><p class="mt-2 max-w-xl text-muted">Browse registered campus stalls and other rentable spaces. Anyone can view stall details; sign in to see the monthly rent and apply.</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
         <UCard class="min-w-28 max-sm:flex-auto" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Total spaces</p><p class="text-xl font-semibold text-highlighted">{{ totalCount }}</p>
@@ -243,6 +245,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
         <div class="mt-auto flex flex-wrap gap-2 pt-4">
           <UButton class="min-w-32 flex-1 justify-center" color="neutral" variant="outline" label="View details" icon="i-lucide-eye" @click="openDetails(card)" />
           <UButton v-if="canApply(card)" class="min-w-32 flex-1 justify-center" data-prominent="true" :to="`/rental-applications?property=${card.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+          <UButton v-else-if="signInToApply(card)" class="min-w-32 flex-1 justify-center" :to="signInLink(card)" label="Sign in to apply" icon="i-lucide-log-in" />
         </div>
       </UCard>
     </div>
@@ -302,6 +305,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
           <div class="flex flex-wrap justify-end gap-2">
             <UButton color="neutral" variant="ghost" label="Close" @click="detailsId = null" />
             <UButton v-if="canApply(detailsCard)" data-prominent="true" :to="`/rental-applications?property=${detailsCard.documentId}`" label="Apply" icon="i-lucide-clipboard-list" />
+            <UButton v-else-if="signInToApply(detailsCard)" :to="signInLink(detailsCard)" label="Sign in to apply" icon="i-lucide-log-in" />
           </div>
         </div>
       </template>

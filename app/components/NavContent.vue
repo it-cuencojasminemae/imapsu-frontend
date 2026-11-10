@@ -12,7 +12,9 @@ type NavLink = { label: string; icon: string; to: string }
 const generalLinks = computed<NavLink[]>(() => {
   const links: NavLink[] = [
     ...(auth.isAuthenticated.value ? [{ label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: auth.isStaff.value ? '/admin' : '/dashboard' }] : []),
-    { label: 'Campus map', icon: 'i-lucide-map-pinned', to: '/campus-map' }
+    { label: 'Campus map', icon: 'i-lucide-map-pinned', to: '/campus-map' },
+    // Guests can browse stall details before they have an account.
+    ...(auth.isAuthenticated.value ? [] : [{ label: 'Rentable spaces', icon: 'i-lucide-store', to: '/properties' }])
   ]
   if (!auth.isStaff.value) {
     links.push({ label: 'Announcements', icon: 'i-lucide-megaphone', to: '/announcements' })

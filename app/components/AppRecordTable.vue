@@ -3,7 +3,7 @@
 // detailsToggle is on, the panel a row opens. Pages whose row action opens a
 // full view turn detailsToggle off so nothing is shown twice.
 type Column = { key: string; label: string; value: (item: T) => string | number; badge?: boolean; color?: (item: T) => 'primary' | 'secondary' | 'neutral' | 'success' | 'warning' | 'error' | 'info' }
-const props = withDefaults(defineProps<{ items: T[]; columns: Column[]; itemKey: (item: T) => string | number; caption: string; expandable?: boolean; compactActions?: boolean; detailsToggle?: boolean }>(), { expandable: true, compactActions: false, detailsToggle: true })
+const props = withDefaults(defineProps<{ items: T[]; columns: Column[]; itemKey: (item: T) => string | number; caption: string; expandable?: boolean; compactActions?: boolean; detailsToggle?: boolean; actionsLabel?: string }>(), { expandable: true, compactActions: false, detailsToggle: true })
 const expanded = ref<string | number | null>(null)
 const detailsLabel = (item: T) => expanded.value === props.itemKey(item) ? 'Close details' : 'Details'
 const detailId = useId()
@@ -19,9 +19,9 @@ function toggle(item: T) {
 <template>
   <AppMotionReveal loaded>
     <div class="hidden overflow-x-auto rounded-xl border border-default bg-default lg:block">
-      <table class="imapsu-record-table">
+      <table class="imapsu-record-table" :class="{ 'imapsu-record-table--compact': compactActions }">
         <caption class="sr-only">{{ caption }}</caption>
-        <thead><tr><th v-for="column in columns" :key="column.key" scope="col" :class="{ 'is-numeric': column.key === 'amount' }">{{ column.label }}</th><th v-if="expandable" scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+        <thead><tr><th v-for="column in columns" :key="column.key" scope="col" :class="{ 'is-numeric': column.key === 'amount' }">{{ column.label }}</th><th v-if="expandable" scope="col" class="is-actions"><template v-if="actionsLabel">{{ actionsLabel }}</template><span v-else class="sr-only">Actions</span></th></tr></thead>
         <tbody>
           <template v-for="item in items" :key="itemKey(item)">
             <tr>

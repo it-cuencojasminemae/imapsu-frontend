@@ -25,8 +25,9 @@ type Bill = {
   dueDate?: string
   overdueFlag?: boolean
   reviewFlags?: string[]
-  status: 'Unpaid' | 'For Verification' | 'Verified' | 'Rejected' | 'Overdue'
+  status: 'Unpaid' | 'For Verification' | 'Verified' | 'Rejected' | 'Overdue' | 'Void'
   verificationNote?: string
+  voidReason?: string | null
   paidAt?: string
   orNumber?: string
   createdAt?: string
@@ -44,6 +45,15 @@ useHead({ title: 'Bills | iMapSU' })
 const auth = useAuth()
 const notify = useNotify()
 const { baseURL, $api, getErrorMessage } = useStrapi()
+
+// Receipts open in a centered viewer on this page instead of a new tab.
+const receiptViewerOpen = ref(false)
+const viewedReceipt = ref<{ url: string; name?: string | null } | null>(null)
+const viewReceipt = (receipt?: Bill['receipt']) => {
+  if (!receipt?.url) return
+  viewedReceipt.value = { url: receipt.url, name: receipt.name }
+  receiptViewerOpen.value = true
+}
 const headers = {}
 
 const recordsPage = useRecordPage([], {  })
@@ -189,7 +199,7 @@ const formatDateTime = (value?: string) => value
   : ''
 
 const isOverdue = (bill: Bill) => {
-  if (bill.status === 'Verified' || !bill.dueDate) return false
+  if (bill.status === 'Verified' || bill.status === 'Void' || !bill.dueDate) return false
   if (bill.status === 'Overdue' || bill.overdueFlag) return true
   const due = new Date(bill.dueDate + 'T00:00:00')
   const today = new Date()
@@ -203,6 +213,7 @@ const statusColor = (bill: Bill) => {
     case 'Rejected':
     case 'Overdue': return 'error'
     case 'For Verification': return 'warning'
+    case 'Void': return 'neutral'
     default: return 'secondary'
   }
 }
@@ -211,12 +222,14 @@ const statusLabel = (bill: Bill) => {
   switch (bill.status) {
     case 'For Verification': return 'For Verification'
     case 'Rejected': return 'Receipt rejected'
+    case 'Void': return 'Voided'
     default: return bill.status
   }
 }
 
 const readOnly = computed(() => !auth.isCurrentTenant.value)
-const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Verified'
+// A voided bill was cancelled by the OAS, so it is never paid.
+const canSubmitPayment = (bill: Bill) => !readOnly.value && bill.status !== 'Verified' && bill.status !== 'Void'
 // A submitted payment stays locked until the OAS verifies or rejects it.
 const isSubmitted = (bill: Bill) => bill.status === 'For Verification'
 
@@ -315,15 +328,16 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
           <div v-if="bill.receipt">
             <dt class="text-xs text-muted">Receipt</dt>
             <dd>
-              <a :href="`${baseURL}${bill.receipt.url}`" target="_blank" rel="noopener" class="group inline-flex items-center gap-2 text-primary">
+              <button type="button" class="group inline-flex items-center gap-2 text-primary" @click="viewReceipt(bill.receipt)">
                 <img :src="`${baseURL}${bill.receipt.url}`" :alt="bill.receipt.name || 'Payment receipt'" class="h-14 w-11 rounded-md border border-default object-cover" />
-                <span class="inline-flex items-center gap-1 font-medium group-hover:underline"><UIcon name="i-lucide-external-link" class="size-3.5" />View</span>
-              </a>
+                <span class="inline-flex items-center gap-1 font-medium group-hover:underline"><UIcon name="i-lucide-maximize-2" class="size-3.5" />View</span>
+              </button>
             </dd>
           </div>
         </dl>
 
-        <UAlert v-if="readOnly && bill.status !== 'Verified'" class="mt-5" color="info" icon="i-lucide-info" title="Settle this bill with the Office of Auxiliary Services" description="Your tenancy has ended, so receipts can no longer be submitted here." />
+        <UAlert v-if="bill.status === 'Void'" class="mt-5" color="neutral" variant="subtle" icon="i-lucide-ban" title="This bill was voided" :description="`${bill.voidReason ? bill.voidReason + ' ' : ''}You do not need to pay it. A corrected bill, if one was issued, is listed separately.`" />
+        <UAlert v-else-if="readOnly && bill.status !== 'Verified'" class="mt-5" color="info" icon="i-lucide-info" title="Settle this bill with the Office of Auxiliary Services" description="Your tenancy has ended, so receipts can no longer be submitted here." />
 
         <div v-if="canSubmitPayment(bill) && isSubmitted(bill)" class="mt-5 border-t border-default pt-4">
           <!-- The OR number and receipt above stay read-only until the OAS verifies or rejects them. -->
@@ -357,10 +371,10 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
 
           <template v-else>
             <div class="flex flex-wrap items-center gap-3">
-              <a :href="`${baseURL}${bill.receipt.url}`" target="_blank" rel="noopener" class="group inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+              <button type="button" class="group inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline" @click="viewReceipt(bill.receipt)">
                 <img :src="`${baseURL}${bill.receipt.url}`" :alt="bill.receipt.name || 'Receipt attached'" class="h-10 w-8 rounded border border-default object-cover" />
                 {{ bill.receipt.name || 'Receipt attached' }}
-              </a>
+              </button>
               <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-default px-2.5 py-1.5 text-xs font-medium text-muted hover:border-primary hover:text-primary" :class="{ 'pointer-events-none opacity-60': isUploading(bill) }">
                 <UIcon name="i-lucide-repeat" class="size-3.5" /> Replace
                 <input type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" :disabled="isUploading(bill)" @change="(event: Event) => onReceiptSelected(bill, event)" />
@@ -403,6 +417,7 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
         </div>
 
         <UAlert v-if="detailsBill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected by the OAS" :description="detailsBill.verificationNote || 'No reason was given.'" />
+        <UAlert v-if="detailsBill.status === 'Void'" color="neutral" variant="subtle" icon="i-lucide-ban" title="This bill was voided" :description="detailsBill.voidReason || 'The Office of Auxiliary Services cancelled this bill.'" />
 
         <section v-for="utility in utilities(detailsBill)" :key="utility.label" class="rounded-lg border border-default p-4">
           <h3 class="mb-3 flex items-center gap-1.5 font-semibold text-highlighted"><UIcon :name="utility.icon" class="size-4 text-primary" />{{ utility.label }}</h3>
@@ -431,10 +446,10 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
           <div class="col-span-2">
             <dt class="text-xs text-muted">Receipt</dt>
             <dd class="mt-1">
-              <a v-if="detailsBill.receipt" :href="`${baseURL}${detailsBill.receipt.url}`" target="_blank" rel="noopener" class="group block font-medium text-primary">
+              <button v-if="detailsBill.receipt" type="button" class="group block w-full text-left font-medium text-primary" @click="viewReceipt(detailsBill.receipt)">
                 <img :src="`${baseURL}${detailsBill.receipt.url}`" :alt="detailsBill.receipt.name || 'Payment receipt'" class="max-h-64 w-full rounded-md border border-default object-contain" />
-                <span class="mt-1 inline-flex items-center gap-1 group-hover:underline"><UIcon name="i-lucide-external-link" class="size-3.5" />View full size</span>
-              </a>
+                <span class="mt-1 inline-flex items-center gap-1 group-hover:underline"><UIcon name="i-lucide-maximize-2" class="size-3.5" />View full size</span>
+              </button>
               <span v-else class="text-muted">No receipt uploaded yet</span>
             </dd>
           </div>
@@ -460,5 +475,6 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
     >
       <template #body><DetailsBody /></template>
     </UDrawer>
+    <ReceiptViewer v-model:open="receiptViewerOpen" :receipt="viewedReceipt" />
   </main>
 </template>

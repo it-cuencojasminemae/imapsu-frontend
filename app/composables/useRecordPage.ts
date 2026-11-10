@@ -24,7 +24,9 @@ export const useRecordPage = (searchFields: string[] = [], filters: Record<strin
       result[prefix+'[0][dueDate][$lt]']=today
       result[prefix+'[1][overdueFlag][$eq]']=true
       result[prefix+'[2][status][$eq]']='Overdue'
-      result['filters[status][$ne]']='Verified'
+      // Paid and voided bills are never overdue.
+      result['filters[status][$notIn][0]']='Verified'
+      result['filters[status][$notIn][1]']='Void'
     }
     return result
   })

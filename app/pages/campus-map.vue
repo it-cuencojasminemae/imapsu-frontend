@@ -261,7 +261,7 @@ const openRating = () => {
 const listingLink = computed(() => {
   const documentId = selectedStall.value?.documentId
   const target = documentId ? `/properties?focus=${documentId}` : '/properties'
-  return auth.isAuthenticated.value ? target : `/login?redirect=${encodeURIComponent(target)}`
+  return target
 })
 const photoIndex = ref(0)
 const activePhoto = computed(() => galleryPhotos.value[photoIndex.value])

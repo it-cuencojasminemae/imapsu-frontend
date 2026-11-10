@@ -22,7 +22,7 @@ type Bill = {
   documentId?: string
   period?: string
   amount: number | string
-  status?: 'Unpaid' | 'For Verification' | 'Verified' | 'Rejected' | 'Overdue'
+  status?: 'Unpaid' | 'For Verification' | 'Verified' | 'Rejected' | 'Overdue' | 'Void'
   dueDate?: string
   overdueFlag?: boolean
   reviewFlags?: string[]
@@ -102,7 +102,7 @@ const todayDate = () => {
 }
 
 const isOverdue = (bill: Bill) => {
-  if (bill.status === 'Verified' || !bill.dueDate) return false
+  if (bill.status === 'Verified' || bill.status === 'Void' || !bill.dueDate) return false
   if (bill.status === 'Overdue' || bill.overdueFlag) return true
   const due = new Date(bill.dueDate + 'T00:00:00')
   return due < todayDate()
@@ -154,6 +154,7 @@ const statusColor = (status?: string) => {
     case 'For Verification': return 'warning'
     case 'Rejected': return 'error'
     case 'Overdue': return 'error'
+    case 'Void': return 'neutral'
     default: return 'warning'
   }
 }

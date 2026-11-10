@@ -4,6 +4,20 @@ export type StatusHistoryEntry = {
   toStatus: string
   changedAt: string
   changedBy?: { id: number; username?: string } | null
+  // Bills only: what happened, and the reason or receipt it was about.
+  details?: StatusHistoryDetails | null
+}
+
+export type StatusHistoryDetails = {
+  event?: string
+  reason?: string
+  orNumber?: string
+  orSource?: 'ocr' | 'manual' | null
+  amount?: number | string
+  period?: string
+  correction?: string
+  correctionOf?: string
+  receipt?: { id: number | null; url: string | null; name: string | null } | null
 }
 
 export type StatusHistoryEntityType = 'rental-application' | 'renewal-intent' | 'maintenance-ticket' | 'bill' | 'tenancy'
