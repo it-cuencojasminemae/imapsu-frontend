@@ -518,14 +518,18 @@ const resetToUnpaid = async (bill: Bill) => {
   await setBillStatus(bill, 'Unpaid', { verificationNote: null })
 }
 
+// A verified bill is a closed payment record: it can only be reset to Unpaid, or
+// gain a receipt picture or number an older one never had. The API enforces this too.
+const canRecord = (bill: Bill) => !isVerified(bill) || !bill.receipt || !bill.orNumber?.trim()
+
 const billMenuItems = (bill: Bill) => [
   [
-    ...(awaitsReceipt(bill) ? [] : [{ label: recordLabel(bill), icon: 'i-lucide-receipt-text', onSelect: () => openRecord(bill) }]),
-    { label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(bill) },
+    ...(awaitsReceipt(bill) || !canRecord(bill) ? [] : [{ label: recordLabel(bill), icon: 'i-lucide-receipt-text', onSelect: () => openRecord(bill) }]),
+    ...(isVerified(bill) ? [] : [{ label: 'Edit', icon: 'i-lucide-pencil', onSelect: () => openEdit(bill) }]),
     { label: 'History', icon: 'i-lucide-history', onSelect: () => openHistory(bill) },
     ...(canReset(bill) ? [{ label: 'Reset to Unpaid', icon: 'i-lucide-rotate-ccw', onSelect: () => resetToUnpaid(bill) }] : [])
   ],
-  [{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(bill) }]
+  ...(isVerified(bill) ? [] : [[{ label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => remove(bill) }]])
 ]
 
 const billContext = (bill: Bill) => [
@@ -686,13 +690,14 @@ const recordColumns = [
     <UEmpty v-else-if="bills.length === 0 && filterCount === 0" icon="i-lucide-receipt" title="No bills yet" description="Advance billing records will appear here once issued." />
 
     <div v-else class="space-y-4">
+      <!-- On phones the peso totals take a full row each, so a long amount never breaks mid-number. -->
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <UCard class="" :ui="{ body: 'p-3' }">
+        <UCard class="max-sm:col-span-2" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Outstanding</p>
           <p class="mt-1 text-xl font-semibold text-error">{{ formatCurrency(outstandingTotal) }}</p>
           <p class="text-xs text-muted">{{ billingSummary?.unverifiedBills ?? '—' }} unverified</p>
         </UCard>
-        <UCard class="" :ui="{ body: 'p-3' }">
+        <UCard class="max-sm:col-span-2" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Collected</p>
           <p class="mt-1 text-xl font-semibold text-success-600">{{ formatCurrency(collectedTotal) }}</p>
           <p class="text-xs text-muted">{{ billingSummary?.verifiedBills ?? '—' }} verified</p>
@@ -708,7 +713,7 @@ const recordColumns = [
           <p class="mt-1 text-xl font-semibold text-error">{{ billingSummary?.overdueBills ?? '—' }}</p>
           <p class="text-xs text-muted">{{ formatCurrency(overdueTotal) }} total</p>
         </UCard>
-        <UCard class="" :ui="{ body: 'p-3' }">
+        <UCard class="max-sm:col-span-2" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Bills</p>
           <p class="mt-1 text-xl font-semibold text-highlighted">{{ billingSummary?.total ?? '—' }}</p>
           <p class="text-xs text-muted">all periods</p>
@@ -815,11 +820,11 @@ const recordColumns = [
             <UButton label="Verify receipt" icon="i-lucide-file-check-2" color="success" size="sm" :loading="workflowBusy === String(bill.documentId ?? bill.id)" :disabled="!!verifyBlocked(bill)" :title="verifyBlocked(bill)" @click="verifyBill(bill)" />
             <UButton label="Reject" icon="i-lucide-x-circle" color="error" variant="subtle" size="sm" :disabled="workflowBusy === String(bill.documentId ?? bill.id)" @click="openReject(bill)" />
           </template>
-          <UButton :label="recordLabel(bill)" icon="i-lucide-receipt-text" color="neutral" variant="subtle" size="sm" @click="openRecord(bill)" />
-          <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(bill)" />
+          <UButton v-if="canRecord(bill)" :label="recordLabel(bill)" icon="i-lucide-receipt-text" color="neutral" variant="subtle" size="sm" @click="openRecord(bill)" />
+          <UButton v-if="!isVerified(bill)" label="Edit" icon="i-lucide-pencil" color="neutral" variant="subtle" size="sm" @click="openEdit(bill)" />
           <UButton label="History" icon="i-lucide-history" color="neutral" variant="subtle" size="sm" @click="openHistory(bill)" />
           <UButton v-if="canReset(bill)" label="Reset to unpaid" icon="i-lucide-rotate-ccw" color="neutral" variant="subtle" size="sm" @click="resetToUnpaid(bill)" />
-          <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (bill.documentId ?? bill.id)" :disabled="deleting !== null" @click="remove(bill)" />
+          <UButton v-if="!isVerified(bill)" label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (bill.documentId ?? bill.id)" :disabled="deleting !== null" @click="remove(bill)" />
         </div>
       </UCard></template>
       </AppRecordTable>

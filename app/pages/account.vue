@@ -184,8 +184,9 @@ onBeforeUnmount(() => {
 
     <div class="grid min-w-0 gap-5 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-8">
       <nav aria-label="Account settings" class="flex gap-1 overflow-x-auto self-start rounded-xl border border-default bg-default p-2 lg:sticky lg:top-24 lg:flex-col">
-        <NuxtLink v-for="item in sections" :key="item.value" :to="{ path: '/account', query: { ...route.query, section: item.value } }" :aria-current="section === item.value ? 'page' : undefined" class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary" :class="section === item.value ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-muted/50 hover:text-highlighted'">
-          <UIcon :name="item.icon" class="size-4 shrink-0" aria-hidden="true" />{{ item.label }}
+        <NuxtLink v-for="item in sections" :key="item.value" :to="{ path: '/account', query: { ...route.query, section: item.value } }" :aria-current="section === item.value ? 'page' : undefined" class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary max-sm:flex-auto max-sm:justify-center max-sm:px-2" :class="section === item.value ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-muted/50 hover:text-highlighted'">
+          <!-- The three tabs share one row on phones; the narrowest screens drop the icons so no label is cut off. -->
+          <UIcon :name="item.icon" class="size-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />{{ item.label }}
         </NuxtLink>
       </nav>
 

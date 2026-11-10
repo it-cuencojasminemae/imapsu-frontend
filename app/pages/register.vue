@@ -208,7 +208,7 @@ const resendVerification = async () => {
           <UInput required v-model="fullName" type="text" placeholder="Juan Dela Cruz" autocomplete="name" size="lg" :disabled="loading" autofocus :ui="{ root: 'w-full' }" />
         </UFormField>
 
-        <div class="grid gap-4 min-[375px]:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-2">
           <UFormField label="Username" name="username" required>
             <UInput required v-model="username" type="text" placeholder="e.g. jdoe" autocomplete="username" size="lg" :disabled="loading" :ui="{ root: 'w-full' }" />
           </UFormField>
@@ -228,7 +228,7 @@ const resendVerification = async () => {
           </UFormField>
         </div>
 
-        <div class="grid gap-4 min-[375px]:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-2">
           <UFormField label="Password" name="password" required :error="attempted && !passwordCheck.ok ? 'Complete the password requirements below.' : undefined">
             <UInput required v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="••••••••" autocomplete="new-password" size="lg" :disabled="loading" :ui="{ root: 'w-full' }">
               <template #trailing>

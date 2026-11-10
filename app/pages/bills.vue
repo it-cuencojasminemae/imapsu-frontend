@@ -262,10 +262,10 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
       <template #title>{{ readOnly ? 'Past bills' : 'Bills' }}</template>
       <template #description><p class="mt-2 max-w-xl text-muted">{{ readOnly ? 'Review the rent and utility bills from your past tenancy. These records are read-only.' : 'Review advance billing information for rent and utilities. Make payments through the University Cashier, then submit the official receipt for verification.' }}</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
-        <UCard class="min-w-32" :ui="{ body: 'p-3' }">
+        <UCard class="min-w-32 max-sm:flex-auto" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Bills</p><p class="text-xl font-semibold text-primary">{{ billingSummary?.total ?? '—' }}</p>
         </UCard>
-        <UCard class="min-w-32" :ui="{ body: 'p-3' }">
+        <UCard class="min-w-32 max-sm:flex-auto" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Outstanding</p><p class="text-xl font-semibold text-error">{{ formatCurrency(totalOutstanding) }}</p>
         </UCard>
         <div class="flex items-center">

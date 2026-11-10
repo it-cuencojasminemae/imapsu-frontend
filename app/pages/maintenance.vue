@@ -276,7 +276,8 @@ const submitFollowUp = async () => {
 
         <div v-else class="space-y-4">
           <UCard v-for="item in tickets" :key="item.documentId ?? item.id" :ui="{ body: 'p-5' }">
-            <div class="flex items-start justify-between gap-3">
+            <!-- The badges drop under the ticket name when a phone has no room for both. -->
+            <div class="flex items-start justify-between gap-3 max-sm:flex-wrap">
               <div class="flex min-w-0 items-center gap-2">
                 <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                   <UIcon :name="categoryIcon(item.category)" class="size-4" />

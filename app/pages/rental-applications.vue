@@ -20,6 +20,7 @@ type RentalApplication = {
   birDocuments?: MediaDoc[] | null
   businessPermits?: MediaDoc[] | null
   productsServices?: string
+  businessName?: string
   appearanceDate?: string
   appearanceConfirmed?: boolean
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
@@ -154,8 +155,11 @@ const docsOf = (item: RentalApplication, key: DocField) => {
 }
 
 const selectedProperty = ref<string>()
+// Arriving from Apply on a stall fixes the application to that stall.
+const stallLocked = ref(false)
 const message = ref('')
 const productsServices = ref('')
+const businessName = ref('')
 const letterFile = ref<File>()
 const letterFormKey = ref(0)
 const submitting = ref(false)
@@ -194,8 +198,10 @@ const removeKept = (field: DocField, id: number) => {
 const resetForm = () => {
   editing.value = null
   selectedProperty.value = undefined
+  stallLocked.value = false
   message.value = ''
   productsServices.value = ''
+  businessName.value = ''
   letterFile.value = undefined
   letterFormKey.value++
   staged.dtiDocuments = []
@@ -204,6 +210,7 @@ const resetForm = () => {
   docSections.forEach(section => { kept[section.key] = [] })
   rulesAccepted.value = false
   errorMessage.value = ''
+  step.value = 'documents'
 }
 
 const chooseLetter = (input: HTMLInputElement) => {
@@ -212,8 +219,16 @@ const chooseLetter = (input: HTMLInputElement) => {
   input.value = ''
 }
 
+// The stall from ?property stays the application's stall for as long as it can
+// still be applied for, so reopening the form keeps it. Once the applicant has
+// applied for it, or it stops being available, the form offers the full list.
 const openNew = () => {
   resetForm()
+  const stall = vacantProperties.value.find(property => property.documentId === preselectProperty.value)
+  if (stall && !unavailable(stall)) {
+    selectedProperty.value = stall.documentId
+    stallLocked.value = true
+  }
   formOpen.value = true
 }
 
@@ -223,6 +238,7 @@ const openEdit = (item: RentalApplication) => {
   selectedProperty.value = item.propertySpace?.documentId
   message.value = item.message ?? ''
   productsServices.value = item.productsServices ?? ''
+  businessName.value = item.businessName ?? ''
   docSections.forEach(section => { kept[section.key] = [...docsOf(item, section.key)] })
   formOpen.value = true
 }
@@ -282,38 +298,49 @@ const applyPreselect = () => {
   }
   resetForm()
   selectedProperty.value = id
+  stallLocked.value = true
   formOpen.value = true
 }
 onMounted(() => {
   watch([preselectProperty, propertyStatus, openStatus], applyPreselect, { immediate: true })
 })
 
+// The form has two steps. The business details open only once the stall is
+// chosen and all four documents are attached.
+type FormStep = 'documents' | 'business'
+const step = ref<FormStep>('documents')
+const documentsIssue = () => {
+  if (!selectedProperty.value) return 'Please choose a vacant property.'
+  if (alreadyApplied(selectedProperty.value)) return 'You already have an open application for this stall. Please choose another stall.'
+  if (inReview(chosenStall.value)) return 'This stall is being reviewed for another applicant. Please choose another stall.'
+  if (!letterFile.value && kept.letterOfIntent.length === 0) return 'Please attach your signed letter of intent.'
+  const missing = stagedSections.value.find(section => staged[section.key].length === 0 && kept[section.key].length === 0)
+  return missing ? `Please attach your ${inSentence(missing.label)}.` : ''
+}
+const documentsReady = computed(() => !documentsIssue())
+const stepTabs = computed(() => [
+  { label: '1. Stall and documents', short: '1. Documents', value: 'documents', icon: 'i-lucide-folder-up' },
+  { label: '2. Business details', short: '2. Business', value: 'business', icon: 'i-lucide-store', disabled: !documentsReady.value }
+])
+const goToStep = (target: FormStep) => {
+  errorMessage.value = target === 'business' ? documentsIssue() : ''
+  if (!errorMessage.value) step.value = target
+}
+
 const submit = async () => {
-  errorMessage.value = ''
-  if (!selectedProperty.value) {
-    errorMessage.value = 'Please choose a vacant property.'
+  // Enter on the first step moves on instead of submitting.
+  if (step.value === 'documents') return goToStep('business')
+  errorMessage.value = documentsIssue()
+  if (errorMessage.value) {
+    step.value = 'documents'
     return
-  }
-  if (alreadyApplied(selectedProperty.value)) {
-    errorMessage.value = 'You already have an open application for this stall. Please choose another stall.'
-    return
-  }
-  if (inReview(chosenStall.value)) {
-    errorMessage.value = 'This stall is being reviewed for another applicant. Please choose another stall.'
-    return
-  }
-  if (!letterFile.value && kept.letterOfIntent.length === 0) {
-    errorMessage.value = 'Please attach your signed letter of intent.'
-    return
-  }
-  for (const section of stagedSections.value) {
-    if (staged[section.key].length === 0 && kept[section.key].length === 0) {
-      errorMessage.value = `Please attach your ${inSentence(section.label)}.`
-      return
-    }
   }
   if (!productsServices.value.trim()) {
     errorMessage.value = 'Please describe the products or services you plan to offer.'
+    return
+  }
+  if (!businessName.value.trim()) {
+    errorMessage.value = 'Please enter your business name.'
     return
   }
   if (!editing.value && !rulesAccepted.value) {
@@ -347,7 +374,8 @@ const submit = async () => {
       dtiDocuments: withKept('dtiDocuments', dtiUploaded),
       birDocuments: withKept('birDocuments', birUploaded),
       businessPermits: withKept('businessPermits', permitUploaded),
-      productsServices: productsServices.value.trim()
+      productsServices: productsServices.value.trim(),
+      businessName: businessName.value.trim()
     }
 
     const updating = editing.value
@@ -528,6 +556,10 @@ const appearanceDayPassed = (value?: string) => {
               </div>
               <p v-if="missingKey" class="mt-2 text-xs text-muted">Uploading…</p>
               <p v-if="missingError" class="mt-2 text-xs text-error">{{ missingError }}</p>
+              <div v-if="item.businessName" class="mt-4">
+                <p class="mb-1 text-xs font-medium text-muted">Business name</p>
+                <p class="text-sm font-medium text-highlighted">{{ item.businessName }}</p>
+              </div>
               <div v-if="item.productsServices" class="mt-4">
                 <p class="mb-1 text-xs font-medium text-muted">Products / services offered</p>
                 <p class="text-sm leading-relaxed text-toned">{{ item.productsServices }}</p>
@@ -560,10 +592,18 @@ const appearanceDayPassed = (value?: string) => {
       :ui="{ body: 'p-5 sm:p-7', footer: 'px-5 py-4 sm:px-7' }"
     >
       <template #body>
+        <UTabs :model-value="step" :items="stepTabs" :content="false" variant="pill" color="neutral" class="mb-7 w-full" aria-label="Application steps" :ui="{ trigger: 'max-sm:py-2.5' }" @update:model-value="goToStep($event as FormStep)">
+          <!-- Phones get the short label so neither tab is cut off. -->
+          <template #default="{ item }"><span class="sm:hidden">{{ item.short }}</span><span class="max-sm:hidden">{{ item.label }}</span></template>
+        </UTabs>
         <form id="application-form" class="space-y-8" @submit.prevent="submit">
-          <section class="space-y-4">
+          <section v-show="step === 'documents'" class="space-y-4">
             <h3 class="text-sm font-semibold text-highlighted">Stall</h3>
-            <UFormField label="Vacant property" name="propertySpace" required>
+            <UFormField v-if="stallLocked && chosenStall" label="Vacant property" name="propertySpace" required>
+              <UInput :model-value="`${chosenStall.name} (${chosenStall.propertyCode})`" readonly icon="i-lucide-lock" aria-label="Chosen stall" class="w-full" :ui="{ base: 'cursor-default bg-elevated/50 text-toned' }" />
+              <p class="mt-2 text-xs text-muted">This is the stall you chose to apply for. To apply for a different one, close this form and pick another from <NuxtLink to="/properties" class="font-medium text-primary hover:underline">Rentable spaces</NuxtLink>.</p>
+            </UFormField>
+            <UFormField v-else label="Vacant property" name="propertySpace" required>
               <AppRecordLookup v-model="selectedProperty" endpoint="/api/properties" :fields="['name','propertyCode','building']" :label="stallLabel" :value="item => item.documentId" :is-disabled="unavailable" :query="{ 'filters[space_status][$eq]': 'Vacant' }" :fallback="lookupFallback" placeholder="Search vacant stalls…" />
               <p v-if="vacantProperties.length === 0" class="mt-2 text-xs text-muted">No vacant spaces are currently available.</p>
               <p v-else class="mt-2 text-xs text-muted">Stalls marked "in review" are being reviewed for another applicant and cannot be chosen.<template v-if="appliedStallIds.size"> Stalls you already have an open application for cannot be chosen again.</template></p>
@@ -584,13 +624,13 @@ const appearanceDayPassed = (value?: string) => {
             </div>
           </section>
 
-          <section class="space-y-4 border-t border-default pt-7">
+          <section v-show="step === 'documents'" class="space-y-4 border-t border-default pt-7">
             <div>
               <h3 class="text-sm font-semibold text-highlighted">Required documents</h3>
               <p class="mt-1 text-sm text-muted">All four are required. Accepted files: PDF, Word (.doc, .docx), JPG and PNG.</p>
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
-              <div class="flex flex-col gap-3 rounded-lg border border-default p-4">
+              <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-default p-4">
                 <div>
                   <p class="text-sm font-medium text-highlighted">Letter of intent <span class="text-error">*</span></p>
                   <p class="mt-1 text-xs leading-relaxed text-muted">Your signed letter of intent, as one file.</p>
@@ -612,7 +652,7 @@ const appearanceDayPassed = (value?: string) => {
                 </label>
               </div>
 
-              <div v-for="section in stagedSections" :key="section.key" class="flex flex-col gap-3 rounded-lg border border-default p-4">
+              <div v-for="section in stagedSections" :key="section.key" class="flex min-w-0 flex-col gap-3 rounded-lg border border-default p-4">
                 <div>
                   <p class="text-sm font-medium text-highlighted">{{ section.label }} <span class="text-error">*</span></p>
                   <p class="mt-1 text-xs leading-relaxed text-muted">{{ section.hint }}</p>
@@ -636,17 +676,20 @@ const appearanceDayPassed = (value?: string) => {
             </div>
           </section>
 
-          <section class="space-y-5 border-t border-default pt-7">
+          <section v-if="step === 'business'" class="space-y-5">
             <h3 class="text-sm font-semibold text-highlighted">Your business</h3>
             <UFormField label="Products / services" name="productsServices" required description="Describe what your business will offer from this space." :ui="{ description: 'mb-2' }">
               <UTextarea v-model="productsServices" required class="w-full" :rows="4" autoresize placeholder="e.g. A coffee shop and bakery offering specialty drinks, pastries, and light meals." :disabled="submitting" />
+            </UFormField>
+            <UFormField label="Business name" name="businessName" required description="The name your stall will go by. It is shown on the campus map once your lease starts." :ui="{ description: 'mb-2' }">
+              <UInput v-model="businessName" required maxlength="120" class="w-full" placeholder="e.g. Campus Bites" :disabled="submitting" />
             </UFormField>
             <UFormField label="Message" name="message" hint="Optional">
               <UTextarea v-model="message" class="w-full" placeholder="Anything else the OAS should know?" :rows="4" autoresize :disabled="submitting" />
             </UFormField>
           </section>
 
-          <div v-if="!editing" class="rounded-lg border border-default px-4 py-3.5">
+          <div v-if="!editing && step === 'business'" class="rounded-lg border border-default px-4 py-3.5">
             <UCheckbox v-model="rulesAccepted" name="rulesAccepted" :disabled="submitting">
               <template #label>
                 I have read and will follow the
@@ -659,9 +702,12 @@ const appearanceDayPassed = (value?: string) => {
         </form>
       </template>
       <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton :label="editing ? 'Discard changes' : 'Close'" color="neutral" variant="ghost" :disabled="submitting" @click="formOpen = false" />
-          <UButton data-prominent="true" type="submit" form="application-form" :loading="submitting">{{ editing ? 'Save changes' : 'Submit application' }}</UButton>
+        <div class="flex w-full flex-wrap items-center justify-end gap-2">
+          <!-- On phones the footer is two equal, taller buttons. The second step drops Close there, since the X in the header does the same. -->
+          <UButton v-if="step === 'business'" label="Back" icon="i-lucide-arrow-left" color="neutral" variant="outline" class="mr-auto max-sm:flex-1 max-sm:justify-center max-sm:py-2.5" :disabled="submitting" @click="goToStep('documents')" />
+          <UButton :label="editing ? 'Discard changes' : 'Close'" color="neutral" variant="ghost" class="max-sm:flex-1 max-sm:justify-center max-sm:py-2.5" :class="{ 'max-sm:hidden': step === 'business' }" :disabled="submitting" @click="formOpen = false" />
+          <UButton v-if="step === 'documents'" data-prominent="true" label="Next" trailing-icon="i-lucide-arrow-right" class="max-sm:flex-1 max-sm:justify-center max-sm:py-2.5" @click="goToStep('business')" />
+          <UButton v-else data-prominent="true" type="submit" form="application-form" class="max-sm:flex-1 max-sm:justify-center max-sm:py-2.5" :loading="submitting">{{ editing ? 'Save changes' : 'Submit application' }}</UButton>
         </div>
       </template>
     </UModal>

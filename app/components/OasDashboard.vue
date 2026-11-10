@@ -237,7 +237,7 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
         <template #header>
           <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">Recent bills</h3>
-            <NuxtLink to="/admin/bills" aria-label="View all bills" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
+            <NuxtLink to="/admin/bills" aria-label="View all bills" class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
         </template>
         <ul v-if="recentBills.length" class="divide-y divide-default">
@@ -263,7 +263,7 @@ const dashboard = useDashboardPresentation([propertyDataStatus, tenancyDataStatu
         <template #header>
           <div class="flex items-center justify-between gap-3">
             <h3 class="text-base font-semibold text-highlighted">Contracts ending within 30 days</h3>
-            <NuxtLink to="/admin/tenancies" aria-label="View all tenancies" class="inline-flex items-center gap-1 text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
+            <NuxtLink to="/admin/tenancies" aria-label="View all tenancies" class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-medium text-toned hover:underline">View all<UIcon name="i-lucide-arrow-right" class="size-3.5" aria-hidden="true" /></NuxtLink>
           </div>
         </template>
         <ul v-if="expiringContracts.length" class="divide-y divide-default">

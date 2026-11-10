@@ -225,7 +225,7 @@ const finalizeForm = reactive({
   closesAt: undefined as string | undefined,
   monthlyRent: '',
   startDate: '',
-  endDate: ''
+  termMonths: undefined as number | undefined
 })
 
 // Operating hours are picked from a 30-minute list rather than typed, so the
@@ -252,26 +252,43 @@ const operatingHours = () => finalizeForm.opensAt && finalizeForm.closesAt
 const finalizeMinStart = ref(todayInManila())
 const finalizeDateError = computed(() => finalizeForm.startDate && finalizeForm.startDate < finalizeMinStart.value
   ? 'The contract cannot start before today.'
-  : finalizeForm.startDate && finalizeForm.endDate && finalizeForm.endDate <= finalizeForm.startDate
-    ? 'The end date must be after the start date.'
+  : !finalizeForm.termMonths
+    ? 'Choose the contract length.'
     : '')
-watch(() => finalizeForm.startDate, startDate => {
-  if (startDate && finalizeForm.endDate && finalizeForm.endDate <= startDate) finalizeForm.endDate = ''
-})
+
+// Contracts run for a fixed length, so the end date is worked out from the
+// start date: the same day of the month, or the month's last day when that
+// day does not exist (Nov 30 + 3 months = Feb 28).
+const contractTermOptions = [
+  { label: '3 months', value: 3 },
+  { label: '6 months', value: 6 },
+  { label: '1 year', value: 12 }
+]
+const addMonths = (date: string, months: number) => {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number]
+  const end = new Date(Date.UTC(year, month - 1 + months, 1))
+  const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate()
+  end.setUTCDate(Math.min(day, lastDay))
+  return end.toISOString().slice(0, 10)
+}
+const finalizeEndDate = computed(() => /^\d{4}-\d{2}-\d{2}$/.test(finalizeForm.startDate) && finalizeForm.termMonths
+  ? addMonths(finalizeForm.startDate, finalizeForm.termMonths)
+  : '')
 
 // Prefilled once the lease can be finalized. The contract is signed outside
-// the system, so its dates are left for the OAS to copy rather than guessed.
+// the system, so its start date and length are left for the OAS to copy
+// rather than guessed.
 const resetFinalizeForm = () => {
   const value = application.value
   if (!value) return
-  finalizeForm.businessName = ''
+  finalizeForm.businessName = value.businessName ?? ''
   finalizeForm.productsServices = value.productsServices ?? ''
   finalizeForm.opensAt = undefined
   finalizeForm.closesAt = undefined
   finalizeMinStart.value = todayInManila()
   finalizeForm.monthlyRent = value.propertySpace?.monthlyRent != null ? String(Number(value.propertySpace.monthlyRent)) : ''
   finalizeForm.startDate = ''
-  finalizeForm.endDate = ''
+  finalizeForm.termMonths = undefined
   finalizeError.value = ''
 }
 watch(canFinalize, ready => { if (ready) resetFinalizeForm() }, { immediate: true })
@@ -295,7 +312,7 @@ const saveFinalize = async () => {
           operatingDetails: operatingHours(),
           monthlyRent: Number(finalizeForm.monthlyRent),
           startDate: finalizeForm.startDate,
-          endDate: finalizeForm.endDate
+          endDate: finalizeEndDate.value
         }
       }
     })
@@ -368,6 +385,11 @@ watch(tab, value => { if (value === 'history') history.load() })
                 <dd class="mt-1 text-toned">{{ formatDate(item.createdAt) }}</dd>
               </div>
             </dl>
+
+            <section v-if="item.kind === 'application'">
+              <h3 class="text-sm font-semibold text-highlighted">Business name</h3>
+              <p class="mt-1 leading-relaxed text-toned">{{ item.businessName || 'Not provided' }}</p>
+            </section>
 
             <section v-if="item.kind === 'application'">
               <h3 class="text-sm font-semibold text-highlighted">Products / services offered</h3>
@@ -487,7 +509,7 @@ watch(tab, value => { if (value === 'history') history.load() })
                   <p class="text-xs text-muted"><span>{{ propertyCode(application) }}</span> · {{ application.propertySpace?.building }}</p>
                 </div>
               </div>
-              <UFormField label="Business name" required>
+              <UFormField label="Business name" description="From the application. Shown on the campus map." required>
                 <UInput v-model="finalizeForm.businessName" required placeholder="e.g. Campus Bites" :ui="{ root: 'w-full' }" />
               </UFormField>
               <UFormField label="Products / services" description="From the application. Shown on the campus map.">
@@ -508,8 +530,8 @@ watch(tab, value => { if (value === 'history') history.load() })
                 <UFormField label="Contract start date" description="As written on the signed contract." required>
                   <UInput v-model="finalizeForm.startDate" type="date" required :min="finalizeMinStart" :ui="{ root: 'w-full' }" />
                 </UFormField>
-                <UFormField label="Contract end date" description="As written on the signed contract." required>
-                  <UInput v-model="finalizeForm.endDate" type="date" required :min="finalizeForm.startDate || undefined" :ui="{ root: 'w-full' }" />
+                <UFormField label="Contract length" :description="finalizeEndDate ? `Ends ${formatDate(finalizeEndDate)}.` : 'As written on the signed contract.'" required>
+                  <USelect v-model="finalizeForm.termMonths" :items="contractTermOptions" placeholder="Choose a length" icon="i-lucide-calendar-range" class="w-full" />
                 </UFormField>
               </div>
               <UAlert color="info" variant="subtle" icon="i-lucide-info" title="What happens next">

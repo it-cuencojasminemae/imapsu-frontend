@@ -349,7 +349,7 @@ const statusOptions = [
         <ClientOnly v-else>
           <div class="overflow-hidden rounded-lg border border-default">
             <UEditor v-slot="{ editor }" v-model="stallRules" content-type="markdown" placeholder="Write the stall rules and regulations…" class="max-h-[32rem] min-h-64 w-full overflow-y-auto" :ui="{ base: 'px-4 py-3' }">
-              <UEditorToolbar :editor="editor" :items="rulesToolbar" class="sticky top-0 z-10 border-b border-default bg-default px-2 py-1" />
+              <UEditorToolbar :editor="editor" :items="rulesToolbar" class="sticky top-0 z-10 flex-wrap border-b border-default bg-default px-2 py-1" />
             </UEditor>
           </div>
           <template #fallback><AppLoadingState :count="3" height="h-8" /></template>

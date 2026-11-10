@@ -144,10 +144,10 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
       <template #title>Rentable spaces</template>
       <template #description><p class="mt-2 max-w-xl text-muted">Browse registered campus stalls and other rentable spaces. Information shown depends on your account access.</p></template>
       <template #actions><div v-if="hasLoaded" class="flex gap-3">
-        <UCard class="min-w-28" :ui="{ body: 'p-3' }">
+        <UCard class="min-w-28 max-sm:flex-auto" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Total spaces</p><p class="text-xl font-semibold text-highlighted">{{ totalCount }}</p>
         </UCard>
-        <UCard class="min-w-28" :ui="{ body: 'p-3' }">
+        <UCard class="min-w-28 max-sm:flex-auto" :ui="{ body: 'p-3' }">
           <p class="text-xs text-muted">Vacant</p><p class="text-xl font-semibold text-secondary">{{ vacantCount }}</p>
         </UCard>
         <div class="flex items-center">
@@ -172,6 +172,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
       variant="pill"
       color="neutral"
       class="mb-5 w-full sm:w-fit"
+      :ui="{ leadingIcon: 'max-sm:hidden', trigger: 'max-sm:px-2' }"
       aria-label="Filter spaces by occupancy"
     />
     <UEmpty

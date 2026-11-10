@@ -59,7 +59,8 @@ const recentQuery = { sort: 'createdAt:desc', 'pagination[pageSize]': 3, 'popula
 
     <DashboardSection v-if="auth.isCurrentTenant.value" title="Billing overview" endpoint="/api/dashboard/billing-summary" resource="billing" to="/bills">
       <template #default="{ data }">
-        <dl class="grid grid-cols-3 gap-4">
+        <!-- items-end keeps the three figures on one line when a label wraps on a phone. -->
+        <dl class="grid grid-cols-3 items-end gap-4">
           <div class="col-span-3"><dt class="text-sm text-muted">Outstanding balance</dt><dd class="mt-1 text-3xl font-semibold tracking-tight text-highlighted tabular-nums sm:text-4xl">{{ money(data.outstanding) }}</dd></div>
           <div><dt class="text-sm text-muted">Overdue</dt><dd class="mt-1 text-lg font-semibold tabular-nums" :class="data.overdueBills ? 'text-error' : 'text-highlighted'">{{ data.overdueBills }}</dd></div>
           <div><dt class="text-sm text-muted">Being verified</dt><dd class="mt-1 text-lg font-semibold text-highlighted tabular-nums">{{ data.forVerification }}</dd></div>

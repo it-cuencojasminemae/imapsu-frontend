@@ -218,18 +218,21 @@ const formatDateTime = (value?: string | null) => value
 
     <div v-else class="space-y-4">
       <UCard v-for="item in announcements" :key="item.documentId ?? item.id" :ui="{ body: 'p-5' }">
-        <div class="flex items-start justify-between gap-3">
+        <!-- Phones stack the title over the badges and actions; from md up they sit side by side. -->
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div class="min-w-0">
             <h2 class="text-lg font-semibold text-highlighted">{{ item.title }}</h2>
             <p class="mt-1 text-xs text-muted">Published {{ formatDate(item.publishedAt ?? item.createdAt) }}</p>
             <p v-if="isScheduled(item)" class="mt-1 text-xs font-medium text-warning-500">Publishes {{ formatDateTime(item.publishAt) }}</p>
             <p v-if="item.expireAt" class="mt-1 text-xs text-muted">Expires {{ formatDateTime(item.expireAt) }}</p>
           </div>
-          <div class="flex shrink-0 items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 md:shrink-0 md:flex-nowrap">
             <UBadge v-if="isExpired(item)" color="error" variant="subtle" icon="i-lucide-circle-off">Expired</UBadge>
             <UBadge v-else-if="isScheduled(item)" color="warning" variant="subtle" icon="i-lucide-calendar-clock">Scheduled</UBadge>
             <UBadge v-if="item.pinned" color="primary" variant="subtle" icon="i-lucide-pin">Pinned</UBadge>
             <UBadge :color="audienceColor(item.audience)" variant="subtle">{{ item.audience }}</UBadge>
+            <!-- On phones the buttons start their own row under the badges. -->
+            <span class="basis-full md:hidden" aria-hidden="true" />
             <UButton :icon="item.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin'" :label="item.pinned ? 'Unpin' : 'Pin'" color="neutral" variant="ghost" size="sm" :loading="togglingPin === String(item.documentId ?? item.id)" @click="togglePin(item)" />
             <UButton label="Edit" icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit(item)" />
             <UButton label="Delete" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" :loading="deleting === (item.documentId ?? item.id)" :disabled="deleting !== null" @click="remove(item)" />
@@ -276,7 +279,7 @@ const formatDateTime = (value?: string | null) => value
           </UFormField>
 
           <UFormField label="Body" required>
-            <UTextarea required v-model="form.body" :rows="5" placeholder="Write the announcement\u2026" />
+            <UTextarea required v-model="form.body" :rows="5" placeholder="Write the announcement…" />
           </UFormField>
 
           <UFormField label="Audience" required>

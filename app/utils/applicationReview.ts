@@ -21,6 +21,7 @@ export type ApplicationItem = {
   birDocuments?: ReviewMedia[] | null
   businessPermits?: ReviewMedia[] | null
   productsServices?: string
+  businessName?: string
   appearanceDate?: string
   appearanceConfirmed?: boolean
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; monthlyRent?: number | string | null } | null

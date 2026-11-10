@@ -136,10 +136,10 @@ const recordColumns = [
               <div class="min-w-0">
                 <p class="font-medium text-highlighted">{{ propertyName(item) }}</p>
                 <p class="mt-1 text-xs text-muted">
-                  {{ reviewKindLabel(item) }} · {{ item.user?.username ?? '—' }} · {{ formatDate(item.createdAt) }}
+                  {{ reviewKindLabel(item) }} · {{ item.user?.username ?? '—' }} · <span class="whitespace-nowrap">{{ formatDate(item.createdAt) }}</span>
                 </p>
               </div>
-              <UBadge :color="statusBadgeColor(item)" variant="subtle">{{ statusLabel(item) }}</UBadge>
+              <UBadge :color="statusBadgeColor(item)" variant="subtle" class="shrink-0 whitespace-nowrap">{{ statusLabel(item) }}</UBadge>
             </div>
             <UButton :to="openTo(item)" v-bind="actionFor(item)" size="sm" block class="mt-3" />
           </UCard>

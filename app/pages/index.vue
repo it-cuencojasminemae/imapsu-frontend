@@ -35,6 +35,13 @@ const tenantTools = [
   'Report maintenance concerns and follow their progress',
   'Read announcements from the Office of Auxiliary Services'
 ]
+
+// Mirrors the real flow on the campus map: building, stall, then the "Rate this stall" button.
+const ratingSteps = [
+  { title: 'Open the campus map', text: 'It is open to everyone. You do not need an account.' },
+  { title: 'Choose the stall you visited', text: 'Select its building on the map, then pick the stall from the list.' },
+  { title: 'Send your rating', text: 'Press “Rate this stall”, give it 1 to 5 stars and add a comment if you like.' }
+]
 </script>
 
 <template>
@@ -149,6 +156,33 @@ const tenantTools = [
         </div>
       </section>
 
+      <!-- For students and visitors: how to rate a stall. Steps sit beside the copy on desktop, in a row on tablets and stacked on phones. -->
+      <section id="ratings" class="landing-section landing-section--flush" aria-labelledby="ratings-heading">
+        <div class="landing-wrap grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center lg:gap-16">
+          <div class="max-w-xl">
+            <p class="landing-tag">For students and visitors</p>
+            <h2 id="ratings-heading" class="landing-heading mt-5">Rate the stalls you visit</h2>
+            <p class="mt-4 text-base leading-relaxed text-toned">
+              Bought a meal, had something printed or used a service on campus? Tell the stall how it went. Your rating is anonymous and you do not need an account.
+            </p>
+            <p class="mt-4 leading-relaxed text-muted">
+              Each stall's average rating and latest comments appear on the campus map, and help tenants and the Office of Auxiliary Services improve campus services. You can rate a stall once while it has the same tenant.
+            </p>
+            <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <UButton to="/campus-map" label="Rate a stall on the map" icon="i-lucide-star" class="landing-btn-primary rounded-lg" />
+              <NuxtLink to="/community-guidelines" class="font-semibold text-maroon-800 underline underline-offset-4 dark:text-maroon-300">Read the community guidelines</NuxtLink>
+            </div>
+          </div>
+          <ol class="grid gap-x-8 gap-y-7 sm:grid-cols-3 lg:grid-cols-1" aria-label="How to rate a stall">
+            <li v-for="(step, index) in ratingSteps" :key="step.title" class="landing-step">
+              <span class="landing-step-number">{{ index + 1 }}</span>
+              <p class="mt-3 font-semibold text-highlighted">{{ step.title }}</p>
+              <p class="mt-1 leading-relaxed text-muted">{{ step.text }}</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
       <section class="landing-section" aria-labelledby="cta-heading">
         <div class="landing-wrap">
           <div class="landing-band">
@@ -165,11 +199,12 @@ const tenantTools = [
     <footer class="border-t border-default">
       <div class="landing-wrap flex flex-col gap-3 py-8 text-sm text-muted sm:flex-row sm:items-center">
         <p>© {{ new Date().getFullYear() }} iMapSU · Office of Auxiliary Services, Pampanga State University</p>
-        <nav class="flex gap-5 sm:ml-auto" aria-label="Footer">
-          <NuxtLink to="/campus-map" class="hover:text-highlighted">Campus map</NuxtLink>
-          <NuxtLink to="/community-guidelines" class="hover:text-highlighted">Community guidelines</NuxtLink>
-          <NuxtLink to="/privacy" class="hover:text-highlighted">Privacy</NuxtLink>
-          <NuxtLink to="/login" class="hover:text-highlighted">Sign in</NuxtLink>
+        <!-- Links wrap as whole labels on phones instead of breaking mid-label. -->
+        <nav class="flex flex-wrap gap-x-5 gap-y-2 sm:ml-auto" aria-label="Footer">
+          <NuxtLink to="/campus-map" class="whitespace-nowrap hover:text-highlighted">Campus map</NuxtLink>
+          <NuxtLink to="/community-guidelines" class="whitespace-nowrap hover:text-highlighted">Community guidelines</NuxtLink>
+          <NuxtLink to="/privacy" class="whitespace-nowrap hover:text-highlighted">Privacy</NuxtLink>
+          <NuxtLink to="/login" class="whitespace-nowrap hover:text-highlighted">Sign in</NuxtLink>
         </nav>
       </div>
     </footer>
@@ -181,7 +216,7 @@ const tenantTools = [
 .dark .landing { --landing-wash: #1c1514; }
 .landing-wrap { width: 100%; max-width: 76rem; margin-inline: auto; padding-inline: 1rem; }
 @media (min-width: 640px) { .landing-wrap { padding-inline: 1.5rem; } }
-#features, #tenants, #about { scroll-margin-top: 5rem; }
+#features, #tenants, #about, #ratings { scroll-margin-top: 5rem; }
 
 /* Top bar */
 .landing-bar { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--ui-bg) 92%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--ui-border); }
@@ -241,6 +276,8 @@ const tenantTools = [
 /* Sections */
 .landing-section { padding-block: 5.5rem; }
 .landing-section--muted { background: var(--landing-wash); border-block: 1px solid var(--ui-border); }
+/* The next section's own top padding is the only gap, so two plain sections don't leave a double space. */
+.landing-section--flush { padding-bottom: 0; }
 .landing-heading { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.12; font-weight: 800; letter-spacing: -0.025em; color: var(--ui-text-highlighted); text-wrap: balance; }
 .landing-step { padding-top: 1.25rem; border-top: 2px solid var(--ui-border); }
 .landing-step-number { font-size: 0.875rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-maroon-700); }

@@ -185,7 +185,7 @@ watch(open, (value) => {
     </template>
 
     <template #content>
-      <div class="w-80">
+      <div class="w-80 max-w-[calc(100vw-1.5rem)]">
         <div class="flex items-center justify-between gap-2 border-b border-default px-3 py-2.5">
           <p class="text-sm font-semibold text-highlighted">Notifications</p>
           <UButton v-if="unread > 0" size="xs" color="neutral" variant="ghost" icon="i-lucide-check-check" label="Mark all read" :disabled="loading" @click="markAllRead" />
