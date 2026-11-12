@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MapProperty } from '~/types/map'
+import { BUSINESS_TYPES, businessTypeItems } from '~/utils/businessTypes'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -7,7 +8,7 @@ definePageMeta({
 })
 
 type Tenancy = {
-  businessDetails?: { businessName?: string; productsServices?: string; operatingDetails?: string } | null
+  businessDetails?: { businessName?: string; businessType?: string | null; productsServices?: string; operatingDetails?: string } | null
   id: number | string
   documentId?: string
   startDate: string
@@ -16,7 +17,7 @@ type Tenancy = {
   monthlyRent?: number | string
   createdAt?: string
   user?: { id: number; username?: string; email?: string } | null
-  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; businessName?: string; productsServices?: string; operatingDetails?: string } | null
+  propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string; businessName?: string; businessType?: string | null; productsServices?: string; operatingDetails?: string } | null
 }
 
 type ListResponse<T> = { data: T[] }
@@ -101,6 +102,7 @@ const form = reactive({
   status: 'Active' as 'Active' | 'Ended' | 'Terminated',
   monthlyRent: '',
   businessName: '',
+  businessType: '',
   productsServices: '',
   operatingDetails: ''
 })
@@ -140,6 +142,7 @@ const openCreate = () => {
     status: 'Active',
     monthlyRent: '',
     businessName: '',
+    businessType: '',
     productsServices: '',
     operatingDetails: ''
   })
@@ -161,6 +164,7 @@ const openEdit = (tenancy: Tenancy) => {
     status: tenancy.status ?? 'Active',
     monthlyRent: tenancy.monthlyRent != null ? String(tenancy.monthlyRent) : '',
     businessName: (tenancy.status === 'Active' ? tenancy.propertySpace?.businessName : tenancy.businessDetails?.businessName) ?? '',
+    businessType: (() => { const type = (tenancy.status === 'Active' ? tenancy.propertySpace?.businessType : tenancy.businessDetails?.businessType) ?? ''; return BUSINESS_TYPES.includes(type) ? type : '' })(),
     productsServices: (tenancy.status === 'Active' ? tenancy.propertySpace?.productsServices : tenancy.businessDetails?.productsServices) ?? '',
     operatingDetails: (tenancy.status === 'Active' ? tenancy.propertySpace?.operatingDetails : tenancy.businessDetails?.operatingDetails) ?? ''
   })
@@ -231,6 +235,7 @@ const save = async () => {
         status: form.status,
         monthlyRent: form.monthlyRent === '' ? blank : Number(form.monthlyRent),
         businessName: form.businessName.trim() || blank,
+        businessType: form.businessType || blank,
         productsServices: form.productsServices.trim() || blank,
         operatingDetails: form.operatingDetails.trim() || blank
       }
@@ -424,6 +429,9 @@ const filteredTenancies = computed(() => {
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="Business name" description="The tenant business occupying the space (e.g. Brew & Bloom).">
               <UInput v-model="form.businessName" placeholder="e.g. Brew & Bloom" />
+            </UFormField>
+            <UFormField label="Type of business" description="Applicants cannot apply for a type a stall already runs.">
+              <USelect v-model="form.businessType" :items="businessTypeItems()" placeholder="Choose the type of business" class="w-full" />
             </UFormField>
           </div>
 

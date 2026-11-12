@@ -63,7 +63,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
   query: computed(() => ({
     'populate[tenancy][populate][propertySpace]': true,
     'populate[receipt]': true,
-    sort: 'period:desc', ...recordsPage.query.value }))
+    sort: 'period:desc,createdAt:desc', ...recordsPage.query.value }))
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
@@ -350,7 +350,7 @@ const baseRent = (bill: Bill) => num(bill.amount) - num(bill.electricCharge) - n
         </div>
 
         <div v-else-if="canSubmitPayment(bill)" class="mt-5 border-t border-default pt-4">
-          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit payment receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>
+          <h2 class="mb-2 text-base font-semibold text-highlighted">Submit payment receipt</h2><p class="mb-4 text-sm text-muted">A clear picture (JPG, PNG or WebP, up to 5 MB) of the official receipt issued by the University Cashier is required for payment recording and verification.</p>
 
           <UAlert v-if="bill.status === 'Rejected'" color="error" icon="i-lucide-x-circle" title="Receipt rejected" :description="bill.verificationNote || 'Your submitted receipt was not accepted. Please review it and try again.'" class="mb-4" />
           <UAlert v-else-if="bill.status === 'Overdue'" color="warning" icon="i-lucide-alarm-clock" title="Overdue" description="This bill is past its due date. Please settle it as soon as possible." class="mb-4" />

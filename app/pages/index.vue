@@ -13,6 +13,20 @@ useHead({ title: 'iMapSU | Campus Stall Management for Pampanga State University
 
 const applyLink = '/register?role=aspiring-tenant'
 
+// The latest public announcements ("Everyone" audience) for visitors without an account.
+type PublicAnnouncement = { id: number | string; documentId?: string; title: string; body: string; pinned?: boolean; publishedAt?: string; createdAt?: string }
+const { baseURL } = useStrapi()
+const { data: announcementData } = await useFetch<{ data: PublicAnnouncement[] }>('/api/announcements', {
+  lazy: true,
+  baseURL,
+  query: { sort: 'pinned:desc,publishedAt:desc', 'pagination[pageSize]': 3 }
+})
+const latestAnnouncements = computed(() => announcementData.value?.data ?? [])
+const announcementDate = (item: PublicAnnouncement) => {
+  const value = item.publishedAt ?? item.createdAt
+  return value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+}
+
 const colorMode = useColorMode()
 const toggleColorMode = () => { colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark' }
 
@@ -63,6 +77,7 @@ const ratingSteps = [
             <UIcon name="i-lucide-moon" class="imapsu-theme-light size-4" />
             <UIcon name="i-lucide-sun" class="imapsu-theme-dark size-4" />
           </UButton>
+          <NuxtLink to="/announcements" class="landing-signin max-md:hidden">Announcements</NuxtLink>
           <NuxtLink to="/login" class="landing-signin">Sign In</NuxtLink>
           <UButton :to="applyLink" label="Apply Now" trailing-icon="i-lucide-arrow-right" class="landing-btn-primary landing-btn-raised rounded-xl px-4" :ui="{ trailingIcon: 'max-[400px]:hidden' }" />
         </div>
@@ -107,6 +122,28 @@ const ratingSteps = [
               <span class="landing-feature-bar" aria-hidden="true" />
               <h2 class="mt-4 text-xl font-bold tracking-tight text-highlighted">{{ feature.title }}</h2>
               <p class="mt-1.5 leading-relaxed text-muted">{{ feature.text }}</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="latestAnnouncements.length" id="announcements" class="landing-section landing-section--flush" aria-labelledby="announcements-heading">
+        <div class="landing-wrap">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="landing-tag">From the Office of Auxiliary Services</p>
+              <h2 id="announcements-heading" class="landing-heading mt-5">Latest announcements</h2>
+            </div>
+            <NuxtLink to="/announcements" class="font-semibold text-maroon-800 underline underline-offset-4 dark:text-maroon-300">View all announcements</NuxtLink>
+          </div>
+          <ul class="mt-10 grid gap-5 md:grid-cols-3">
+            <li v-for="item in latestAnnouncements" :key="item.documentId ?? item.id" class="landing-notice">
+              <div class="flex items-center gap-2 text-xs text-muted">
+                <span>{{ announcementDate(item) }}</span>
+                <UBadge v-if="item.pinned" color="primary" variant="subtle" size="sm" icon="i-lucide-pin">Pinned</UBadge>
+              </div>
+              <h3 class="mt-3 font-semibold text-highlighted">{{ item.title }}</h3>
+              <p class="landing-notice-body mt-2 whitespace-pre-line leading-relaxed text-toned">{{ item.body }}</p>
             </li>
           </ul>
         </div>
@@ -202,6 +239,7 @@ const ratingSteps = [
         <!-- Links wrap as whole labels on phones instead of breaking mid-label. -->
         <nav class="flex flex-wrap gap-x-5 gap-y-2 sm:ml-auto" aria-label="Footer">
           <NuxtLink to="/campus-map" class="whitespace-nowrap hover:text-highlighted">Campus map</NuxtLink>
+          <NuxtLink to="/announcements" class="whitespace-nowrap hover:text-highlighted">Announcements</NuxtLink>
           <NuxtLink to="/community-guidelines" class="whitespace-nowrap hover:text-highlighted">Community guidelines</NuxtLink>
           <NuxtLink to="/privacy" class="whitespace-nowrap hover:text-highlighted">Privacy</NuxtLink>
           <NuxtLink to="/login" class="whitespace-nowrap hover:text-highlighted">Sign in</NuxtLink>
@@ -216,7 +254,7 @@ const ratingSteps = [
 .dark .landing { --landing-wash: #1c1514; }
 .landing-wrap { width: 100%; max-width: 76rem; margin-inline: auto; padding-inline: 1rem; }
 @media (min-width: 640px) { .landing-wrap { padding-inline: 1.5rem; } }
-#features, #tenants, #about, #ratings { scroll-margin-top: 5rem; }
+#features, #announcements, #tenants, #about, #ratings { scroll-margin-top: 5rem; }
 
 /* Top bar */
 .landing-bar { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--ui-bg) 92%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--ui-border); }
@@ -282,6 +320,8 @@ const ratingSteps = [
 .landing-step { padding-top: 1.25rem; border-top: 2px solid var(--ui-border); }
 .landing-step-number { font-size: 0.875rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-maroon-700); }
 .dark .landing-step-number { color: var(--color-maroon-300); }
+.landing-notice { padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--ui-border); background: var(--ui-bg); border-top: 4px solid var(--color-maroon-700); }
+.landing-notice-body { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .landing-panel { align-self: start; padding: 1.75rem; border-radius: 1rem; border: 1px solid var(--ui-border); background: var(--landing-wash); }
 
 .landing-band { display: flex; flex-direction: column; gap: 1.5rem; padding: 2.5rem; border-radius: 1rem; background: var(--color-maroon-900); }

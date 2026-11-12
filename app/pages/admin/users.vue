@@ -41,7 +41,7 @@ const headers = {}
 
 const recordSearch = ref('')
 const recordsPage = useRecordPage([], {  }, recordSearch)
-const directoryQuery = computed(() => ({ ...recordsPage.query.value, ...(recordSearch.value.trim() ? { term: recordSearch.value.trim() } : {}) }))
+const directoryQuery = computed(() => ({ sort: 'createdAt:desc', ...recordsPage.query.value, ...(recordSearch.value.trim() ? { term: recordSearch.value.trim() } : {}) }))
 const { data: responseData, status, error, refresh } = await useFetch<{ data: DirectoryUser[]; meta: any }>('/api/user-directory', { lazy: true,
   baseURL,
   headers,

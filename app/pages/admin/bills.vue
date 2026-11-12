@@ -94,7 +94,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
     'populate[correction][fields][0]': 'period',
     'populate[correction][fields][1]': 'status',
     'populate[correction][fields][2]': 'amount',
-    sort: 'period:desc', ...recordsPage.query.value }))
+    sort: 'period:desc,createdAt:desc', ...recordsPage.query.value }))
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 

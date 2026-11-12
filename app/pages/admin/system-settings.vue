@@ -100,7 +100,7 @@ const form = reactive<SystemSettings>({
   accountLockoutThreshold: 5,
   accountLockoutWindowMinutes: 10,
   accountLockoutDurationMinutes: 30,
-  uploadMaxFileMb: 10,
+  uploadMaxFileMb: 5,
   notificationEmailEnabled: true,
   notifyOnApplication: true,
   notifyOnTicket: true,
@@ -127,7 +127,7 @@ watch(
       accountLockoutThreshold: settings.accountLockoutThreshold ?? 5,
       accountLockoutWindowMinutes: settings.accountLockoutWindowMinutes ?? 10,
       accountLockoutDurationMinutes: settings.accountLockoutDurationMinutes ?? 30,
-      uploadMaxFileMb: settings.uploadMaxFileMb ?? 10,
+      uploadMaxFileMb: Math.min(settings.uploadMaxFileMb ?? 5, 5),
       notificationEmailEnabled: settings.notificationEmailEnabled ?? true,
       notifyOnApplication: settings.notifyOnApplication ?? true,
       notifyOnTicket: settings.notifyOnTicket ?? true,
@@ -310,8 +310,8 @@ const statusOptions = [
           <p class="text-sm text-muted">Restrictions applied to uploaded documents and images.</p>
         </template>
         <div class="grid gap-6 sm:grid-cols-2">
-          <UFormField label="Maximum upload size (MB)">
-            <UInputNumber v-model="form.uploadMaxFileMb" :min="1" :max="100" />
+          <UFormField label="Maximum upload size (MB)" description="Up to 5 MB per file.">
+            <UInputNumber v-model="form.uploadMaxFileMb" :min="1" :max="5" />
           </UFormField>
         </div>
       </UCard>

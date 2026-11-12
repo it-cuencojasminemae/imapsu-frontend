@@ -13,7 +13,7 @@ const sections = [
   {
     title: 'Be respectful',
     points: [
-      'No profanity, insults or slurs, in English, Filipino, Kapampangan or any other language. Disguised spellings count too.',
+      'No profanity, insults or slurs, in English, Filipino, Kapampangan or any other language. This includes mild swearing such as "damn" or "hell", and disguised or shortened spellings count too.',
       'Criticize the service, not the person. No name-calling of tenants, staff or other visitors.',
       'No threats, harassment, or content about anyone\'s private life.'
     ]

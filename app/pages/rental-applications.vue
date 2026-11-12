@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { uploadInBatches } from '~/utils/uploadFile'
+import { MAX_FILE_BYTES, MAX_FILE_MB, uploadInBatches } from '~/utils/uploadFile'
+import { businessTypeItems } from '~/utils/businessTypes'
 
 definePageMeta({
   middleware: ['auth', 'role'],
@@ -21,6 +22,7 @@ type RentalApplication = {
   businessPermits?: MediaDoc[] | null
   productsServices?: string
   businessName?: string
+  businessType?: string
   appearanceDate?: string
   appearanceConfirmed?: boolean
   propertySpace?: { documentId?: string; name?: string; propertyCode?: string; building?: string } | null
@@ -68,6 +70,21 @@ const { data: propertyData, status: propertyStatus } = await useCompleteFetch<Li
   }
 })
 
+// Types of business occupied stalls already run. The OAS allows one stall per
+// type on campus, so an aspiring tenant cannot pick these. A current tenant may
+// be moving their own business, so the server decides for them.
+const { data: occupiedData } = await useCompleteFetch<ListResponse<{ businessType?: string | null }>>('/api/properties', { lazy: true,
+  baseURL,
+  headers,
+  query: {
+    'fields[0]': 'businessType',
+    'filters[space_status][$eq]': 'Occupied',
+    'pagination[pageSize]': 100
+  }
+})
+const takenBusinessTypes = computed(() => (occupiedData.value?.data ?? []).map(stall => stall.businessType).filter((type): type is string => !!type))
+const businessTypeOptions = computed(() => businessTypeItems(takenBusinessTypes.value, auth.isCurrentTenant.value))
+
 // Stalls the applicant already has an open application for. Only one open
 // application per stall is allowed, so the lookup greys these out.
 const OPEN_STATUSES = ['Pending', 'For Review', 'For Recommendation', 'Approved']
@@ -100,8 +117,14 @@ const ALLOWED_EXTENSIONS = /\.(pdf|docx?|jpe?g|png)$/i
 const FILE_ACCEPT = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
 const allowedFiles = (files: File[]) => {
   const rejected = files.filter(file => !ALLOWED_EXTENSIONS.test(file.name))
-  if (rejected.length === 0) return true
+  if (rejected.length === 0) return withinSizeLimit(files)
   notify.error('Unsupported file type', { description: `${rejected.map(file => file.name).join(', ')} cannot be attached. Upload PDF, Word (.doc, .docx), JPG or PNG files only.` })
+  return false
+}
+const withinSizeLimit = (files: File[]) => {
+  const tooLarge = files.filter(file => file.size > MAX_FILE_BYTES)
+  if (tooLarge.length === 0) return true
+  notify.error('File is too large', { description: `${tooLarge.map(file => file.name).join(', ')} cannot be attached. Each file must be ${MAX_FILE_MB} MB or smaller.` })
   return false
 }
 
@@ -160,6 +183,7 @@ const stallLocked = ref(false)
 const message = ref('')
 const productsServices = ref('')
 const businessName = ref('')
+const businessType = ref<string>()
 const letterFile = ref<File>()
 const letterFormKey = ref(0)
 const submitting = ref(false)
@@ -202,6 +226,7 @@ const resetForm = () => {
   message.value = ''
   productsServices.value = ''
   businessName.value = ''
+  businessType.value = undefined
   letterFile.value = undefined
   letterFormKey.value++
   staged.dtiDocuments = []
@@ -239,6 +264,7 @@ const openEdit = (item: RentalApplication) => {
   message.value = item.message ?? ''
   productsServices.value = item.productsServices ?? ''
   businessName.value = item.businessName ?? ''
+  businessType.value = item.businessType || undefined
   docSections.forEach(section => { kept[section.key] = [...docsOf(item, section.key)] })
   formOpen.value = true
 }
@@ -335,6 +361,10 @@ const submit = async () => {
     step.value = 'documents'
     return
   }
+  if (!businessType.value) {
+    errorMessage.value = 'Please choose the type of business.'
+    return
+  }
   if (!productsServices.value.trim()) {
     errorMessage.value = 'Please describe the products or services you plan to offer.'
     return
@@ -374,6 +404,7 @@ const submit = async () => {
       dtiDocuments: withKept('dtiDocuments', dtiUploaded),
       birDocuments: withKept('birDocuments', birUploaded),
       businessPermits: withKept('businessPermits', permitUploaded),
+      businessType: businessType.value,
       productsServices: productsServices.value.trim(),
       businessName: businessName.value.trim()
     }
@@ -560,6 +591,10 @@ const appearanceDayPassed = (value?: string) => {
                 <p class="mb-1 text-xs font-medium text-muted">Business name</p>
                 <p class="text-sm font-medium text-highlighted">{{ item.businessName }}</p>
               </div>
+              <div v-if="item.businessType" class="mt-4">
+                <p class="mb-1 text-xs font-medium text-muted">Type of business</p>
+                <p class="text-sm font-medium text-highlighted">{{ item.businessType }}</p>
+              </div>
               <div v-if="item.productsServices" class="mt-4">
                 <p class="mb-1 text-xs font-medium text-muted">Products / services offered</p>
                 <p class="text-sm leading-relaxed text-toned">{{ item.productsServices }}</p>
@@ -627,7 +662,7 @@ const appearanceDayPassed = (value?: string) => {
           <section v-show="step === 'documents'" class="space-y-4 border-t border-default pt-7">
             <div>
               <h3 class="text-sm font-semibold text-highlighted">Required documents</h3>
-              <p class="mt-1 text-sm text-muted">All four are required. Accepted files: PDF, Word (.doc, .docx), JPG and PNG.</p>
+              <p class="mt-1 text-sm text-muted">All four are required. Accepted files: PDF, Word (.doc, .docx), JPG and PNG, up to 5 MB each.</p>
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
               <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-default p-4">
@@ -678,6 +713,9 @@ const appearanceDayPassed = (value?: string) => {
 
           <section v-if="step === 'business'" class="space-y-5">
             <h3 class="text-sm font-semibold text-highlighted">Your business</h3>
+            <UFormField label="Type of business" name="businessType" required description="The OAS allows only one stall of each type on campus, so types that already have a stall cannot be chosen." :ui="{ description: 'mb-2' }">
+              <USelect v-model="businessType" :items="businessTypeOptions" placeholder="Choose the type of business" class="w-full" :disabled="submitting" />
+            </UFormField>
             <UFormField label="Products / services" name="productsServices" required description="Describe what your business will offer from this space." :ui="{ description: 'mb-2' }">
               <UTextarea v-model="productsServices" required class="w-full" :rows="4" autoresize placeholder="e.g. A coffee shop and bakery offering specialty drinks, pastries, and light meals." :disabled="submitting" />
             </UFormField>

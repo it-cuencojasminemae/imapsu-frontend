@@ -1,5 +1,11 @@
-// Vercel functions reject request bodies over 4.5 MB, so uploads stay under 4 MB including multipart overhead.
+// Files may be up to 5 MB (MAX_FILE_BYTES), checked on the file the user picks.
+// Vercel functions reject request bodies over 4.5 MB, so each request stays
+// under 4 MB (UPLOAD_LIMIT_BYTES); a file still over that after any image
+// compression is sent in 2 MB pieces first (see stageLargeUploads).
+export const MAX_FILE_MB = 5
+export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 export const UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
+export const CHUNK_BYTES = 2 * 1024 * 1024
 export const RESIZE_THRESHOLD_BYTES = 3.5 * 1024 * 1024
 export const MAX_IMAGE_EDGE = 2560
 export const JPEG_QUALITY = 0.85
@@ -40,8 +46,8 @@ export const renamedForType = (name: string, type: string) => {
 }
 
 export function assertUploadSize(file: FileLike) {
-  if (file.size <= UPLOAD_LIMIT_BYTES) return
-  throw new UploadTooLargeError(`"${file.name}" is ${formatMegabytes(file.size)}. Files must be under 4 MB. Compress it or upload a smaller version.`)
+  if (file.size <= MAX_FILE_BYTES) return
+  throw new UploadTooLargeError(`"${file.name}" is ${formatMegabytes(file.size)}. Files must be ${MAX_FILE_MB} MB or smaller. Compress it or upload a smaller version.`)
 }
 
 // Groups files in order so each request body stays under the upload limit and the backend's per-request file cap.
@@ -88,6 +94,8 @@ async function downscaleImage(file: File): Promise<File> {
 }
 
 export async function prepareUpload(file: File): Promise<File> {
+  // The limit applies to the file as chosen, so a 12 MB photo is refused rather than shrunk.
+  assertUploadSize(file)
   let prepared = file
   if (shouldResize(file)) {
     try { prepared = await downscaleImage(file) } catch { /* An undecodable image falls through to the size check. */ }
@@ -103,4 +111,37 @@ export async function uploadInBatches<T>(files: File[], send: (batch: File[]) =>
   const results: T[] = []
   for (const batch of uploadBatches(prepared)) results.push(...((await send(batch)) ?? []))
   return results
+}
+
+const randomUploadId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
+
+// An /api/upload form whose files each fit in one request is sent as is.
+// Larger files (4 to 5 MB) are sent piece by piece with `sendPiece` and named
+// in the form's `chunkedFiles` field instead; the server puts them back
+// together and checks them like any other upload.
+export async function stageLargeUploads(form: FormData, sendPiece: (piece: FormData) => Promise<unknown>, limit = UPLOAD_LIMIT_BYTES, chunkSize = CHUNK_BYTES): Promise<FormData> {
+  const large = form.getAll('files').filter((entry): entry is File => typeof entry !== 'string' && entry.size > limit)
+  if (!large.length) return form
+  const staged = new FormData()
+  const chunked: { uploadId: string, name: string, type: string }[] = []
+  for (const [key, value] of form.entries()) {
+    if (key === 'files' && typeof value !== 'string' && large.includes(value as File)) continue
+    staged.append(key, value)
+  }
+  for (const file of large) {
+    assertUploadSize(file)
+    const uploadId = randomUploadId()
+    const total = Math.ceil(file.size / chunkSize)
+    for (let index = 0; index < total; index++) {
+      const piece = new FormData()
+      piece.append('uploadId', uploadId)
+      piece.append('index', String(index))
+      piece.append('total', String(total))
+      piece.append('chunk', file.slice(index * chunkSize, (index + 1) * chunkSize), 'chunk')
+      await sendPiece(piece)
+    }
+    chunked.push({ uploadId, name: file.name, type: file.type })
+  }
+  staged.append('chunkedFiles', JSON.stringify(chunked))
+  return staged
 }

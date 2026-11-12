@@ -283,7 +283,7 @@ const formatDateTime = (value?: string | null) => value
           </UFormField>
 
           <UFormField label="Audience" required>
-            <USelect v-model="form.audience" :items="[{ label: 'Everyone', value: 'Everyone' }, { label: 'Tenants', value: 'Tenants' }]" />
+            <USelect v-model="form.audience" :items="[{ label: 'Everyone, including the public', value: 'Everyone' }, { label: 'Tenants and applicants only', value: 'Tenants' }]" />
           </UFormField>
 
           <div class="flex items-center justify-between gap-3 rounded-lg border border-default px-3 py-2.5">

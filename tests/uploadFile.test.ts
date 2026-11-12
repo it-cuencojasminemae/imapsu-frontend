@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { assertUploadSize, encodingCandidates, renamedForType, shouldResize, targetDimensions, uploadBatches, uploadInBatches, UploadTooLargeError, RESIZE_THRESHOLD_BYTES, UPLOAD_LIMIT_BYTES } from '../app/utils/uploadFile.ts'
+import { assertUploadSize, encodingCandidates, prepareUpload, renamedForType, shouldResize, stageLargeUploads, targetDimensions, uploadBatches, uploadInBatches, UploadTooLargeError, MAX_FILE_BYTES, RESIZE_THRESHOLD_BYTES, UPLOAD_LIMIT_BYTES } from '../app/utils/uploadFile.ts'
 
 const MB = 1024 * 1024
 
@@ -30,10 +30,37 @@ test('transparent formats never become JPEG and names follow the output type', (
   assert.equal(renamedForType('.png', 'image/png'), 'image.png')
 })
 
-test('files over 4 MB are rejected with a readable message', () => {
-  assert.doesNotThrow(() => assertUploadSize({ name: 'ok.pdf', type: 'application/pdf', size: UPLOAD_LIMIT_BYTES }))
+test('files over 5 MB are rejected with a readable message', () => {
+  assert.doesNotThrow(() => assertUploadSize({ name: 'ok.pdf', type: 'application/pdf', size: MAX_FILE_BYTES }))
+  assert.doesNotThrow(() => assertUploadSize({ name: 'ok.pdf', type: 'application/pdf', size: 4.6 * MB }))
   assert.throws(() => assertUploadSize({ name: 'scan.pdf', type: 'application/pdf', size: 6.2 * MB }), (error: unknown) =>
-    error instanceof UploadTooLargeError && error.message.includes('"scan.pdf" is 6.2 MB') && error.message.includes('under 4 MB'))
+    error instanceof UploadTooLargeError && error.message.includes('"scan.pdf" is 6.2 MB') && error.message.includes('5 MB or smaller'))
+})
+
+test('a photo over 5 MB is refused before it would be shrunk', async () => {
+  const photo = new File([new Uint8Array(MAX_FILE_BYTES + 1)], 'phone.jpg', { type: 'image/jpeg' })
+  await assert.rejects(prepareUpload(photo), UploadTooLargeError)
+})
+
+test('files over the request limit are sent in pieces and named in the form', async () => {
+  const form = new FormData()
+  form.append('purpose', 'application')
+  form.append('files', new File([new Uint8Array(1000)], 'small.pdf', { type: 'application/pdf' }))
+  form.append('files', new File([new Uint8Array(4.5 * MB)], 'permit.pdf', { type: 'application/pdf' }))
+  const pieces: { index: string, total: string, size: number }[] = []
+  const staged = await stageLargeUploads(form, async piece => { pieces.push({ index: String(piece.get('index')), total: String(piece.get('total')), size: (piece.get('chunk') as Blob).size }) })
+  assert.deepEqual(pieces.map(piece => [piece.index, piece.total]), [['0', '3'], ['1', '3'], ['2', '3']])
+  assert.equal(pieces.reduce((sum, piece) => sum + piece.size, 0), 4.5 * MB)
+  assert.ok(pieces.every(piece => piece.size <= 2 * MB))
+  assert.equal(staged.get('purpose'), 'application')
+  assert.deepEqual(staged.getAll('files').map(file => (file as File).name), ['small.pdf'])
+  const chunked = JSON.parse(String(staged.get('chunkedFiles')))
+  assert.equal(chunked.length, 1)
+  assert.equal(chunked[0].name, 'permit.pdf')
+  assert.match(chunked[0].uploadId, /^[a-f0-9]{32}$/)
+  const untouched = new FormData()
+  untouched.append('files', new File([new Uint8Array(UPLOAD_LIMIT_BYTES)], 'fits.pdf'))
+  assert.equal(await stageLargeUploads(untouched, async () => { throw new Error('should not send') }), untouched)
 })
 
 test('batches keep each request under the size limit and file cap', () => {
@@ -52,5 +79,5 @@ test('uploadInBatches sends each batch and joins the results in order', async ()
   })
   assert.deepEqual(sent, [['a.pdf'], ['b.pdf', 'c.pdf']])
   assert.deepEqual(results.map(entry => entry.id), ['a.pdf', 'b.pdf', 'c.pdf'])
-  await assert.rejects(uploadInBatches([file('big.pdf', 5 * MB)], async () => { throw new Error('should not send') }), UploadTooLargeError)
+  await assert.rejects(uploadInBatches([file('big.pdf', 5.5 * MB)], async () => { throw new Error('should not send') }), UploadTooLargeError)
 })

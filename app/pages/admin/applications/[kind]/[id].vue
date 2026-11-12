@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BUSINESS_TYPES, OTHER_BUSINESS_TYPE, businessTypeItems } from '~/utils/businessTypes'
 import {
   formatReviewDate as formatDate,
   isLeaseActive as leaseActive,
@@ -36,6 +37,21 @@ const { data: responseData, status, error, refresh } = await useFetch<{ data: It
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 const item = computed(() => data.value?.data ?? null)
 const application = computed(() => item.value?.kind === 'application' ? item.value : null)
+
+// An occupied stall that already runs this application's type of business.
+// The server refuses to approve or finalize such an application, so the OAS
+// is told up front. Settled and closed applications need no warning.
+type OccupiedStall = { documentId?: string; name?: string; businessName?: string; building?: string; businessType?: string | null }
+const { data: occupiedData } = await useFetch<{ data: OccupiedStall[] }>('/api/property-spaces', { lazy: true,
+  baseURL,
+  query: { 'fields[0]': 'name', 'fields[1]': 'businessName', 'fields[2]': 'building', 'fields[3]': 'businessType', 'filters[space_status][$eq]': 'Occupied', 'pagination[pageSize]': 100 }
+})
+const sameTypeStall = computed(() => {
+  const value = application.value
+  if (!value?.businessType || value.businessType === OTHER_BUSINESS_TYPE || value.tenancy || ['Declined', 'Cancelled'].includes(value.status)) return ''
+  const stall = (occupiedData.value?.data ?? []).find(entry => entry.businessType === value.businessType && entry.documentId !== value.propertySpace?.documentId)
+  return stall ? [stall.businessName || stall.name, stall.building].filter(Boolean).join(', ') : ''
+})
 const notFound = computed(() => (error.value as { statusCode?: number } | null)?.statusCode === 404)
 
 useHead({ title: computed(() => `${item.value ? propertyName(item.value) : 'Review'} | iMapSU`) })
@@ -220,6 +236,7 @@ const finalizeSaving = ref(false)
 const finalizeError = ref('')
 const finalizeForm = reactive({
   businessName: '',
+  businessType: undefined as string | undefined,
   productsServices: '',
   opensAt: undefined as string | undefined,
   closesAt: undefined as string | undefined,
@@ -282,6 +299,7 @@ const resetFinalizeForm = () => {
   const value = application.value
   if (!value) return
   finalizeForm.businessName = value.businessName ?? ''
+  finalizeForm.businessType = value.businessType && BUSINESS_TYPES.includes(value.businessType) ? value.businessType : undefined
   finalizeForm.productsServices = value.productsServices ?? ''
   finalizeForm.opensAt = undefined
   finalizeForm.closesAt = undefined
@@ -308,6 +326,7 @@ const saveFinalize = async () => {
       body: {
         data: {
           businessName: finalizeForm.businessName.trim(),
+          businessType: finalizeForm.businessType,
           productsServices: finalizeForm.productsServices.trim(),
           operatingDetails: operatingHours(),
           monthlyRent: Number(finalizeForm.monthlyRent),
@@ -385,6 +404,12 @@ watch(tab, value => { if (value === 'history') history.load() })
                 <dd class="mt-1 text-toned">{{ formatDate(item.createdAt) }}</dd>
               </div>
             </dl>
+
+            <section v-if="item.kind === 'application'">
+              <h3 class="text-sm font-semibold text-highlighted">Type of business</h3>
+              <p class="mt-1 leading-relaxed text-toned">{{ item.businessType || 'Not provided' }}</p>
+              <UAlert v-if="sameTypeStall" class="mt-3" color="warning" variant="subtle" icon="i-lucide-copy-x" title="This type of business is already on campus" :description="`${sameTypeStall} already runs this type of business. The OAS allows one stall per type of business, so this application cannot be approved unless that stall is the applicant's own.`" />
+            </section>
 
             <section v-if="item.kind === 'application'">
               <h3 class="text-sm font-semibold text-highlighted">Business name</h3>
@@ -511,6 +536,9 @@ watch(tab, value => { if (value === 'history') history.load() })
               </div>
               <UFormField label="Business name" description="From the application. Shown on the campus map." required>
                 <UInput v-model="finalizeForm.businessName" required placeholder="e.g. Campus Bites" :ui="{ root: 'w-full' }" />
+              </UFormField>
+              <UFormField label="Type of business" description="From the application. Only one stall of each type is allowed on campus." required>
+                <USelect v-model="finalizeForm.businessType" :items="businessTypeItems()" placeholder="Choose the type of business" class="w-full" />
               </UFormField>
               <UFormField label="Products / services" description="From the application. Shown on the campus map.">
                 <UTextarea v-model="finalizeForm.productsServices" :rows="3" :ui="{ root: 'w-full' }" />

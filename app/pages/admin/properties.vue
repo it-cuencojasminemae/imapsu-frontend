@@ -25,6 +25,7 @@ type PropertySpace = {
   businessName?: string
   photos?: UploadedFile[] | null
   productsServices?: string
+  businessType?: string | null
   operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
   inReview?: boolean
@@ -52,7 +53,7 @@ const { data: responseData, status, error, refresh } = await useFetch<ListRespon
   baseURL,
   headers,
   query: computed(() => ({
-    sort: 'building:asc',
+    sort: 'createdAt:desc',
 
     'populate[photos]': true,
     'populate[tenancies][filters][status][$eq]': 'Active',
@@ -385,7 +386,7 @@ const remove = async (property: PropertySpace) => {
             </dl>
 
             <p v-if="property.productsServices" class="mt-4 rounded-lg bg-primary/5 px-3 py-2 text-xs leading-relaxed text-toned">
-              <span class="font-semibold text-highlighted">Products / services: </span>{{ property.productsServices }}
+              <span v-if="property.businessType" class="font-semibold text-highlighted">{{ property.businessType }} · </span><span class="font-semibold text-highlighted">Products / services: </span>{{ property.productsServices }}
             </p>
 
             <div class="mt-4 flex gap-2 border-t border-default pt-4">

@@ -669,6 +669,7 @@ onBeforeUnmount(() => {
             <UBadge variant="subtle" :color="propertyBadgeColor(selectedStall)">{{ stallStatus(selectedStall) ?? 'Status unavailable' }}</UBadge>
           </div>
           <template v-if="selectedStall.space_status === 'Occupied'">
+            <div v-if="selectedStall.space_status === 'Occupied' && selectedStall.businessType"><h4 class="text-sm font-semibold">Type of business</h4><p class="mt-1 text-sm text-toned">{{ selectedStall.businessType }}</p></div>
             <div v-if="selectedStall.productsServices"><h4 class="text-sm font-semibold">Products / services</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.productsServices }}</p></div>
             <div v-if="selectedStall.operatingDetails"><h4 class="text-sm font-semibold">Operating details</h4><p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-toned">{{ selectedStall.operatingDetails }}</p></div>
             <StallRatingSummary v-if="selectedStall.documentId" :document-id="selectedStall.documentId" :refresh-key="ratingsVersion" />

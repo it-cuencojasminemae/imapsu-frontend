@@ -33,6 +33,7 @@ export type MapProperty = {
   // Set by the server while an application for this stall is being reviewed.
   inReview?: boolean
   businessName?: string
+  businessType?: string | null
   productsServices?: string
   operatingDetails?: string
   monthlyRent?: number | string

@@ -1,3 +1,5 @@
+import { stageLargeUploads } from '~/utils/uploadFile'
+
 export const useSecureApi = () => {
   const requestFetch = useRequestFetch()
   const csrf = useState<string | null>('csrf-token', () => null)
@@ -11,6 +13,10 @@ export const useSecureApi = () => {
       const result = await requestFetch<{ token: string }>('/api/auth/csrf')
       csrf.value = result.token
       headers['X-CSRF-Token'] = result.token
+    }
+    // Files too large for one request reach the server in pieces first (see stageLargeUploads).
+    if (import.meta.client && method === 'POST' && path === '/api/upload' && options.body instanceof FormData) {
+      options = { ...options, body: await stageLargeUploads(options.body, piece => requestFetch('/api/media/chunks', { method: 'POST', body: piece, baseURL: '', headers: { 'X-CSRF-Token': headers['X-CSRF-Token'] } })) }
     }
     try { return await requestFetch<T>(path, { ...options, baseURL: '', headers }) as T }
     catch(error: any) {

@@ -17,6 +17,7 @@ type PropertySpace = {
   area?: number | string
   rentalClassification?: string
   productsServices?: string
+  businessType?: string | null
   operatingDetails?: string
   space_status: 'Vacant' | 'Occupied'
   inReview?: boolean
@@ -39,7 +40,7 @@ const { data: responseData, status, error, refresh } = await useFetch<PropertyRe
   query: computed(() => ({
     'populate[photos]': true,
     'populate[tenantPhotos]': true,
-    sort: 'propertyCode:asc', ...recordsPage.query.value }))
+    sort: 'createdAt:desc', ...recordsPage.query.value }))
 })
 const { data, hasLoaded, isInitialLoading, isRefreshing, isInitialError } = useRequestPresentation(responseData, status)
 
@@ -296,6 +297,7 @@ const formatArea = (area?: number | string) => area == null || area === '' ? 'No
             <div v-if="detailsCard.rentalClassification"><dt class="mb-1 text-xs text-muted">Classification</dt><dd class="font-medium text-highlighted">{{ detailsCard.rentalClassification }}</dd></div>
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.businessName"><dt class="mb-1 text-xs text-muted">Business</dt><dd class="font-medium text-highlighted">{{ detailsCard.businessName }}</dd></div>
             <div v-if="detailsCard.description" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Description</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.description }}</dd></div>
+            <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.businessType"><dt class="mb-1 text-xs text-muted">Type of business</dt><dd class="font-medium text-highlighted">{{ detailsCard.businessType }}</dd></div>
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.productsServices" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Products / services</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.productsServices }}</dd></div>
             <div v-if="detailsCard.space_status === 'Occupied' && detailsCard.operatingDetails" class="sm:col-span-2"><dt class="mb-1 text-xs text-muted">Operating details</dt><dd class="whitespace-pre-line leading-relaxed text-toned">{{ detailsCard.operatingDetails }}</dd></div>
           </dl>
